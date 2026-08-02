@@ -28,9 +28,42 @@ import sys
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
+from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
 
 DEFAULT_START_URL = "https://gas.symfa.ir/TestCenters/GasReception"
+
+
+def wait_for_page_to_settle(page, timeout_ms=15000):
+    """صبر می‌کند تا صفحه کاملاً بارگذاری و آرام شود (بعضی صفحات این سایت
+    بعد از رسیدن به networkidle یک بار دیگر navigate/redirect می‌کنند)."""
+    try:
+        page.wait_for_load_state("load", timeout=timeout_ms)
+    except PlaywrightError:
+        pass
+    try:
+        page.wait_for_load_state("networkidle", timeout=timeout_ms)
+    except PlaywrightError:
+        pass
+    page.wait_for_timeout(700)
+
+
+def retry_on_navigation(func, retries=5, delay_ms=800):
+    """چون گاهی درست همان لحظه‌ای که داریم صفحه را می‌خوانیم، سایت یک
+    navigation/redirect دیگر انجام می‌دهد، این تابع در صورت خطای
+    'Execution context was destroyed' چند بار دوباره تلاش می‌کند."""
+    last_err = None
+    for attempt in range(retries):
+        try:
+            return func()
+        except PlaywrightError as e:
+            if "context was destroyed" in str(e) or "Target closed" in str(e):
+                last_err = e
+                import time as _time
+                _time.sleep(delay_ms / 1000)
+                continue
+            raise
+    raise last_err
 
 
 def parse_manufacturer_serial(raw_text):
@@ -48,10 +81,10 @@ def parse_manufacturer_serial(raw_text):
 def find_reception_ids(page):
     """کد پذیرش (ReceptionId) تمام ردیف‌هایی که دکمه «چاپ نتایج» دارند را از
     صفحه فعلی لیست پذیرش‌ها برمی‌دارد."""
-    hrefs = page.eval_on_selector_all(
+    hrefs = retry_on_navigation(lambda: page.eval_on_selector_all(
         "a[href*='PrintResult']",
         "elements => elements.map(e => e.getAttribute('href'))",
-    )
+    ))
     ids = []
     for href in hrefs:
         match = re.search(r"ReceptionId=(\d+)", href or "")
@@ -84,8 +117,15 @@ def click_page_number(page, next_number):
     ]
     for selector in candidates:
         locator = page.locator(selector)
-        if locator.count() > 0 and locator.first.is_visible():
-            locator.first.click()
+        try:
+            found = locator.count() > 0 and locator.first.is_visible()
+        except PlaywrightError:
+            found = False
+        if found:
+            try:
+                locator.first.click()
+            except PlaywrightError:
+                pass
             return True
     return False
 
@@ -133,7 +173,7 @@ def main():
         page_number = 1
 
         while page_number <= args.max_pages:
-            page.wait_for_load_state("networkidle")
+            wait_for_page_to_settle(page)
             reception_ids = find_reception_ids(page)
             new_ids = [rid for rid in reception_ids if rid not in seen_reception_ids]
 
