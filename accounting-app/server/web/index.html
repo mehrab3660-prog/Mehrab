@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>حسابداری</title>
+<link rel="icon" href="/assets/icon.png">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- صفحه ورود -->
+<div id="login-screen" class="login-screen">
+  <div class="login-panel">
+    <div class="login-panel-brand">
+      <img src="/assets/icon.png" alt="" id="login-panel-logo" class="hidden">
+      <h1 id="login-panel-name">حسابداری</h1>
+      <p>مدیریت کالا، فروش، خرید و مشتریان — همه‌جا در یک صفحه</p>
+    </div>
+  </div>
+  <div class="login-form-side">
+    <div class="login-card">
+      <div class="login-logo">
+        <h1>ورود به سیستم</h1>
+      </div>
+      <div class="field">
+        <label>نام کاربری</label>
+        <input type="text" id="login-username" autocomplete="username">
+      </div>
+      <div class="field">
+        <label>رمز عبور</label>
+        <input type="password" id="login-password" autocomplete="current-password">
+      </div>
+      <button class="btn btn-primary btn-block" id="login-btn">ورود</button>
+      <p class="login-error" id="login-error"></p>
+    </div>
+  </div>
+</div>
+
+<!-- برنامه اصلی -->
+<div id="app" class="app hidden">
+
+  <!-- نوار بالا -->
+  <header class="topbar">
+    <div class="live-clock" id="live-clock">
+      <span id="live-clock-date"></span>
+      <span id="live-clock-time"></span>
+    </div>
+    <div class="topbar-search">
+      <i class="icon">search</i>
+      <input type="text" id="global-search" placeholder="جستجوی سریع در کالاها، مشتریان و فاکتورها...">
+    </div>
+    <div class="topbar-actions">
+      <div class="zoom-controls">
+        <button class="icon-btn" id="zoom-out-btn" title="کوچک‌تر کردن نوشته‌ها">A-</button>
+        <button class="icon-btn" id="zoom-in-btn" title="بزرگ‌تر کردن نوشته‌ها">A+</button>
+      </div>
+      <button class="icon-btn" id="theme-toggle" title="تغییر حالت روشن/تیره">
+        <span id="theme-icon">🌙</span>
+      </button>
+      <div class="user-badge">
+        <span class="user-name" id="user-name">—</span>
+        <span class="user-role" id="user-role">—</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-body">
+    <!-- منوی کناری (راست) -->
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <img src="/assets/icon.png" alt="">
+        <span>حسابداری</span>
+      </div>
+      <ul class="nav-list">
+        <li class="nav-item active" data-page="dashboard"><span class="nav-icon">📊</span><span class="nav-label">داشبورد</span></li>
+        <li class="nav-item" data-page="quick-sale"><span class="nav-icon">⚡</span><span class="nav-label">فروش سریع</span></li>
+        <li class="nav-item" data-page="items"><span class="nav-icon">📦</span><span class="nav-label">کالاها</span></li>
+        <li class="nav-item" data-page="sale"><span class="nav-icon">🧾</span><span class="nav-label">فاکتور فروش</span></li>
+        <li class="nav-item" data-page="purchase"><span class="nav-icon">🛒</span><span class="nav-label">فاکتور خرید</span></li>
+        <li class="nav-item" data-page="ai-scan"><span class="nav-icon">📷</span><span class="nav-label">اسکن فاکتور خرید (AI)</span></li>
+        <li class="nav-item" data-page="history"><span class="nav-icon">📜</span><span class="nav-label">تاریخچه فاکتورها</span></li>
+        <li class="nav-item" data-page="parties"><span class="nav-icon">👥</span><span class="nav-label">مشتریان و تامین‌کنندگان</span></li>
+        <li class="nav-item" data-page="checks"><span class="nav-icon">💳</span><span class="nav-label">چک‌ها</span></li>
+        <li class="nav-item" data-page="bank"><span class="nav-icon">🏦</span><span class="nav-label">بانک</span></li>
+        <li class="nav-item" data-page="cash"><span class="nav-icon">💰</span><span class="nav-label">صندوق</span></li>
+        <li class="nav-item" data-page="monthly"><span class="nav-icon">📈</span><span class="nav-label">گزارش ماهانه</span></li>
+        <li class="nav-item" data-page="extra-reports"><span class="nav-icon">📋</span><span class="nav-label">بدهکاران و پرفروش‌ها</span></li>
+        <li class="nav-item admin-only" data-page="bulk-price"><span class="nav-icon">💹</span><span class="nav-label">افزایش قیمت گروهی</span></li>
+        <li class="nav-item admin-only" data-page="settings-hub"><span class="nav-icon">⚙️</span><span class="nav-label">تنظیمات کلی</span></li>
+      </ul>
+      <button class="btn btn-ghost btn-block logout-btn" id="logout-btn">خروج از حساب</button>
+    </nav>
+
+    <!-- محتوای اصلی -->
+    <main class="content" id="content">
+
+      <!-- داشبورد -->
+      <section class="page active" id="page-dashboard">
+        <div class="page-header"><div><h2>داشبورد</h2><p class="page-sub">خلاصه وضعیت لحظه‌ای مغازه — مثلاً می‌بینی امروز چقدر فروختی و چقدر سود کردی، بدون اینکه لازم باشه دنبال فاکتورها بگردی.</p></div></div>
+
+        <div class="kpi-grid" id="stat-grid"></div>
+
+        <div class="dash-row-2">
+          <div class="card insight-card">
+            <div class="card-title">
+              <svg class="ic accent-ic" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+              پرفروش‌ترین کالاها <span class="card-title-sub">(۳۰ روز اخیر)</span>
+            </div>
+            <ul class="simple-list" id="dash-top-items"></ul>
+          </div>
+          <div class="card chart-card">
+            <div class="card-title">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 9l-5 5-3-3-4 4"/></svg>
+              نمودار فروش و سود ماهانه
+            </div>
+            <canvas id="dashboard-chart" height="70"></canvas>
+          </div>
+        </div>
+
+        <div class="dash-grid-3">
+          <div class="card">
+            <div class="card-title">
+              <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z"/></svg>
+              وضعیت مالی
+            </div>
+            <canvas id="finance-donut" height="120"></canvas>
+            <ul class="simple-list" id="finance-legend" style="margin-top:8px"></ul>
+          </div>
+          <div class="card alert-card" id="low-stock-card">
+            <div class="card-title">
+              <svg class="ic warn" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9L2 18a1.5 1.5 0 0 0 1.3 2h17.4a1.5 1.5 0 0 0 1.3-2L13.7 3.9a1.5 1.5 0 0 0-2.6 0z"/></svg>
+              یادآوری‌ها
+            </div>
+            <ul class="simple-list" id="reminders-list"></ul>
+          </div>
+          <div class="card insight-card">
+            <div class="card-title">
+              <svg class="ic danger-ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>
+              بیشترین بدهکار
+            </div>
+            <ul class="simple-list" id="dash-top-debtor"></ul>
+          </div>
+        </div>
+
+        <div class="dash-grid-3">
+          <div class="card" style="grid-column: span 2">
+            <div class="card-title">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+              آخرین فاکتورها
+            </div>
+            <table class="data-table" id="dash-recent-invoices-table">
+              <thead><tr><th>شماره</th><th>تاریخ</th><th>طرف حساب</th><th>مبلغ</th></tr></thead>
+              <tbody id="dash-recent-invoices"></tbody>
+            </table>
+          </div>
+          <div class="card insight-card">
+            <div class="card-title">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M21 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v3M3 8v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8M3 8h18"/></svg>
+              موجودی کالاها
+            </div>
+            <ul class="simple-list" id="dash-stock-ranking"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- فروش سریع (پشت صندوق) -->
+      <section class="page" id="page-quick-sale">
+        <div class="page-header"><div><h2>⚡ فروش سریع</h2><p class="page-sub">برای فروش‌های روزمره پشت صندوق — بارکد رو اسکن کن یا نام کالا رو بنویس و Enter بزن، خودش اضافه میشه. سریع‌تر از فرم عادی فاکتور فروش.</p></div></div>
+        <div class="card">
+          <input type="text" id="qs-search" placeholder="بارکد را اسکن کن یا نام کالا را تایپ کن و Enter بزن..." style="font-size:16px;padding:14px">
+          <div id="qs-suggestions" class="hidden" style="margin-top:8px"></div>
+        </div>
+        <div class="card">
+          <table class="data-table">
+            <thead><tr><th>کالا</th><th>تعداد</th><th>قیمت واحد</th><th>جمع</th><th></th></tr></thead>
+            <tbody id="qs-cart-tbody"></tbody>
+          </table>
+          <div class="cart-total" id="qs-total" style="font-size:22px">جمع کل: ۰ تومان</div>
+          <div class="words-hint" id="qs-total-words"></div>
+        </div>
+        <div class="card">
+          <div class="form-row">
+            <div><label>مشتری (اختیاری)</label><div id="qs-party"></div></div>
+            <div><label>نوع پرداخت</label>
+              <select id="qs-pay"><option value="cash">نقدی</option><option value="credit">نسیه</option><option value="check">چک</option></select>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-block" id="qs-submit" style="font-size:16px;padding:14px;margin-top:10px">ثبت فروش (Ctrl+Enter)</button>
+        </div>
+      </section>
+
+      <!-- کالاها -->
+      <section class="page" id="page-items">
+        <div class="page-header">
+          <div><h2>کالاها</h2><p class="page-sub">هر جنسی که توی مغازه می‌فروشی یا نگه می‌داری اینجا تعریف می‌کنی — مثلاً «لامپ ال‌ای‌دی ۱۲ وات، برند فیلیپس». بعد از تعریف، همین کالا توی فرم فروش و خرید هم قابل انتخابه.</p></div>
+          <button class="btn btn-primary" id="btn-new-item">+ کالای جدید</button>
+        </div>
+        <div class="card">
+          <div class="table-toolbar">
+            <input type="text" id="items-filter" placeholder="فیلتر بر اساس نام یا کد...">
+            <button class="btn btn-secondary" id="btn-new-category">+ دسته‌بندی جدید</button>
+            <button class="btn btn-secondary" id="btn-export-items">خروجی اکسل</button>
+          </div>
+          <table class="data-table">
+            <thead><tr>
+              <th>کد/بارکد</th><th>نام</th><th>برند</th><th>واحد</th>
+              <th>قیمت خرید</th><th>قیمت فروش</th><th>موجودی</th><th>عملیات</th>
+            </tr></thead>
+            <tbody id="items-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- فاکتور فروش -->
+      <section class="page" id="page-sale">
+        <div class="page-header"><div><h2>فاکتور فروش</h2><p class="page-sub">وقتی مشتری از مغازه‌ات جنس می‌خرد، اینجا ثبت می‌کنی — مثلاً «آقای رضایی ۲ عدد لامپ نقدی خرید». موجودی انبار خودکار کم می‌شود.</p></div></div>
+        <div id="invoice-form-sale"></div>
+      </section>
+
+      <!-- فاکتور خرید -->
+      <section class="page" id="page-purchase">
+        <div class="page-header"><div><h2>فاکتور خرید</h2><p class="page-sub">وقتی خودت از تامین‌کننده جنس می‌خری تا انبارت پر بشه، اینجا ثبت می‌کنی — مثلاً «۵۰ عدد لامپ از شرکت پخش خریدی». موجودی انبار خودکار زیاد می‌شود. کالا باید قبلاً در بخش «کالاها» تعریف شده باشد تا در لیست پایین ظاهر شود.</p></div></div>
+        <div id="invoice-form-purchase"></div>
+      </section>
+
+      <!-- اسکن فاکتور خرید با هوش مصنوعی -->
+      <section class="page" id="page-ai-scan">
+        <div class="page-header"><div><h2>اسکن فاکتور خرید (هوش مصنوعی)</h2><p class="page-sub">عکس یا فایل PDF فاکتوری که از تامین‌کننده گرفتی رو آپلود کن — هوش مصنوعی کالاها، تعداد و قیمت رو می‌خونه، قبل از ثبت نهایی همه رو نشونت می‌ده تا تأیید کنی.</p></div></div>
+        <div class="card">
+          <div class="form-row">
+            <div><label>روش آنالیز</label>
+              <select id="ai-scan-method">
+                <option value="ai">هوش مصنوعی (دقیق‌تر، نیاز به اینترنت و کلید API)</option>
+                <option value="offline">رایگان و آفلاین (Tesseract، دقتش کمتره)</option>
+              </select>
+            </div>
+          </div>
+          <input type="file" id="ai-scan-file" accept="image/png,image/jpeg,image/webp,application/pdf" capture="environment">
+          <button class="btn btn-primary" id="btn-ai-scan">آنالیز عکس</button>
+          <span id="ai-scan-loading" class="muted hidden">در حال آنالیز... چند ثانیه صبر کن</span>
+        </div>
+        <div class="card hidden" id="ai-scan-result-card">
+          <div class="card-title">نتیجه تشخیص هوش مصنوعی — لطفاً بررسی و تأیید کن</div>
+          <div class="ai-summary-box" id="ai-summary-box"></div>
+          <div class="form-row">
+            <div><label>تامین‌کننده (قابل ویرایش — اگه جدید بود خودکار ساخته می‌شه)</label>
+              <input type="text" id="ai-scan-party-name" placeholder="نام تامین‌کننده را بنویس یا از پیشنهادها انتخاب کن" list="ai-scan-party-suggestions">
+              <datalist id="ai-scan-party-suggestions"></datalist>
+            </div>
+            <div><label>نوع پرداخت</label><select id="ai-scan-pay"><option value="cash">نقدی</option><option value="credit">نسیه</option></select></div>
+          </div>
+          <table class="data-table">
+            <thead><tr><th>شامل شود؟</th><th>نام روی فاکتور</th><th>مطابقت با کالای موجود</th><th>تعداد</th><th>قیمت واحد</th></tr></thead>
+            <tbody id="ai-scan-items-tbody"></tbody>
+          </table>
+          <div class="cart-total" id="ai-scan-total"></div>
+          <button class="btn btn-primary" id="btn-ai-scan-confirm" style="margin-top:14px">تأیید و ثبت خودکار فاکتور</button>
+        </div>
+      </section>
+
+      <!-- تاریخچه فاکتورها -->
+      <section class="page" id="page-history">
+        <div class="page-header"><div><h2>تاریخچه فاکتورها</h2><p class="page-sub">همه فاکتورهای فروش و خرید قبلی اینجاست — می‌تونی هر کدوم رو دوباره چاپ کنی یا با فیلتر بالا فقط فروش یا فقط خرید رو ببینی.</p></div></div>
+        <div class="card">
+          <div class="table-toolbar">
+            <select id="history-type-filter">
+              <option value="">همه فاکتورها</option>
+              <option value="sale">فروش</option>
+              <option value="purchase">خرید</option>
+              <option value="sale_return">مرجوعی فروش</option>
+              <option value="purchase_return">مرجوعی خرید</option>
+            </select>
+            <button class="btn btn-secondary" id="btn-refresh-history">بروزرسانی</button>
+          </div>
+          <table class="data-table">
+            <thead><tr><th>شماره</th><th>نوع</th><th>تاریخ</th><th>طرف حساب</th><th>یادداشت</th><th>جمع کل</th><th>پرداخت‌شده</th><th>عملیات</th></tr></thead>
+            <tbody id="history-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- مشتریان و تامین‌کنندگان -->
+      <section class="page" id="page-parties">
+        <div class="page-header">
+          <div><h2>مشتریان و تامین‌کنندگان</h2><p class="page-sub">افرادی که از تو نسیه می‌خرن (مشتری) یا تو ازشون نسیه می‌خری (تامین‌کننده) — مثلاً «آقای رضایی ۸۰,۰۰۰ تومان بهت بدهکاره». وقتی پولش رو دادن، از دکمه «تسویه» ثبت کن.</p></div>
+          <button class="btn btn-primary" id="btn-new-party">+ طرف‌حساب جدید</button>
+        </div>
+        <div class="card">
+          <table class="data-table">
+            <thead><tr><th>نام</th><th>تلفن</th><th>نوع</th><th>مانده حساب</th><th>آخرین خرید/فروش</th><th>عملیات</th></tr></thead>
+            <tbody id="parties-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- چک‌ها -->
+      <section class="page" id="page-checks">
+        <div class="page-header"><div><h2>چک‌ها</h2><p class="page-sub">چک‌هایی که از مشتری گرفتی یا به تامین‌کننده دادی و هنوز نقد نشده‌اند — مثلاً «چک ۵۰۰,۰۰۰ تومانی سررسید ماه بعد». وقتی وصول یا برگشت خورد، وضعیتش رو اینجا آپدیت کن.</p></div></div>
+        <div class="card">
+          <table class="data-table">
+            <thead><tr><th>طرف حساب</th><th>مبلغ</th><th>سررسید</th><th>نوع</th><th>وضعیت</th><th>عملیات</th></tr></thead>
+            <tbody id="checks-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- بانک -->
+      <section class="page" id="page-bank">
+        <div class="page-header">
+          <div><h2>بانک</h2><p class="page-sub">حساب‌های بانکی مغازه رو اینجا تعریف کن، واریز/برداشت ثبت کن، یا بین صندوق و بانک پول جابه‌جا کن.</p></div>
+          <button class="btn btn-primary" id="btn-new-bank-account">+ حساب بانکی جدید</button>
+        </div>
+
+        <div class="stat-grid" id="bank-accounts-grid"></div>
+
+        <div class="card">
+          <div class="card-title">انتقال وجه (بین صندوق و بانک، یا بین دو حساب بانکی)</div>
+          <div class="form-row">
+            <div><label>از</label><select id="transfer-from"></select></div>
+            <div><label>به</label><select id="transfer-to"></select></div>
+            <div><label>مبلغ</label><input type="text" inputmode="decimal" id="transfer-amount"></div>
+          </div>
+          <div class="form-row"><div><label>توضیحات (اختیاری)</label><input type="text" id="transfer-desc"></div></div>
+          <button class="btn btn-primary" id="btn-do-transfer">ثبت انتقال</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">واریز / برداشت مستقیم از یک حساب</div>
+          <div class="form-row">
+            <div><label>حساب</label><select id="bank-tx-account"></select></div>
+            <div><label>نوع</label><select id="bank-tx-type"><option value="deposit">واریز</option><option value="withdrawal">برداشت</option></select></div>
+            <div><label>مبلغ</label><input type="text" inputmode="decimal" id="bank-tx-amount"></div>
+          </div>
+          <div class="form-row"><div><label>توضیحات</label><input type="text" id="bank-tx-desc"></div></div>
+          <button class="btn btn-secondary" id="btn-bank-tx-submit">ثبت تراکنش</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">گردش حساب</div>
+          <select id="statement-account" style="margin-bottom:12px"></select>
+          <table class="data-table">
+            <thead><tr><th>تاریخ</th><th>نوع</th><th>مبلغ</th><th>توضیحات</th></tr></thead>
+            <tbody id="bank-statement-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- صندوق -->
+      <section class="page" id="page-cash">
+        <div class="page-header"><div><h2>صندوق</h2><p class="page-sub">پول نقدی که وارد یا خارج مغازه می‌شود — مثلاً «۲۰۰,۰۰۰ تومان بابت اجاره از صندوق پرداخت شد». فروش و خرید نقدی خودش اینجا ثبت می‌شود، برای بقیه تراکنش‌ها دستی ثبت کن.</p></div></div>
+        <div class="stat-grid" id="cash-stat"></div>
+        <div class="card">
+          <div class="table-toolbar">
+            <select id="cash-type"><option value="in">دریافت</option><option value="out">پرداخت</option></select>
+            <input type="text" inputmode="decimal" id="cash-amount" placeholder="مبلغ">
+            <div class="words-hint" id="cash-amount-words"></div>
+            <input type="text" id="cash-desc" placeholder="توضیحات">
+            <button class="btn btn-primary" id="btn-add-cash">ثبت تراکنش</button>
+          </div>
+          <table class="data-table">
+            <thead><tr><th>تاریخ</th><th>نوع</th><th>مبلغ</th><th>توضیحات</th></tr></thead>
+            <tbody id="cash-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- گزارش ماهانه -->
+      <section class="page" id="page-monthly">
+        <div class="page-header"><div><h2>گزارش ماهانه</h2><p class="page-sub">می‌بینی هر ماه چقدر فروختی، چقدر خریدی و آخرش چقدر سود یا ضرر کردی — مثلاً مقایسه فروش تیر با مرداد.</p></div></div>
+        <div class="card chart-card">
+          <canvas id="monthly-chart" height="100"></canvas>
+        </div>
+        <div class="card">
+          <table class="data-table">
+            <thead><tr><th>ماه</th><th>فروش</th><th>خرید</th><th>سود/زیان</th></tr></thead>
+            <tbody id="monthly-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- گزارش‌های تکمیلی -->
+      <section class="page" id="page-extra-reports">
+        <div class="page-header"><div><h2>بدهکاران، بستانکاران و پرفروش‌ترین‌ها</h2><p class="page-sub">یک نگاه سریع به اینکه چه کسی به تو بدهکاره، تو به چه کسی بدهکاری، و کدوم کالاها این یک ماه بیشتر فروش رفته.</p></div></div>
+        <div class="report-grid">
+          <div class="card">
+            <div class="card-title">مشتریان بدهکار</div>
+            <table class="data-table"><thead><tr><th>نام</th><th>تلفن</th><th>بدهی</th></tr></thead><tbody id="debtors-tbody"></tbody></table>
+          </div>
+          <div class="card">
+            <div class="card-title">تامین‌کنندگان بستانکار</div>
+            <table class="data-table"><thead><tr><th>نام</th><th>تلفن</th><th>بدهی ما</th></tr></thead><tbody id="creditors-tbody"></tbody></table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">پرفروش‌ترین کالاها (۳۰ روز اخیر)</div>
+          <table class="data-table"><thead><tr><th>کالا</th><th>برند</th><th>تعداد</th><th>جمع فروش</th></tr></thead><tbody id="top-items-tbody"></tbody></table>
+        </div>
+      </section>
+
+      <!-- افزایش قیمت گروهی -->
+      <section class="page" id="page-bulk-price">
+        <div class="page-header"><div><h2>افزایش قیمت گروهی</h2><p class="page-sub">مثلاً می‌خوای قیمت فروش همه کالاها رو ۱۰٪ زیاد کنی — عدد رو بزن، پیش‌نمایش رو ببین، هر کالا رو دلخواه ویرایش یا از لیست حذف کن، بعد اعمال کن. همه تغییرات قبلی هم ذخیره می‌مونه و هر وقت خواستی می‌تونی برگردونی.</p></div></div>
+        <div class="card">
+          <div class="form-row">
+            <div><label>درصد تغییر (برای کاهش، عدد منفی بزن)</label><input type="number" id="bulk-price-percent" value="10"></div>
+            <div><label>روی کدام قیمت اعمال شود؟</label>
+              <select id="bulk-price-target">
+                <option value="sale">فقط قیمت فروش</option>
+                <option value="purchase">فقط قیمت خرید</option>
+                <option value="both">هر دو</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-secondary" id="btn-bulk-price-preview">پیش‌نمایش تغییرات</button>
+        </div>
+        <div class="card hidden" id="bulk-price-preview-card">
+          <div class="card-title">پیش‌نمایش — قبل از اعمال بررسی و در صورت نیاز اصلاح کن</div>
+          <table class="data-table">
+            <thead><tr><th>شامل شود؟</th><th>کالا</th><th>قیمت خرید فعلی</th><th>قیمت خرید جدید</th><th>قیمت فروش فعلی</th><th>قیمت فروش جدید</th></tr></thead>
+            <tbody id="bulk-price-tbody"></tbody>
+          </table>
+          <button class="btn btn-primary" id="btn-bulk-price-apply" style="margin-top:14px">اعمال تغییرات</button>
+        </div>
+        <div class="card">
+          <div class="card-title">تاریخچه تغییرات قیمت</div>
+          <table class="data-table">
+            <thead><tr><th>زمان</th><th>کالا</th><th>خرید قبلی → جدید</th><th>فروش قبلی → جدید</th><th>یادداشت</th><th>عملیات</th></tr></thead>
+            <tbody id="price-history-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- تنظیمات کلی (ادغام‌شده: اطلاعات فاکتور، پشتیبان‌گیری، کاربران، لاگ فعالیت) -->
+      <section class="page" id="page-settings-hub">
+        <div class="page-header"><div><h2>تنظیمات کلی</h2><p class="page-sub">همه تنظیمات مدیریتی مغازه یک‌جا: اطلاعات فاکتور، پشتیبان‌گیری، کاربران و لاگ فعالیت.</p></div></div>
+
+        <div class="settings-subnav">
+          <button class="settings-subnav-btn active" data-subtab="shop-info">🏪 اطلاعات فاکتور</button>
+          <button class="settings-subnav-btn" data-subtab="backup">🗄️ پشتیبان‌گیری</button>
+          <button class="settings-subnav-btn" data-subtab="users">🔐 کاربران</button>
+          <button class="settings-subnav-btn" data-subtab="activity">🕒 لاگ فعالیت</button>
+        </div>
+
+        <div class="settings-subpage active" id="subpage-shop-info">
+          <div class="card">
+            <div class="field"><label>نام مغازه</label><input type="text" id="shop-name"></div>
+            <div class="field"><label>تلفن‌ها</label><input type="text" id="shop-phones" placeholder="021-XXXXXXX - 0912XXXXXXX"></div>
+            <div class="field"><label>آدرس</label><input type="text" id="shop-address"></div>
+            <button class="btn btn-primary" id="btn-save-shop-info">ذخیره اطلاعات</button>
+          </div>
+          <div class="card">
+            <div class="card-title">لوگوی فاکتور</div>
+            <div id="shop-logo-preview" style="margin-bottom:12px"></div>
+            <input type="file" id="shop-logo-file" accept="image/png,image/jpeg,image/gif,image/webp">
+            <button class="btn btn-primary" id="btn-upload-logo">آپلود لوگو</button>
+            <button class="btn btn-secondary" id="btn-remove-logo">حذف لوگو</button>
+            <p class="muted" style="margin-top:10px">فرمت‌های مجاز: PNG، JPG، GIF، WEBP</p>
+          </div>
+        </div>
+
+        <div class="settings-subpage" id="subpage-backup">
+          <div class="card">
+            <p class="muted">پشتیبان‌گیری خودکار روزانه فعال است. در صورت نیاز می‌توانید همین حالا هم نسخه پشتیبان بگیرید.</p>
+            <button class="btn btn-primary" id="btn-backup-now">تهیه نسخه پشتیبان الان</button>
+            <button class="btn btn-secondary" id="btn-nightly-now">ارسال گزارش شبانه همین الان (تست)</button>
+          </div>
+          <div class="card">
+            <div class="card-title">نسخه‌های پشتیبان موجود</div>
+            <ul id="backup-list" class="simple-list"></ul>
+          </div>
+        </div>
+
+        <div class="settings-subpage" id="subpage-users">
+          <div class="card">
+            <div class="table-toolbar">
+              <input type="text" id="new-user-username" placeholder="نام کاربری">
+              <input type="password" id="new-user-password" placeholder="رمز عبور">
+              <select id="new-user-role"><option value="employee">کارمند</option><option value="admin">مدیر</option></select>
+              <button class="btn btn-primary" id="btn-add-user">افزودن کاربر</button>
+            </div>
+            <table class="data-table">
+              <thead><tr><th>نام کاربری</th><th>سطح دسترسی</th><th>عملیات</th></tr></thead>
+              <tbody id="users-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="settings-subpage" id="subpage-activity">
+          <div class="card">
+            <table class="data-table">
+              <thead><tr><th>زمان</th><th>کاربر</th><th>فعالیت</th><th>جزئیات</th></tr></thead>
+              <tbody id="activity-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- مودال عمومی -->
+<div class="modal-overlay hidden" id="modal-overlay">
+  <div class="modal" id="modal-box"></div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

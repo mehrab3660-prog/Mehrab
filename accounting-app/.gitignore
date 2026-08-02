@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+
+# فایل‌های زمان اجرا (نباید در گیت باشند - حاوی داده/رمز واقعی هستند)
+server/config.json
+client/config.json
+server/accounting.db
+client/accounting.db
+server/shop_settings.json
+client/shop_settings.json
+server/backups/
+client/backups/
+**/FIRST_LOGIN_ADMIN_PASSWORD.txt
+
+# ساخت exe
+build/
+dist/
+*.spec

@@ -1,0 +1,27 @@
+{
+  "ai": {
+    "enabled": true,
+    "api_key": "sk-ant-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "model": "claude-haiku-4-5-20251001"
+  },
+  "shop": {
+    "name": "فروشگاه لوازم الکتریکی شما",
+    "phones": "021-XXXXXXX - 0912XXXXXXX",
+    "address": "آدرس مغازه شما"
+  },
+  "email": {
+    "enabled": true,
+    "sender": "youraddress@gmail.com",
+    "app_password": "xxxx xxxx xxxx xxxx",
+    "recipient": "youraddress@gmail.com",
+    "attach_backup": true
+  },
+  "vps": {
+    "enabled": true,
+    "host": "1.2.3.4",
+    "port": 22,
+    "username": "root",
+    "key_path": "C:\\Users\\YourName\\.ssh\\id_rsa",
+    "remote_dir": "/home/backups"
+  }
+}

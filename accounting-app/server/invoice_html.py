@@ -1,0 +1,206 @@
+# -*- coding: utf-8 -*-
+"""
+تولید فاکتور به‌صورت یک صفحه HTML آماده چاپ - دقیقاً شبیه فرم‌های رسمی حسابداری فارسی.
+به‌جای ساخت PDF با کتابخانه پایتون (که بدون فونت اختصاصی فارسی را درست رندر نمی‌کند)،
+این صفحه توسط خودِ مرورگر رندر و چاپ می‌شود، پس رندر فارسی همیشه کاملاً درست است
+(از فونت‌های نصب‌شده روی خود سیستم مثل Tahoma/Vazir استفاده می‌شود).
+"""
+import html
+import jalali
+
+_PERSIAN_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
+
+
+def to_fa_digits(text):
+    return str(text).translate(_PERSIAN_DIGITS)
+
+
+def esc(text):
+    """فرار دادن مقادیر کاربر (نام کالا، طرف‌حساب، تنظیمات مغازه و ...) قبل از قرار دادن
+    در HTML، تا کسی نتواند با گذاشتن اسکریپت داخل نام کالا/مشتری، کد دلخواه در مرورگر
+    بیننده فاکتور اجرا کند (XSS ذخیره‌شده)."""
+    return html.escape(str(text if text is not None else ""))
+
+
+def fmt_qty(q):
+    """نمایش تعداد: اگر عدد صحیح بود بدون اعشار، وگرنه با اعشار (برای متر/کیلوگرم)"""
+    try:
+        q = float(q)
+    except (TypeError, ValueError):
+        q = 0
+    text = f"{q:.2f}".rstrip("0").rstrip(".") if q % 1 else f"{int(q)}"
+    return to_fa_digits(text)
+
+
+def fmt_amount(n):
+    """عدد را با جداکننده هزارگان و ارقام فارسی برمی‌گرداند، مثل ۱۲۵،۰۰۰"""
+    try:
+        n = float(n)
+    except (TypeError, ValueError):
+        n = 0
+    formatted = f"{n:,.0f}"
+    return to_fa_digits(formatted)
+
+
+PAGE_SIZE_CSS = {
+    "A4": "size: A4; margin: 14mm;",
+    "A5": "size: A5; margin: 10mm;",
+    "thermal80": "size: 80mm auto; margin: 3mm;",
+    "thermal58": "size: 58mm auto; margin: 2mm;",
+}
+
+
+def build_invoice_html(invoice, items, party, page_format="A5",
+                        shop_name="حسابداری", shop_phones="", shop_address="",
+                        words_text="", logo_url=None):
+    """
+    invoice: دیکشنری شامل number/id, invoice_type, date, total, paid, discount
+    items: لیستی شامل item_name, category_name (اختیاری), qty, unit_price, total
+    party: دیکشنری مشتری/تامین‌کننده شامل name, phone, balance (یا None)
+    """
+    is_thermal = page_format.startswith("thermal")
+    page_css = PAGE_SIZE_CSS.get(page_format, PAGE_SIZE_CSS["A5"])
+
+    type_titles = {
+        "sale": "فاکتور فروش", "purchase": "فاکتور خرید",
+        "sale_return": "فاکتور مرجوعی فروش", "purchase_return": "فاکتور مرجوعی خرید",
+    }
+    title = type_titles.get(invoice["invoice_type"], "فاکتور")
+    party_role = "خریدار" if invoice["invoice_type"] in ("sale", "sale_return") else "فروشنده (تامین‌کننده)"
+
+    rows_html = ""
+    for i, it in enumerate(items, start=1):
+        rows_html += f"""
+        <tr>
+          <td>{to_fa_digits(i)}</td>
+          <td>{esc(it.get('category_name') or it.get('brand') or '—')}</td>
+          <td>{esc(it['item_name'])}</td>
+          <td>{fmt_qty(it['qty'])}</td>
+          <td>{fmt_amount(it['unit_price'])}</td>
+          <td>{fmt_amount(it['total'])}</td>
+        </tr>"""
+
+    total = invoice.get("total", 0)
+    discount = invoice.get("discount", 0) or 0
+    subtotal = total + discount
+    balance_after = party["balance"] if party else None
+    balance_before = None
+    if party is not None and invoice.get("payment_type") == "credit":
+        remaining = total - invoice.get("paid", 0)
+        sign_map = {"sale": 1, "purchase": -1, "sale_return": -1, "purchase_return": 1}
+        sign = sign_map.get(invoice["invoice_type"], 0)
+        balance_before = balance_after - sign * remaining
+    elif party is not None:
+        balance_before = balance_after
+
+    balance_rows = ""
+    if party is not None:
+        balance_rows = f"""
+        <tr><td class="label">مانده قبلی:</td><td class="value">{fmt_amount(balance_before)} تومان</td></tr>
+        <tr><td class="label">مانده کل:</td><td class="value">{fmt_amount(balance_after)} تومان</td></tr>"""
+
+    party_block = ""
+    if party:
+        party_block = f"""
+        <div class="party-row">
+          <span><strong>{party_role}:</strong> {esc(party['name'])}</span>
+          <span><strong>تلفن:</strong> {esc(to_fa_digits(party.get('phone') or '—'))}</span>
+        </div>"""
+
+    date_fa = to_fa_digits(jalali.format_jalali_datetime(invoice.get('date', '')))
+
+    html = f"""<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>{esc(title)} {esc(invoice.get('number') or invoice.get('id'))}</title>
+<style>
+  @page {{ {page_css} }}
+  * {{ box-sizing: border-box; }}
+  body {{
+    font-family: 'Vazirmatn', Tahoma, 'Segoe UI', Arial, sans-serif;
+    color: #111; margin: 0; padding: {'8px' if is_thermal else '20px'};
+    font-size: {'11px' if is_thermal else '14px'};
+  }}
+  .shop-header {{ text-align: center; margin-bottom: 10px; }}
+  .shop-header img {{ max-height: {'34px' if is_thermal else '54px'}; margin-bottom: 6px; }}
+  .shop-header h1 {{ font-size: {'14px' if is_thermal else '20px'}; margin: 0 0 4px 0; }}
+  .shop-header .sub {{ font-size: {'10px' if is_thermal else '12px'}; color: #444; margin: 2px 0; }}
+  .title-badge {{
+    text-align: left; font-weight: bold; font-size: {'11px' if is_thermal else '13px'};
+    border: 1px solid #333; display: inline-block; padding: 3px 14px; float: left; border-radius: 4px;
+  }}
+  .clearfix::after {{ content: ""; display: table; clear: both; }}
+  .meta-row {{ display: flex; justify-content: space-between; margin: 10px 0 4px 0; font-size: {'10px' if is_thermal else '13px'}; flex-wrap: wrap; }}
+  .party-row {{ display: flex; justify-content: space-between; margin-bottom: 8px; font-size: {'10px' if is_thermal else '13px'}; border-top: 1px dashed #999; padding-top: 6px; flex-wrap: wrap; }}
+  table.items {{ width: 100%; border-collapse: collapse; margin-top: 8px; }}
+  table.items th, table.items td {{
+    border: 1px solid #333; padding: {'3px' if is_thermal else '7px'}; text-align: center;
+    font-size: {'10px' if is_thermal else '13px'};
+  }}
+  table.items th {{ background: #f0f0f0; }}
+  table.totals {{ width: 100%; margin-top: 10px; border-collapse: collapse; }}
+  table.totals td {{ padding: {'2px 4px' if is_thermal else '5px 8px'}; font-size: {'10px' if is_thermal else '13px'}; }}
+  table.totals .label {{ text-align: left; color: #333; }}
+  table.totals .value {{ text-align: right; font-weight: bold; width: 140px; }}
+  table.totals tr.grand td {{ border-top: 2px solid #333; font-size: {'11px' if is_thermal else '14px'}; }}
+  .words-box {{ margin-top: 10px; padding: 8px; border: 1px dashed #666; font-size: {'10px' if is_thermal else '12.5px'}; }}
+  .signatures {{ display: flex; justify-content: space-between; margin-top: {'20px' if is_thermal else '40px'}; font-size: {'10px' if is_thermal else '13px'}; }}
+  .footer {{ text-align: center; margin-top: 16px; font-size: {'10px' if is_thermal else '12px'}; color: #555; border-top: 1px solid #ccc; padding-top: 8px; }}
+  .print-btn {{
+    display: block; margin: 14px auto; padding: 10px 26px; font-size: 14px; cursor: pointer;
+    background: #14375E; color: #fff; border: none; border-radius: 6px;
+  }}
+  @media print {{ .print-btn {{ display: none; }} }}
+</style>
+</head>
+<body>
+
+<button class="print-btn" onclick="window.print()">چاپ این فاکتور</button>
+
+<div class="clearfix">
+  <div class="title-badge">{esc(title)}</div>
+</div>
+<div class="shop-header">
+  {f'<img src="{esc(logo_url)}" alt="لوگو">' if logo_url else ''}
+  <h1>{esc(shop_name)}</h1>
+  {f'<div class="sub">{esc(shop_phones)}</div>' if shop_phones else ''}
+  {f'<div class="sub">{esc(shop_address)}</div>' if shop_address else ''}
+</div>
+
+<div class="meta-row">
+  <span><strong>شماره فاکتور:</strong> {esc(invoice.get('number') or invoice.get('id'))}</span>
+  <span><strong>تاریخ:</strong> {date_fa}</span>
+</div>
+{party_block}
+
+<table class="items">
+  <thead>
+    <tr>
+      <th>ردیف</th><th>نوع کالا</th><th>شرح کالا</th><th>تعداد</th><th>مبلغ واحد</th><th>جمع کل</th>
+    </tr>
+  </thead>
+  <tbody>
+    {rows_html}
+  </tbody>
+</table>
+
+<table class="totals">
+  <tr><td class="label">جمع کل:</td><td class="value">{fmt_amount(subtotal)} تومان</td></tr>
+  <tr><td class="label">تخفیف:</td><td class="value">{fmt_amount(discount)} تومان</td></tr>
+  <tr class="grand"><td class="label">جمع کل با تخفیف:</td><td class="value">{fmt_amount(total)} تومان</td></tr>
+  {balance_rows}
+</table>
+
+<div class="words-box"><strong>مبلغ به حروف:</strong> {words_text} تومان</div>
+
+<div class="signatures">
+  <span>امضای خریدار</span>
+  <span>امضای فروشنده</span>
+</div>
+
+<div class="footer">اعتماد شما سرمایه ماست</div>
+
+</body>
+</html>"""
+    return html
