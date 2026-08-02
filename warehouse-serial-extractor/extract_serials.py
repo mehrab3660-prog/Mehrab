@@ -1,80 +1,40 @@
 """
-استخراج شماره پذیرش، نام سازنده و سریال مخزن از سامانه آزمایشگاه.
+استخراج شماره پذیرش، نام سازنده و سریال مخزن از سامانه سیمفا
+(gas.symfa.ir) برای مراکز معاینه فنی خودروهای گازسوز.
 
 نحوه کار:
 1. یک مرورگر واقعی (غیر مخفی) باز می‌شود.
 2. خودتان به‌صورت دستی وارد سامانه می‌شوید (نام کاربری/رمز عبور شما هرگز داخل
    این اسکریپت ذخیره یا وارد نمی‌شود).
-3. خودتان تاریخ موردنظر را وارد کرده و روی «مشاهده نتیجه» کلیک می‌کنید تا
-   صفحه اول نتایج باز شود.
+3. خودتان به صفحه «پذیرش‌های گازسوز» می‌روید، بازه تاریخ موردنظر (از تاریخ /
+   تا تاریخ) را وارد کرده و روی «جستجو» کلیک می‌کنید تا صفحه اول نتایج باز شود.
 4. در ترمینال کلید Enter را می‌زنید تا اسکریپت شروع به کار کند.
-5. اسکریپت به‌صورت خودکار از هر صفحه، «شماره پذیرش»، «نام سازنده» و
-   «سریال مخزن» را استخراج می‌کند، روی دکمه صفحه بعد کلیک می‌کند و این کار
-   را تا آخرین صفحه تکرار می‌کند.
-6. در پایان یک فایل Excel با نتایج ساخته می‌شود.
+5. اسکریپت برای هر ردیفی که دکمه «چاپ نتایج» دارد، به‌صورت خودکار صفحه
+   نتیجه آزمون همان پذیرش را می‌خواند و «شماره پذیرش»، «نام سازنده» و
+   «سریال مخزن» (برای همه مخزن‌های همان پذیرش) را استخراج می‌کند.
+6. روی شماره صفحه بعدی (۲، ۳، ...) کلیک می‌کند و همین کار را تکرار می‌کند
+   تا به آخرین صفحه برسد.
+7. در پایان یک فایل Excel با نتایج ساخته می‌شود.
 
 اجرا:
     pip install -r requirements.txt
     playwright install chromium
-    python extract_serials.py --start-url "https://<site-address>" --out result.xlsx
+    python extract_serials.py --out result.xlsx
 """
 
 import argparse
 import re
 import sys
+from urllib.parse import urljoin
 
+from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
 
-# متن دکمه/لینک «صفحه بعد» ممکن است در سامانه‌های مختلف فرق کند.
-# اسکریپت به ترتیب این‌ها را امتحان می‌کند و اولین موردی که فعال و قابل کلیک
-# باشد را انتخاب می‌کند. اگر سایت شما از متن دیگری استفاده می‌کند، آن را به
-# همین لیست اضافه کنید.
-NEXT_PAGE_SELECTORS = [
-    "li.PagedList-skipToNext a",
-    "a[rel='next']",
-    "a:has-text('بعدی')",
-    "a:has-text('صفحه بعد')",
-    ".pagination .next a",
-    "a:has-text('Next')",
-    "a:has-text('»')",
-]
-
-EXTRACT_JS = r"""
-() => {
-    const rows = [];
-    const links = document.querySelectorAll('a[href*="PrintResult"]');
-    links.forEach(link => {
-        const href = link.getAttribute('href') || '';
-        const match = href.match(/ReceptionId=(\d+)/);
-        if (!match) return;
-        const receptionId = match[1];
-
-        // از روی لینک بالا می‌رویم تا کارت/ردیفی که شامل متن
-        // «سریال مخزن» است را پیدا کنیم.
-        let container = link;
-        let serialText = null;
-        for (let i = 0; i < 6 && container; i++) {
-            container = container.parentElement;
-            if (!container) break;
-            const paragraphs = container.querySelectorAll('p');
-            for (const p of paragraphs) {
-                if (p.textContent && p.textContent.includes('سریال مخزن')) {
-                    serialText = p.textContent;
-                    break;
-                }
-            }
-            if (serialText) break;
-        }
-
-        rows.push({ receptionId, serialText });
-    });
-    return rows;
-}
-"""
+DEFAULT_START_URL = "https://gas.symfa.ir/TestCenters/GasReception"
 
 
 def parse_manufacturer_serial(raw_text):
-    """از متنی مثل 'شرکت و سریال مخزن: Asiyanama(ANCC)-2024071949'
+    """از متنی مثل 'شرکت و سریال مخزن: MIE(Energy-Sanat)-381481411410'
     نام سازنده و سریال مخزن را جدا می‌کند."""
     if not raw_text:
         return "", ""
@@ -85,32 +45,49 @@ def parse_manufacturer_serial(raw_text):
     return text, ""
 
 
-def scrape_current_page(page):
-    rows = page.evaluate(EXTRACT_JS)
-    results = []
-    for row in rows:
-        manufacturer, serial = parse_manufacturer_serial(row.get("serialText"))
-        results.append({
-            "شماره پذیرش": row["receptionId"],
-            "نام سازنده": manufacturer,
-            "سریال مخزن": serial,
-        })
-    return results
+def find_reception_ids(page):
+    """کد پذیرش (ReceptionId) تمام ردیف‌هایی که دکمه «چاپ نتایج» دارند را از
+    صفحه فعلی لیست پذیرش‌ها برمی‌دارد."""
+    hrefs = page.eval_on_selector_all(
+        "a[href*='PrintResult']",
+        "elements => elements.map(e => e.getAttribute('href'))",
+    )
+    ids = []
+    for href in hrefs:
+        match = re.search(r"ReceptionId=(\d+)", href or "")
+        if match:
+            ids.append(match.group(1))
+    return ids
 
 
-def find_next_page_control(page):
-    for selector in NEXT_PAGE_SELECTORS:
+def extract_tanks_from_print_page(html):
+    """از HTML صفحه «چاپ نتایج» تمام خط‌های «... سریال مخزن: ...» را
+    پیدا می‌کند (ممکن است یک پذیرش چند مخزن داشته باشد)."""
+    soup = BeautifulSoup(html, "html.parser")
+    tank_lines = []
+    for el in soup.find_all(True):
+        if el.find(True):
+            # فقط عناصر برگ (بدون تگ فرزند) را می‌خواهیم تا متن قاطی نشود.
+            continue
+        text = el.get_text(" ", strip=True)
+        if "سریال مخزن" in text:
+            tank_lines.append(text)
+    return tank_lines
+
+
+def click_page_number(page, next_number):
+    """روی لینک/دکمه شماره صفحه بعدی در نوار صفحه‌بندی کلیک می‌کند."""
+    candidates = [
+        f"xpath=//a[normalize-space(text())='{next_number}']",
+        f"xpath=//button[normalize-space(text())='{next_number}']",
+        f"xpath=//li[normalize-space(text())='{next_number}']",
+    ]
+    for selector in candidates:
         locator = page.locator(selector)
-        try:
-            count = locator.count()
-        except Exception:
-            continue
-        if count == 0:
-            continue
-        element = locator.first
-        if element.is_visible() and element.is_enabled():
-            return element
-    return None
+        if locator.count() > 0 and locator.first.is_visible():
+            locator.first.click()
+            return True
+    return False
 
 
 def save_to_excel(all_rows, out_path):
@@ -135,19 +112,21 @@ def save_to_excel(all_rows, out_path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--start-url", required=True, help="آدرس سامانه (صفحه ورود)")
+    parser.add_argument("--start-url", default=DEFAULT_START_URL, help="آدرس صفحه پذیرش‌های گازسوز")
     parser.add_argument("--out", default="result.xlsx", help="مسیر فایل خروجی Excel")
     parser.add_argument("--max-pages", type=int, default=500, help="سقف تعداد صفحات برای جلوگیری از حلقه بی‌نهایت")
     args = parser.parse_args()
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
-        page = browser.new_page()
+        context = browser.new_context()
+        page = context.new_page()
         page.goto(args.start_url)
 
         print("مرورگر باز شد.")
-        print("لطفاً به‌صورت دستی وارد سامانه شوید، تاریخ را وارد کنید و روی «مشاهده نتیجه» بزنید.")
-        input("وقتی صفحه اول نتایج باز شد، اینجا Enter را بزنید تا استخراج شروع شود... ")
+        print("لطفاً به‌صورت دستی وارد سامانه شوید، به بخش «پذیرش‌های گازسوز» بروید،")
+        print("بازه تاریخ موردنظر را وارد کنید و روی «جستجو» بزنید.")
+        input("وقتی صفحه اول نتایج (لیست پذیرش‌ها) باز شد، اینجا Enter را بزنید... ")
 
         all_rows = []
         seen_reception_ids = set()
@@ -155,24 +134,42 @@ def main():
 
         while page_number <= args.max_pages:
             page.wait_for_load_state("networkidle")
-            page_rows = scrape_current_page(page)
+            reception_ids = find_reception_ids(page)
+            new_ids = [rid for rid in reception_ids if rid not in seen_reception_ids]
 
-            new_rows = [r for r in page_rows if r["شماره پذیرش"] not in seen_reception_ids]
-            if not new_rows and page_number > 1:
-                print(f"صفحه {page_number}: ردیف جدیدی پیدا نشد، پایان استخراج.")
+            if not new_ids and page_number > 1:
+                print(f"صفحه {page_number}: پذیرش جدیدی پیدا نشد، پایان استخراج.")
                 break
 
-            for r in new_rows:
-                seen_reception_ids.add(r["شماره پذیرش"])
-            all_rows.extend(new_rows)
-            print(f"صفحه {page_number}: {len(new_rows)} ردیف استخراج شد. (مجموع: {len(all_rows)})")
+            print(f"صفحه {page_number}: {len(new_ids)} پذیرش دارای نتیجه پیدا شد.")
+            for reception_id in new_ids:
+                seen_reception_ids.add(reception_id)
+                print_url = urljoin(page.url, f"/TestCenters/GasReception/PrintResult?ReceptionId={reception_id}")
+                response = context.request.get(print_url)
+                if not response.ok:
+                    print(f"  - پذیرش {reception_id}: خطا در بارگذاری صفحه نتیجه ({response.status})")
+                    continue
 
-            next_control = find_next_page_control(page)
-            if next_control is None:
-                print("دکمه صفحه بعد پیدا نشد، پایان استخراج.")
+                tank_lines = extract_tanks_from_print_page(response.text())
+                if not tank_lines:
+                    print(f"  - پذیرش {reception_id}: خط «سریال مخزن» پیدا نشد.")
+                    continue
+
+                for line in tank_lines:
+                    manufacturer, serial = parse_manufacturer_serial(line)
+                    all_rows.append({
+                        "شماره پذیرش": reception_id,
+                        "نام سازنده": manufacturer,
+                        "سریال مخزن": serial,
+                    })
+                print(f"  - پذیرش {reception_id}: {len(tank_lines)} مخزن استخراج شد.")
+
+            print(f"مجموع تا این‌جا: {len(all_rows)} ردیف.")
+
+            if not click_page_number(page, page_number + 1):
+                print("صفحه بعدی پیدا نشد، پایان استخراج.")
                 break
 
-            next_control.click()
             page_number += 1
 
         browser.close()
