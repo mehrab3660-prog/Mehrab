@@ -2,7 +2,7 @@ requests==2.32.3
 reportlab==4.2.5
 arabic-reshaper==3.0.0
 python-bidi==0.4.2
-matplotlib==3.9.2
+matplotlib==3.7.5
 openpyxl==3.1.5
 ttkbootstrap==1.10.1
 pywin32==306; sys_platform == 'win32'

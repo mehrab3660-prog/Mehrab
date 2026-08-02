@@ -26,13 +26,21 @@ jobs:
           python-version: "3.8"
 
       - name: Install dependencies
+        # shell: bash + "set -e" so that if any single package fails to install
+        # (e.g. a version pin incompatible with this Python), the step fails loudly
+        # instead of silently continuing to the next line and shipping a broken exe
+        # (pwsh does not stop on a non-zero exit code by default).
+        shell: bash
         run: |
+          set -e
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m pip install pyinstaller
 
       - name: Build exe
+        shell: bash
         run: |
+          set -e
           python -m PyInstaller --onefile --name AccountingApp --icon=assets/icon.ico --add-data "web;web" --add-data "assets;assets" --add-data "fonts;fonts" --noconfirm run_app.py
 
       - name: Upload exe artifact
