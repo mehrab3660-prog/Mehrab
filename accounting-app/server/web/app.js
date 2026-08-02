@@ -1584,14 +1584,23 @@ let bulkPriceRows = [];
 async function loadBulkPricePage() {
   $('#bulk-price-preview-card').classList.add('hidden');
   await refreshPriceHistory();
+  const categories = await api('GET', '/categories');
+  const select = $('#bulk-price-category');
+  const currentValue = select.value;
+  select.innerHTML = '<option value="">همه دسته‌ها</option>' +
+    (categories || []).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  select.value = currentValue;
 }
 
 $('#btn-bulk-price-preview').addEventListener('click', async () => {
   const percent = parseFloat($('#bulk-price-percent').value);
   if (isNaN(percent)) { toast('درصد را وارد کن', 'danger'); return; }
   const target = $('#bulk-price-target').value;
-  const items = await api('GET', '/items');
+  const categoryId = $('#bulk-price-category').value;
+  let items = await api('GET', '/items');
   if (!items) return;
+  if (categoryId) items = items.filter(it => String(it.category_id) === categoryId);
+  if (!items.length) { toast('کالایی در این دسته‌بندی پیدا نشد', 'danger'); return; }
 
   const factor = 1 + percent / 100;
   bulkPriceRows = items.map(it => ({
@@ -1626,10 +1635,13 @@ $('#btn-bulk-price-apply').addEventListener('click', async () => {
   if (!changes.length) { toast('حداقل یک کالا باید تیک خورده باشد', 'danger'); return; }
   const percent = $('#bulk-price-percent').value;
   const target = $('#bulk-price-target').selectedOptions[0].textContent;
+  const categorySelect = $('#bulk-price-category');
+  const categoryName = categorySelect.value ? categorySelect.selectedOptions[0].textContent : null;
   if (!confirm(`آیا مطمئنی می‌خوای قیمت ${changes.length} کالا رو تغییر بدی؟`)) return;
 
+  const note = `تغییر ${percent}٪ روی ${target}` + (categoryName ? ` — دسته: ${categoryName}` : '');
   const res = await api('POST', '/items/apply-bulk-prices', {
-    changes, note: `تغییر ${percent}٪ روی ${target}`, username: state.user.username,
+    changes, note, username: state.user.username,
   });
   if (res && res.ok) {
     toast(`قیمت ${res.updated_count} کالا با موفقیت تغییر کرد`, 'success');
