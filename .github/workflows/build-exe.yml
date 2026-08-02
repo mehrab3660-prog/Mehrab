@@ -1,0 +1,39 @@
+name: Build Windows exe
+
+on:
+  push:
+    branches:
+      - "**"
+    paths:
+      - "accounting-app/client/**"
+      - ".github/workflows/build-exe.yml"
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: accounting-app/client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
+
+      - name: Build exe
+        run: |
+          python -m PyInstaller --onefile --name AccountingApp --icon=assets/icon.ico --add-data "web;web" --add-data "assets;assets" --add-data "fonts;fonts" --noconfirm run_app.py
+
+      - name: Upload exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AccountingApp-windows-exe
+          path: accounting-app/client/dist/AccountingApp.exe
