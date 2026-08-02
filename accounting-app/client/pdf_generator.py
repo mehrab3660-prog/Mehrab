@@ -165,6 +165,25 @@ def generate_invoice_pdf(output_path, invoice, items, party_name=None, shop_name
     if party_name:
         c.drawRightString(width - margin, y, rtl(f'طرف حساب: {party_name}'))
         y -= (14 if is_thermal else 18)
+    if invoice.get("description"):
+        desc_text = f'توضیحات: {invoice["description"]}'
+        if is_thermal:
+            max_chars = 34
+            words = desc_text.split(" ")
+            line = ""
+            for w in words:
+                if len(line) + len(w) + 1 > max_chars:
+                    c.drawRightString(width - margin, y, rtl(line))
+                    y -= 11
+                    line = w
+                else:
+                    line = (line + " " + w) if line else w
+            if line:
+                c.drawRightString(width - margin, y, rtl(line))
+                y -= 11
+        else:
+            c.drawRightString(width - margin, y, rtl(desc_text))
+            y -= 18
 
     y -= 8
     c.line(margin, y, width - margin, y)

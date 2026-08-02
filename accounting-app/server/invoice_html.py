@@ -107,6 +107,11 @@ def build_invoice_html(invoice, items, party, page_format="A5",
           <span><strong>تلفن:</strong> {esc(to_fa_digits(party.get('phone') or '—'))}</span>
         </div>"""
 
+    description_block = ""
+    if invoice.get("description"):
+        description_block = f"""
+        <div class="description-row"><strong>توضیحات:</strong> {esc(invoice["description"])}</div>"""
+
     date_fa = to_fa_digits(jalali.format_jalali_datetime(invoice.get('date', '')))
 
     html = f"""<!DOCTYPE html>
@@ -133,6 +138,7 @@ def build_invoice_html(invoice, items, party, page_format="A5",
   .clearfix::after {{ content: ""; display: table; clear: both; }}
   .meta-row {{ display: flex; justify-content: space-between; margin: 10px 0 4px 0; font-size: {'10px' if is_thermal else '13px'}; flex-wrap: wrap; }}
   .party-row {{ display: flex; justify-content: space-between; margin-bottom: 8px; font-size: {'10px' if is_thermal else '13px'}; border-top: 1px dashed #999; padding-top: 6px; flex-wrap: wrap; }}
+  .description-row {{ margin-bottom: 8px; font-size: {'10px' if is_thermal else '13px'}; color: #333; word-break: break-word; }}
   table.items {{ width: 100%; border-collapse: collapse; margin-top: 8px; }}
   table.items th, table.items td {{
     border: 1px solid #333; padding: {'3px' if is_thermal else '7px'}; text-align: center;
@@ -173,6 +179,7 @@ def build_invoice_html(invoice, items, party, page_format="A5",
   <span><strong>تاریخ:</strong> {date_fa}</span>
 </div>
 {party_block}
+{description_block}
 
 <table class="items">
   <thead>
