@@ -546,21 +546,133 @@ def add_invoice():
 @app.route("/invoices/<int:invoice_id>", methods=["PUT"])
 def update_invoice(invoice_id):
     """
-    ویرایش یک فاکتور موجود — فقط فیلد توضیحات (غیرمالی).
-    برای جلوگیری از به‌هم‌ریختن موجودی/حساب/صندوق، اقلام، مبالغ، نوع پرداخت و طرف‌حساب
-    از این مسیر قابل تغییر نیستند؛ برای اصلاح آن‌ها باید فاکتور حذف و دوباره ثبت شود.
+    ویرایش کامل یک فاکتور موجود (اقلام، تعداد/قیمت، طرف‌حساب، نوع پرداخت، تخفیف، توضیحات).
+    نوع فاکتور (فروش/خرید/مرجوعی فروش/مرجوعی خرید) قابل تغییر نیست — برای آن باید فاکتور
+    حذف و دوباره با نوع درست ثبت شود.
+
+    روش کار: ابتدا اثرات فاکتور قبلی (موجودی انبار، مانده حساب طرف‌حساب، تراکنش صندوق،
+    چک‌های مرتبط) دقیقاً مثل حذف فاکتور برگردانده می‌شود؛ سپس همان اعتبارسنجی‌هایی که
+    هنگام ثبت فاکتور جدید انجام می‌شود (سقف اعتبار، موجودی کافی) روی داده‌ی ویرایش‌شده
+    اجرا می‌شود؛ اگر نامعتبر بود همه‌چیز rollback و خطا برگردانده می‌شود، وگرنه اثرات
+    جدید اعمال و ثبت می‌شود.
     """
+    err = require_admin()
+    if err:
+        return err
     d = request.json or {}
     conn = get_connection()
     invoice = conn.execute("SELECT * FROM invoices WHERE id=?", (invoice_id,)).fetchone()
     if not invoice:
         conn.close()
         return jsonify({"ok": False, "message": "فاکتور پیدا نشد"}), 404
-    conn.execute("UPDATE invoices SET description=? WHERE id=?", (d.get("description", ""), invoice_id))
+
+    new_items = d.get("items") or []
+    if not new_items:
+        conn.close()
+        return jsonify({"ok": False, "message": "فاکتور باید حداقل یک کالا داشته باشد"}), 400
+
+    invoice_type = invoice["invoice_type"]  # نوع فاکتور از طریق ویرایش قابل تغییر نیست
+    sale_like = invoice_type in ("sale", "purchase_return")
+    old_items = conn.execute("SELECT * FROM invoice_items WHERE invoice_id=?", (invoice_id,)).fetchall()
+
+    # ۱. برگرداندن موجودی انبار قبلی (برعکسِ همون منطقی که هنگام ثبت اعمال شده بود)
+    for it in old_items:
+        if sale_like:
+            conn.execute("UPDATE items SET stock_qty = stock_qty + ? WHERE id=?", (it["qty"], it["item_id"]))
+        else:
+            conn.execute("UPDATE items SET stock_qty = stock_qty - ? WHERE id=?", (it["qty"], it["item_id"]))
+
+    # ۲. برگرداندن مانده حساب طرف‌حساب قبلی (اگر نسیه بوده)
+    if invoice["party_id"] and invoice["payment_type"] == "credit":
+        old_remaining = invoice["total"] - invoice["paid"]
+        sign_map = {"sale": 1, "purchase": -1, "sale_return": -1, "purchase_return": 1}
+        old_sign = sign_map.get(invoice_type, 0)
+        conn.execute("UPDATE parties SET balance = balance - ? WHERE id=?", (old_sign * old_remaining, invoice["party_id"]))
+
+    # ۳. حذف تراکنش صندوق و چک‌های مرتبط قبلی (مثل حذف فاکتور)
+    conn.execute("DELETE FROM cash_transactions WHERE invoice_id=?", (invoice_id,))
+    related_checks = conn.execute("SELECT * FROM checks WHERE invoice_id=?", (invoice_id,)).fetchall()
+    checks_note = ""
+    for ch in related_checks:
+        if ch["status"] == "cashed":
+            conn.execute("DELETE FROM cash_transactions WHERE description=?", (f"وصول چک شماره {ch['id']}",))
+            checks_note = " (چک‌های وصول‌شده مرتبط حذف و اثرشان در صندوق برگردانده شد — در صورت نیاز چک جدید ثبت کنید)"
+    conn.execute("DELETE FROM checks WHERE invoice_id=?", (invoice_id,))
+    conn.execute("DELETE FROM invoice_items WHERE invoice_id=?", (invoice_id,))
+
+    # ---------- اعتبارسنجی داده‌ی جدید، روی وضعیتِ برگردانده‌شده ----------
+    new_party_id = d.get("party_id")
+    new_payment_type = d.get("payment_type", invoice["payment_type"])
+    discount = d.get("discount", 0) or 0
+    subtotal = sum(it["qty"] * it["unit_price"] for it in new_items)
+    total = max(subtotal - discount, 0)
+    paid = total if new_payment_type == "cash" else d.get("paid", 0)
+
+    if invoice_type == "sale" and new_payment_type == "credit" and new_party_id:
+        party = conn.execute("SELECT * FROM parties WHERE id=?", (new_party_id,)).fetchone()
+        if party and party["credit_limit"] and party["credit_limit"] > 0:
+            remaining = total - paid
+            projected_balance = party["balance"] + remaining
+            if projected_balance > party["credit_limit"]:
+                conn.rollback()
+                conn.close()
+                return jsonify({
+                    "ok": False,
+                    "message": f'این فاکتور از سقف اعتبار «{party["name"]}» عبور می‌کند '
+                               f'(سقف: {party["credit_limit"]:,.0f}، بدهی فعلی: {party["balance"]:,.0f}، بعد از این فاکتور: {projected_balance:,.0f})'
+                }), 400
+
+    if invoice_type == "sale":
+        needed = {}
+        for it in new_items:
+            needed[it["item_id"]] = needed.get(it["item_id"], 0) + it["qty"]
+        for item_id, qty_needed in needed.items():
+            row = conn.execute("SELECT name, stock_qty FROM items WHERE id=?", (item_id,)).fetchone()
+            if row and row["stock_qty"] < qty_needed:
+                conn.rollback()
+                conn.close()
+                return jsonify({
+                    "ok": False,
+                    "message": f'موجودی «{row["name"]}» فقط {row["stock_qty"]:g} عدد است — نمی‌توان {qty_needed:g} تا فروخت'
+                }), 400
+
+    # ---------- اعمال اثرات جدید ----------
+    for it in new_items:
+        line_total = it["qty"] * it["unit_price"]
+        conn.execute("""INSERT INTO invoice_items (invoice_id, item_id, qty, unit_price, total)
+                        VALUES (?,?,?,?,?)""",
+                     (invoice_id, it["item_id"], it["qty"], it["unit_price"], line_total))
+        if sale_like:
+            conn.execute("UPDATE items SET stock_qty = stock_qty - ? WHERE id=?", (it["qty"], it["item_id"]))
+        else:
+            conn.execute("UPDATE items SET stock_qty = stock_qty + ? WHERE id=?", (it["qty"], it["item_id"]))
+
+    if new_party_id and new_payment_type == "credit":
+        remaining = total - paid
+        new_sign = 1 if invoice_type == "sale" else (-1 if invoice_type == "purchase" else 0)
+        if invoice_type == "sale_return":
+            new_sign = -1
+        elif invoice_type == "purchase_return":
+            new_sign = 1
+        conn.execute("UPDATE parties SET balance = balance + ? WHERE id=?", (new_sign * remaining, new_party_id))
+
+    conn.execute(
+        "UPDATE invoices SET party_id=?, total=?, paid=?, payment_type=?, description=?, discount=? WHERE id=?",
+        (new_party_id, total, paid, new_payment_type, d.get("description", invoice["description"]), discount, invoice_id)
+    )
+
+    if paid > 0:
+        tx_type = "in" if invoice_type in ("sale", "purchase_return") else "out"
+        label = {"sale": "فروش", "purchase": "خرید", "sale_return": "مرجوعی فروش", "purchase_return": "مرجوعی خرید"}[invoice_type]
+        conn.execute("INSERT INTO cash_transactions (date, tx_type, amount, description, invoice_id) VALUES (?,?,?,?,?)",
+                     (now(), tx_type, paid, f"فاکتور {label} شماره {invoice['number']} (ویرایش‌شده)", invoice_id))
+
     conn.commit()
     conn.close()
-    log_action(d.get("username"), "ویرایش توضیحات فاکتور", f'فاکتور شماره {invoice["number"] or invoice_id}')
-    return jsonify({"ok": True})
+    log_action(d.get("username"), "ویرایش فاکتور", f'فاکتور شماره {invoice["number"] or invoice_id}{checks_note}')
+    log_security_event(d.get("username"), "ویرایش فاکتور",
+                        f'فاکتور شماره {invoice["number"] or invoice_id} — جمع کل جدید: {total:,.0f} تومان{checks_note}')
+    return jsonify({"ok": True, "invoice_id": invoice_id, "invoice_number": invoice["number"], "total": total})
 
 
 @app.route("/invoices/<int:invoice_id>", methods=["DELETE"])

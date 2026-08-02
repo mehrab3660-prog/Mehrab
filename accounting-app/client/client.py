@@ -794,45 +794,179 @@ class App(_BASE_APP):
             tree.column(c, width=120, anchor="center")
         tree.pack(fill="both", expand=True, padx=10, pady=10)
 
+        type_label_fa = {"sale": "فروش", "purchase": "خرید", "sale_return": "مرجوعی فروش", "purchase_return": "مرجوعی خرید"}
+        self._history_invoices = {}
+
         def refresh():
             for r in tree.get_children():
                 tree.delete(r)
             t = None if type_combo.get() == "همه" else type_combo.get()
             path = "/invoices" + (f"?type={t}" if t else "")
             invoices = self.api("GET", path) or []
+            self._history_invoices = {inv["id"]: inv for inv in invoices}
             for inv in invoices:
                 tree.insert("", "end", values=(
-                    inv["id"], "فروش" if inv["invoice_type"] == "sale" else "خرید",
+                    inv["id"], type_label_fa.get(inv["invoice_type"], inv["invoice_type"]),
                     inv["date"], inv.get("party_name") or "-", inv["total"], inv["paid"], inv.get("description") or "-"
                 ))
 
-        def edit_description():
+        def edit_invoice_full():
             sel = tree.selection()
             if not sel:
                 messagebox.showerror("خطا", "یک فاکتور از لیست انتخاب کنید")
                 return
-            vals = tree.item(sel[0])["values"]
-            invoice_id = vals[0]
-            current_desc = vals[6] if vals[6] != "-" else ""
+            invoice_id = tree.item(sel[0])["values"][0]
+            inv = self._history_invoices.get(invoice_id)
+            if not inv:
+                messagebox.showerror("خطا", "اطلاعات فاکتور پیدا نشد؛ لیست را بروزرسانی کنید")
+                return
+
+            inv_items = self.api("GET", f"/invoices/{invoice_id}/items") or []
+            all_items = self.api("GET", "/items") or []
+            all_parties = self.api("GET", "/parties") or []
+            item_by_id = {it["id"]: it for it in all_items}
+            wanted_party_type = "customer" if inv["invoice_type"] in ("sale", "sale_return") else "supplier"
+            parties = [p for p in all_parties if p["type"] == wanted_party_type]
+
+            cart = [{"item_id": it["item_id"], "item_name": it["item_name"],
+                     "qty": it["qty"], "unit_price": it["unit_price"]} for it in inv_items]
 
             win = tk.Toplevel(self)
-            win.title(f"ویرایش توضیحات فاکتور {invoice_id}")
-            ttk.Label(win, text="برای جلوگیری از به‌هم‌ریختن موجودی/حساب‌ها، فقط توضیحات قابل ویرایش است.",
-                      wraplength=320).pack(padx=15, pady=(15, 5))
-            entry = ttk.Entry(win, width=40)
-            entry.insert(0, current_desc)
-            entry.pack(padx=15, pady=5)
+            win.title(f'ویرایش فاکتور {inv.get("number") or invoice_id}')
+            win.geometry("560x560")
+
+            ttk.Label(win, text=f'نوع فاکتور ({type_label_fa.get(inv["invoice_type"], inv["invoice_type"])}) قابل تغییر نیست. '
+                                 "موجودی انبار و حساب طرف‌حساب بر اساس مقادیر جدید دوباره محاسبه می‌شود.",
+                      wraplength=520, foreground="gray").pack(padx=15, pady=(15, 10))
+
+            top_frame = ttk.Frame(win, padding=(15, 0))
+            top_frame.pack(fill="x")
+
+            ttk.Label(top_frame, text="طرف‌حساب:").grid(row=0, column=0, sticky="e", padx=5, pady=3)
+            party_names = ["— بدون طرف‌حساب —"] + [p["name"] for p in parties]
+            party_combo = ttk.Combobox(top_frame, state="readonly", values=party_names, width=25)
+            current_party = next((p["name"] for p in parties if p["id"] == inv.get("party_id")), None)
+            party_combo.set(current_party or party_names[0])
+            party_combo.grid(row=0, column=1, padx=5, pady=3)
+
+            ttk.Label(top_frame, text="نوع پرداخت:").grid(row=0, column=2, sticky="e", padx=5, pady=3)
+            pay_fa = {"cash": "نقدی", "credit": "نسیه", "check": "چک"}
+            pay_combo = ttk.Combobox(top_frame, state="readonly", values=["نقدی", "نسیه", "چک"], width=10)
+            pay_combo.set(pay_fa.get(inv["payment_type"], "نقدی"))
+            pay_combo.grid(row=0, column=3, padx=5, pady=3)
+
+            ttk.Label(top_frame, text="تخفیف کل (تومان):").grid(row=1, column=0, sticky="e", padx=5, pady=3)
+            discount_entry = ttk.Entry(top_frame, width=15)
+            discount_entry.insert(0, str(inv.get("discount", 0) or 0))
+            discount_entry.grid(row=1, column=1, padx=5, pady=3)
+
+            ttk.Label(top_frame, text="توضیحات:").grid(row=1, column=2, sticky="e", padx=5, pady=3)
+            desc_entry = ttk.Entry(top_frame, width=25)
+            desc_entry.insert(0, inv.get("description") or "")
+            desc_entry.grid(row=1, column=3, padx=5, pady=3)
+
+            ttk.Label(win, text="اقلام فاکتور:", font=("Tahoma", 10, "bold")).pack(padx=15, pady=(10, 0), anchor="e")
+
+            cart_tree = ttk.Treeview(win, columns=("item", "qty", "price", "total"), show="headings", height=6)
+            for c, t in zip(("item", "qty", "price", "total"), ("کالا", "تعداد", "قیمت واحد", "جمع")):
+                cart_tree.heading(c, text=t)
+                cart_tree.column(c, width=110, anchor="center")
+            cart_tree.pack(fill="both", expand=True, padx=15, pady=5)
+
+            def refresh_cart_tree():
+                for r in cart_tree.get_children():
+                    cart_tree.delete(r)
+                for row in cart:
+                    cart_tree.insert("", "end", values=(row["item_name"], row["qty"], row["unit_price"],
+                                                          row["qty"] * row["unit_price"]))
+
+            refresh_cart_tree()
+
+            def remove_selected_row():
+                sel2 = cart_tree.selection()
+                if not sel2:
+                    return
+                idx = cart_tree.index(sel2[0])
+                cart.pop(idx)
+                refresh_cart_tree()
+
+            ttk.Button(win, text="حذف ردیف انتخاب‌شده", command=remove_selected_row).pack(padx=15, pady=2, anchor="e")
+
+            add_frame = ttk.Frame(win, padding=(15, 5))
+            add_frame.pack(fill="x")
+            price_field = "sale_price" if inv["invoice_type"] in ("sale", "sale_return") else "purchase_price"
+            item_names = [it["name"] for it in all_items]
+            ttk.Label(add_frame, text="کالا:").grid(row=0, column=0, sticky="e", padx=3)
+            item_combo = ttk.Combobox(add_frame, values=item_names, width=20)
+            item_combo.grid(row=0, column=1, padx=3)
+            ttk.Label(add_frame, text="تعداد:").grid(row=0, column=2, sticky="e", padx=3)
+            qty_entry = ttk.Entry(add_frame, width=8)
+            qty_entry.grid(row=0, column=3, padx=3)
+            ttk.Label(add_frame, text="قیمت واحد:").grid(row=0, column=4, sticky="e", padx=3)
+            price_entry = ttk.Entry(add_frame, width=10)
+            price_entry.grid(row=0, column=5, padx=3)
+
+            def add_line():
+                name = item_combo.get()
+                match = next((it for it in all_items if it["name"] == name), None)
+                if not match:
+                    messagebox.showerror("خطا", "کالای انتخاب‌شده معتبر نیست")
+                    return
+                try:
+                    qty = float(qty_entry.get())
+                    price = float(price_entry.get())
+                except ValueError:
+                    messagebox.showerror("خطا", "تعداد و قیمت باید عدد باشند")
+                    return
+                if not qty or not price:
+                    messagebox.showerror("خطا", "تعداد و قیمت را وارد کنید")
+                    return
+                cart.append({"item_id": match["id"], "item_name": match["name"], "qty": qty, "unit_price": price})
+                qty_entry.delete(0, tk.END)
+                price_entry.delete(0, tk.END)
+                refresh_cart_tree()
+
+            def on_item_selected(event):
+                name = item_combo.get()
+                match = next((it for it in all_items if it["name"] == name), None)
+                if match and match.get(price_field):
+                    price_entry.delete(0, tk.END)
+                    price_entry.insert(0, str(match[price_field]))
+
+            item_combo.bind("<<ComboboxSelected>>", on_item_selected)
+            ttk.Button(add_frame, text="+ افزودن قلم", command=add_line).grid(row=0, column=6, padx=8)
 
             def save():
-                res = self.api("PUT", f"/invoices/{invoice_id}",
-                                json={"description": entry.get(), "username": self.user["username"]})
+                if not cart:
+                    messagebox.showerror("خطا", "فاکتور باید حداقل یک کالا داشته باشد")
+                    return
+                if not messagebox.askyesno("تأیید ویرایش",
+                        "آیا مطمئنی می‌خوای این فاکتور رو با این تغییرات ذخیره کنی؟\n"
+                        "موجودی انبار و حساب طرف‌حساب بر این اساس دوباره محاسبه می‌شود."):
+                    return
+                selected_party = next((p for p in parties if p["name"] == party_combo.get()), None)
+                pay_type = {v: k for k, v in pay_fa.items()}.get(pay_combo.get(), "cash")
+                try:
+                    discount = float(discount_entry.get() or 0)
+                except ValueError:
+                    discount = 0
+                payload = {
+                    "party_id": selected_party["id"] if selected_party else None,
+                    "payment_type": pay_type,
+                    "discount": discount,
+                    "description": desc_entry.get(),
+                    "username": self.user["username"],
+                    "items": [{"item_id": r["item_id"], "qty": r["qty"], "unit_price": r["unit_price"]} for r in cart],
+                }
+                res = self.api("PUT", f"/invoices/{invoice_id}", json=payload)
                 if res and res.get("ok"):
+                    messagebox.showinfo("موفق", "فاکتور با موفقیت ویرایش شد")
                     win.destroy()
                     refresh()
                 else:
                     messagebox.showerror("خطا", (res or {}).get("message", "ذخیره نشد"))
 
-            ttk.Button(win, text="ذخیره", command=save).pack(pady=15)
+            ttk.Button(win, text="ذخیره تغییرات", command=save).pack(pady=15)
 
         def print_selected():
             sel = tree.selection()
@@ -858,7 +992,8 @@ class App(_BASE_APP):
         btn_row = ttk.Frame(parent)
         btn_row.pack(pady=5)
         ttk.Button(btn_row, text="چاپ / ذخیره PDF فاکتور انتخاب‌شده", command=print_selected).pack(side="right", padx=5)
-        ttk.Button(btn_row, text="ویرایش توضیحات فاکتور انتخاب‌شده", command=edit_description).pack(side="right", padx=5)
+        if self.user and self.user.get("role") == "admin":
+            ttk.Button(btn_row, text="ویرایش فاکتور انتخاب‌شده", command=edit_invoice_full).pack(side="right", padx=5)
         ttk.Button(btn_row, text="خروجی اکسل از این لیست", command=export_excel).pack(side="right", padx=5)
         refresh()
         self.tab_refresh_callbacks[parent] = refresh

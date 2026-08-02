@@ -974,7 +974,7 @@ async function loadHistory() {
       <td>${inv.party_name || '—'}</td><td>${inv.description || '—'}</td><td title="${wordsTitle(inv.total)}">${fmt(inv.total)}</td><td title="${wordsTitle(inv.paid)}">${fmt(inv.paid)}</td>
       <td>
         <button class="btn btn-sm btn-secondary" onclick="askPrintInvoice(${inv.id})">چاپ</button>
-        <button class="btn btn-sm btn-secondary" onclick="editInvoiceDescription(${inv.id})">ویرایش</button>
+        ${state.user.role === 'admin' ? `<button class="btn btn-sm btn-secondary" onclick="openEditInvoiceModal(${inv.id})">ویرایش</button>` : ''}
         ${['sale', 'purchase'].includes(inv.invoice_type) ? `<button class="btn btn-sm btn-danger" onclick="openReturnModal(${inv.id})">ثبت مرجوعی</button>` : ''}
         ${state.user.role === 'admin' ? `<button class="btn btn-sm btn-danger" onclick="deleteInvoice(${inv.id})">حذف</button>` : ''}
       </td>
@@ -983,28 +983,124 @@ async function loadHistory() {
 $('#history-type-filter').addEventListener('change', loadHistory);
 $('#btn-refresh-history').addEventListener('click', loadHistory);
 
-function editInvoiceDescription(invoiceId) {
+// ===================== ویرایش کامل فاکتور (اقلام، طرف‌حساب، پرداخت، تخفیف، توضیحات) =====================
+let editInvoiceCart = [];
+
+async function openEditInvoiceModal(invoiceId) {
   const inv = state.invoicesById[invoiceId];
   if (!inv) return;
+  const items = await api('GET', `/invoices/${invoiceId}/items`);
+  if (!items) return;
+  if (!state.items || !state.items.length) state.items = await api('GET', `/items?role=${state.user.role}`) || [];
+  if (!state.parties || !state.parties.length) state.parties = await api('GET', '/parties') || [];
+
+  editInvoiceCart = items.map(it => ({ item_id: it.item_id, item_name: it.item_name, qty: it.qty, unit_price: it.unit_price }));
+
+  const typeLabel = { sale: 'فروش', purchase: 'خرید', sale_return: 'مرجوعی فروش', purchase_return: 'مرجوعی خرید' };
+  const wantedType = ['sale', 'sale_return'].includes(inv.invoice_type) ? 'customer' : 'supplier';
+  const filteredParties = state.parties.filter(p => p.type === wantedType);
+
   openModal(`
-    <h3>ویرایش توضیحات فاکتور ${inv.number || inv.id}</h3>
-    <p class="muted">برای جلوگیری از به‌هم‌ریختن موجودی و حساب‌ها، فقط توضیحات قابل ویرایش است. برای تغییر اقلام/مبالغ، فاکتور را حذف و دوباره ثبت کن.</p>
-    <div class="field"><label>توضیحات</label><input id="edit-inv-description" value="${(inv.description || '').replace(/"/g, '&quot;')}"></div>
+    <h3>ویرایش فاکتور ${inv.number || inv.id}</h3>
+    <p class="muted">نوع فاکتور (${typeLabel[inv.invoice_type] || inv.invoice_type}) قابل تغییر نیست. موجودی انبار و حساب طرف‌حساب بر اساس مقادیر جدید دوباره محاسبه می‌شود.</p>
+    <div class="form-row">
+      <div><label>طرف‌حساب</label><div id="edit-inv-party"></div></div>
+      <div><label>نوع پرداخت</label><select id="edit-inv-pay">
+        <option value="cash">نقدی</option><option value="credit">نسیه</option><option value="check">چک</option>
+      </select></div>
+    </div>
+    <div class="form-row">
+      <div><label>تخفیف کل فاکتور (تومان)</label><input type="text" inputmode="decimal" id="edit-inv-discount"></div>
+      <div><label>توضیحات</label><input id="edit-inv-description"></div>
+    </div>
+    <div class="card" style="margin-top:10px">
+      <div class="card-title">اقلام فاکتور</div>
+      <div class="form-row">
+        <div><label>کالا</label><div id="edit-inv-item"></div></div>
+        <div><label>تعداد</label><input type="number" step="any" id="edit-inv-qty"></div>
+        <div><label>قیمت واحد</label><input type="text" inputmode="decimal" id="edit-inv-price"></div>
+      </div>
+      <button class="btn btn-secondary" type="button" id="edit-inv-add-line">+ افزودن قلم</button>
+      <table class="data-table" style="margin-top:10px"><thead><tr><th>کالا</th><th>تعداد</th><th>قیمت</th><th>جمع</th><th></th></tr></thead><tbody id="edit-inv-cart-tbody"></tbody></table>
+      <div class="cart-total" id="edit-inv-cart-total"></div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal()">انصراف</button>
-      <button class="btn btn-primary" onclick="saveInvoiceDescription(${invoiceId})">ذخیره</button>
+      <button class="btn btn-primary" id="edit-inv-save-btn">ذخیره تغییرات</button>
     </div>`);
+
+  const partySS = createSearchableSelect('edit-inv-party', filteredParties.map(p => ({ value: p.id, label: p.name })),
+    { placeholder: 'جستجو...', emptyLabel: '— بدون طرف‌حساب —' });
+  if (inv.party_id) partySS.setValue(inv.party_id);
+
+  const priceField = ['sale', 'sale_return'].includes(inv.invoice_type) ? 'sale_price' : 'purchase_price';
+  const itemSS = createSearchableSelect('edit-inv-item',
+    state.items.map(it => ({ value: it.id, label: it.name, price: it[priceField] })),
+    {
+      placeholder: 'جستجوی کالا (نام یا کد)...', allowEmpty: false,
+      onSelect: (val, found) => {
+        $('#edit-inv-price').value = found && found.price ? Number(found.price).toLocaleString('en-US') : '';
+      },
+    });
+
+  $('#edit-inv-pay').value = inv.payment_type;
+  attachThousandsFormatting($('#edit-inv-discount'));
+  $('#edit-inv-discount').value = Number(inv.discount || 0).toLocaleString('en-US');
+  $('#edit-inv-description').value = inv.description || '';
+  attachThousandsFormatting($('#edit-inv-price'));
+
+  renderEditInvoiceCart();
+
+  $('#edit-inv-add-line').addEventListener('click', () => {
+    const itemId = parseInt(itemSS.getValue());
+    const itemObj = state.items.find(it => it.id === itemId);
+    const qty = parseFloat($('#edit-inv-qty').value);
+    const price = readAmount($('#edit-inv-price'));
+    if (!itemId || !qty || !price) { toast('کالا، تعداد و قیمت را وارد کنید', 'danger'); return; }
+    editInvoiceCart.push({ item_id: itemId, item_name: itemObj?.name, qty, unit_price: price });
+    $('#edit-inv-qty').value = '';
+    $('#edit-inv-price').value = '';
+    renderEditInvoiceCart();
+  });
+
+  $('#edit-inv-save-btn').addEventListener('click', () => saveFullInvoiceEdit(invoiceId, partySS));
 }
 
-async function saveInvoiceDescription(invoiceId) {
-  const description = $('#edit-inv-description').value;
-  const res = await api('PUT', `/invoices/${invoiceId}`, { description, username: state.user.username });
+function renderEditInvoiceCart() {
+  $('#edit-inv-cart-tbody').innerHTML = editInvoiceCart.map((c, i) => `
+    <tr>
+      <td>${c.item_name}</td><td>${fmt(c.qty)}</td><td>${fmt(c.unit_price)}</td><td>${fmt(c.qty * c.unit_price)}</td>
+      <td><button class="btn btn-sm btn-danger" type="button" onclick="removeEditInvoiceCartRow(${i})">حذف</button></td>
+    </tr>`).join('');
+  const total = editInvoiceCart.reduce((s, c) => s + c.qty * c.unit_price, 0);
+  $('#edit-inv-cart-total').textContent = `جمع جزء: ${fmt(total)} تومان`;
+}
+
+function removeEditInvoiceCartRow(i) {
+  editInvoiceCart.splice(i, 1);
+  renderEditInvoiceCart();
+}
+
+async function saveFullInvoiceEdit(invoiceId, partySS) {
+  if (!editInvoiceCart.length) { toast('فاکتور باید حداقل یک کالا داشته باشد', 'danger'); return; }
+  if (!confirm('آیا مطمئنی می‌خوای این فاکتور رو با این تغییرات ذخیره کنی؟\nموجودی انبار و حساب طرف‌حساب بر این اساس دوباره محاسبه می‌شود.')) return;
+
+  const payload = {
+    party_id: partySS.getValue() || null,
+    payment_type: $('#edit-inv-pay').value,
+    discount: readAmount($('#edit-inv-discount')),
+    description: $('#edit-inv-description').value,
+    username: state.user.username,
+    items: editInvoiceCart.map(c => ({ item_id: c.item_id, qty: c.qty, unit_price: c.unit_price })),
+  };
+  const res = await api('PUT', `/invoices/${invoiceId}`, payload);
   if (res && res.ok) {
-    toast('توضیحات فاکتور ذخیره شد', 'success');
+    toast('فاکتور با موفقیت ویرایش شد', 'success');
     closeModal();
     loadHistory();
+    loadItems();
   } else if (res) {
-    toast(res.message || 'خطا در ذخیره', 'danger');
+    toast(res.message || 'خطا در ویرایش فاکتور', 'danger');
   }
 }
 
