@@ -786,9 +786,9 @@ class App(_BASE_APP):
         type_combo.set("همه")
         type_combo.grid(row=0, column=0, padx=5)
 
-        tree = ttk.Treeview(parent, columns=("id", "type", "date", "party", "total", "paid"), show="headings")
+        tree = ttk.Treeview(parent, columns=("id", "type", "date", "party", "total", "paid", "description"), show="headings")
         headers = {"id": "شماره", "type": "نوع", "date": "تاریخ", "party": "طرف حساب",
-                   "total": "جمع کل", "paid": "پرداخت‌شده"}
+                   "total": "جمع کل", "paid": "پرداخت‌شده", "description": "توضیحات"}
         for c in headers:
             tree.heading(c, text=headers[c])
             tree.column(c, width=120, anchor="center")
@@ -803,8 +803,36 @@ class App(_BASE_APP):
             for inv in invoices:
                 tree.insert("", "end", values=(
                     inv["id"], "فروش" if inv["invoice_type"] == "sale" else "خرید",
-                    inv["date"], inv.get("party_name") or "-", inv["total"], inv["paid"]
+                    inv["date"], inv.get("party_name") or "-", inv["total"], inv["paid"], inv.get("description") or "-"
                 ))
+
+        def edit_description():
+            sel = tree.selection()
+            if not sel:
+                messagebox.showerror("خطا", "یک فاکتور از لیست انتخاب کنید")
+                return
+            vals = tree.item(sel[0])["values"]
+            invoice_id = vals[0]
+            current_desc = vals[6] if vals[6] != "-" else ""
+
+            win = tk.Toplevel(self)
+            win.title(f"ویرایش توضیحات فاکتور {invoice_id}")
+            ttk.Label(win, text="برای جلوگیری از به‌هم‌ریختن موجودی/حساب‌ها، فقط توضیحات قابل ویرایش است.",
+                      wraplength=320).pack(padx=15, pady=(15, 5))
+            entry = ttk.Entry(win, width=40)
+            entry.insert(0, current_desc)
+            entry.pack(padx=15, pady=5)
+
+            def save():
+                res = self.api("PUT", f"/invoices/{invoice_id}",
+                                json={"description": entry.get(), "username": self.user["username"]})
+                if res and res.get("ok"):
+                    win.destroy()
+                    refresh()
+                else:
+                    messagebox.showerror("خطا", (res or {}).get("message", "ذخیره نشد"))
+
+            ttk.Button(win, text="ذخیره", command=save).pack(pady=15)
 
         def print_selected():
             sel = tree.selection()
@@ -830,6 +858,7 @@ class App(_BASE_APP):
         btn_row = ttk.Frame(parent)
         btn_row.pack(pady=5)
         ttk.Button(btn_row, text="چاپ / ذخیره PDF فاکتور انتخاب‌شده", command=print_selected).pack(side="right", padx=5)
+        ttk.Button(btn_row, text="ویرایش توضیحات فاکتور انتخاب‌شده", command=edit_description).pack(side="right", padx=5)
         ttk.Button(btn_row, text="خروجی اکسل از این لیست", command=export_excel).pack(side="right", padx=5)
         refresh()
         self.tab_refresh_callbacks[parent] = refresh

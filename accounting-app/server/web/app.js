@@ -974,6 +974,7 @@ async function loadHistory() {
       <td>${inv.party_name || '—'}</td><td>${inv.description || '—'}</td><td title="${wordsTitle(inv.total)}">${fmt(inv.total)}</td><td title="${wordsTitle(inv.paid)}">${fmt(inv.paid)}</td>
       <td>
         <button class="btn btn-sm btn-secondary" onclick="askPrintInvoice(${inv.id})">چاپ</button>
+        <button class="btn btn-sm btn-secondary" onclick="editInvoiceDescription(${inv.id})">ویرایش</button>
         ${['sale', 'purchase'].includes(inv.invoice_type) ? `<button class="btn btn-sm btn-danger" onclick="openReturnModal(${inv.id})">ثبت مرجوعی</button>` : ''}
         ${state.user.role === 'admin' ? `<button class="btn btn-sm btn-danger" onclick="deleteInvoice(${inv.id})">حذف</button>` : ''}
       </td>
@@ -981,6 +982,31 @@ async function loadHistory() {
 }
 $('#history-type-filter').addEventListener('change', loadHistory);
 $('#btn-refresh-history').addEventListener('click', loadHistory);
+
+function editInvoiceDescription(invoiceId) {
+  const inv = state.invoicesById[invoiceId];
+  if (!inv) return;
+  openModal(`
+    <h3>ویرایش توضیحات فاکتور ${inv.number || inv.id}</h3>
+    <p class="muted">برای جلوگیری از به‌هم‌ریختن موجودی و حساب‌ها، فقط توضیحات قابل ویرایش است. برای تغییر اقلام/مبالغ، فاکتور را حذف و دوباره ثبت کن.</p>
+    <div class="field"><label>توضیحات</label><input id="edit-inv-description" value="${(inv.description || '').replace(/"/g, '&quot;')}"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">انصراف</button>
+      <button class="btn btn-primary" onclick="saveInvoiceDescription(${invoiceId})">ذخیره</button>
+    </div>`);
+}
+
+async function saveInvoiceDescription(invoiceId) {
+  const description = $('#edit-inv-description').value;
+  const res = await api('PUT', `/invoices/${invoiceId}`, { description, username: state.user.username });
+  if (res && res.ok) {
+    toast('توضیحات فاکتور ذخیره شد', 'success');
+    closeModal();
+    loadHistory();
+  } else if (res) {
+    toast(res.message || 'خطا در ذخیره', 'danger');
+  }
+}
 
 async function deleteInvoice(invoiceId) {
   const inv = state.invoicesById[invoiceId];

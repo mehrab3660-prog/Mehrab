@@ -543,6 +543,26 @@ def add_invoice():
     return jsonify({"ok": True, "invoice_id": invoice_id, "invoice_number": invoice_number, "total": total})
 
 
+@app.route("/invoices/<int:invoice_id>", methods=["PUT"])
+def update_invoice(invoice_id):
+    """
+    ویرایش یک فاکتور موجود — فقط فیلد توضیحات (غیرمالی).
+    برای جلوگیری از به‌هم‌ریختن موجودی/حساب/صندوق، اقلام، مبالغ، نوع پرداخت و طرف‌حساب
+    از این مسیر قابل تغییر نیستند؛ برای اصلاح آن‌ها باید فاکتور حذف و دوباره ثبت شود.
+    """
+    d = request.json or {}
+    conn = get_connection()
+    invoice = conn.execute("SELECT * FROM invoices WHERE id=?", (invoice_id,)).fetchone()
+    if not invoice:
+        conn.close()
+        return jsonify({"ok": False, "message": "فاکتور پیدا نشد"}), 404
+    conn.execute("UPDATE invoices SET description=? WHERE id=?", (d.get("description", ""), invoice_id))
+    conn.commit()
+    conn.close()
+    log_action(d.get("username"), "ویرایش توضیحات فاکتور", f'فاکتور شماره {invoice["number"] or invoice_id}')
+    return jsonify({"ok": True})
+
+
 @app.route("/invoices/<int:invoice_id>", methods=["DELETE"])
 def delete_invoice(invoice_id):
     """
