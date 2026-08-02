@@ -93,18 +93,38 @@ def find_reception_ids(page):
     return ids
 
 
+def _has_value_after_colon(text):
+    if ":" not in text:
+        return False
+    return bool(text.split(":", 1)[-1].strip())
+
+
 def extract_tanks_from_print_page(html):
-    """از HTML صفحه «چاپ نتایج» تمام خط‌های «... سریال مخزن: ...» را
-    پیدا می‌کند (ممکن است یک پذیرش چند مخزن داشته باشد)."""
+    """از HTML صفحه «چاپ نتایج» تمام خط‌های «... سریال مخزن: مقدار» را
+    پیدا می‌کند (ممکن است یک پذیرش چند مخزن داشته باشد).
+
+    برچسب «سریال مخزن» معمولاً داخل یک <span> است و مقدار آن به‌صورت متن
+    ساده بعد از همان <span>، داخل عنصر والد (مثلاً <p>) قرار دارد. پس باید
+    کوچک‌ترین عنصری را برداریم که هم برچسب و هم مقدار را با هم دارد، نه
+    خودِ <span> برچسب (که مقدار را ندارد) و نه یک عنصر خیلی بزرگ‌تر که چند
+    فیلد را با هم قاطی می‌کند."""
     soup = BeautifulSoup(html, "html.parser")
     tank_lines = []
     for el in soup.find_all(True):
-        if el.find(True):
-            # فقط عناصر برگ (بدون تگ فرزند) را می‌خواهیم تا متن قاطی نشود.
-            continue
         text = el.get_text(" ", strip=True)
-        if "سریال مخزن" in text:
-            tank_lines.append(text)
+        if "سریال مخزن" not in text or not _has_value_after_colon(text):
+            continue
+
+        has_valid_child = any(
+            "سریال مخزن" in child_text and _has_value_after_colon(child_text)
+            for child_text in (c.get_text(" ", strip=True) for c in el.find_all(True))
+        )
+        if has_valid_child:
+            # عنصر فرزندی داریم که خودش برچسب+مقدار کامل را دارد؛ همان
+            # دقیق‌تر است، این عنصر بزرگ‌تر را رد کن.
+            continue
+
+        tank_lines.append(text)
     return tank_lines
 
 
