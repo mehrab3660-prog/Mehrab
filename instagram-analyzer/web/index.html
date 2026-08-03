@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>آنالیز هوشمند اینستاگرام</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<header>
+  <h1>آنالیز هوشمند اینستاگرام</h1>
+  <a class="btn" href="/auth/login">اتصال اکانت جدید</a>
+</header>
+
+<main>
+  <section id="accounts-view">
+    <h2>اکانت‌های متصل</h2>
+    <div id="accounts-list" class="grid"></div>
+  </section>
+
+  <section id="account-detail" class="hidden">
+    <button id="back-btn" class="btn secondary">بازگشت</button>
+    <div id="account-header"></div>
+    <div class="actions">
+      <button id="sync-btn" class="btn">به‌روزرسانی داده‌ها</button>
+      <button id="analyze-btn" class="btn">تحلیل با هوش‌مصنوعی</button>
+    </div>
+
+    <h3>گزارش‌های هوش‌مصنوعی</h3>
+    <div id="reports-list"></div>
+
+    <h3>پست‌های اخیر</h3>
+    <table id="media-table">
+      <thead>
+        <tr><th>کپشن</th><th>لایک</th><th>کامنت</th><th>ریچ</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>
