@@ -9,11 +9,32 @@
 <body>
 <header>
   <h1>آنالیز هوشمند اینستاگرام</h1>
-  <a class="btn" href="/auth/login">اتصال اکانت جدید</a>
 </header>
 
 <main>
   <section id="accounts-view">
+    <div class="login-card">
+      <h2>اتصال اکانت با یوزرنیم و پسورد</h2>
+      <p class="warning">
+        ⚠️ این روش از API غیررسمی اینستاگرام استفاده می‌کند (نه API رسمی متا).
+        خلاف قوانین اینستاگرامه و ریسک محدود/مسدود شدن اکانت داره. فقط با اکانت
+        خودتان و با آگاهی از این ریسک استفاده کنید.
+      </p>
+      <form id="login-form">
+        <input type="text" id="login-username" placeholder="یوزرنیم اینستاگرام" required />
+        <input type="password" id="login-password" placeholder="پسورد" required />
+        <div id="verify-row" class="hidden">
+          <input type="text" id="login-code" placeholder="کد تأیید ارسال‌شده" />
+        </div>
+        <button type="submit" class="btn">ورود و اتصال</button>
+      </form>
+      <p id="login-message"></p>
+      <details>
+        <summary>یا از طریق API رسمی متا (نیاز به ساخت اپ در Meta for Developers)</summary>
+        <a class="btn secondary" href="/auth/login">اتصال با API رسمی</a>
+      </details>
+    </div>
+
     <h2>اکانت‌های متصل</h2>
     <div id="accounts-list" class="grid"></div>
   </section>

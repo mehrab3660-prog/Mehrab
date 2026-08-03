@@ -19,6 +19,58 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+const loginForm = document.getElementById("login-form");
+const loginMessage = document.getElementById("login-message");
+const verifyRow = document.getElementById("verify-row");
+const codeInput = document.getElementById("login-code");
+let pendingLoginToken = null;
+
+loginForm.onsubmit = async (e) => {
+  e.preventDefault();
+  const username = document.getElementById("login-username").value.trim();
+  const password = document.getElementById("login-password").value;
+  const submitBtn = loginForm.querySelector("button[type=submit]");
+  submitBtn.disabled = true;
+
+  try {
+    let result;
+    if (pendingLoginToken) {
+      result = await fetchJson("/auth/private/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          login_token: pendingLoginToken,
+          code: codeInput.value.trim(),
+          username,
+          password,
+        }),
+      });
+    } else {
+      result = await fetchJson("/auth/private/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+    }
+
+    if (result.status === "challenge_required") {
+      pendingLoginToken = result.login_token;
+      verifyRow.classList.remove("hidden");
+      loginMessage.textContent = result.message;
+    } else if (result.status === "ok") {
+      pendingLoginToken = null;
+      verifyRow.classList.add("hidden");
+      loginForm.reset();
+      loginMessage.textContent = "اکانت با موفقیت وصل شد.";
+      await loadAccounts();
+    }
+  } catch (err) {
+    loginMessage.textContent = "خطا: " + err.message;
+  } finally {
+    submitBtn.disabled = false;
+  }
+};
+
 async function loadAccounts() {
   const accounts = await fetchJson("/accounts");
   accountsList.innerHTML = "";

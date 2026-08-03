@@ -16,21 +16,25 @@ from app.database import Base
 
 
 class Account(Base):
-    """An Instagram business/creator account connected via the Graph API."""
+    """An Instagram account connected either via the official Graph API
+    (auth_method="official") or via direct username/password login through
+    the unofficial private API (auth_method="private")."""
 
     __tablename__ = "accounts"
 
     id = Column(Integer, primary_key=True)
+    auth_method = Column(String, nullable=False, default="official")  # "official" | "private"
     ig_user_id = Column(String, unique=True, nullable=False, index=True)
-    facebook_page_id = Column(String, nullable=False)
+    facebook_page_id = Column(String, nullable=True)
     username = Column(String, nullable=False)
     name = Column(String)
     profile_picture_url = Column(String)
     followers_count = Column(Integer, default=0)
     follows_count = Column(Integer, default=0)
     media_count = Column(Integer, default=0)
-    access_token = Column(String, nullable=False)
+    access_token = Column(String, nullable=True)  # official (Graph API) auth
     token_expires_at = Column(DateTime)
+    session_data = Column(Text, nullable=True)  # private (instagrapi) auth — serialized session
     created_at = Column(DateTime, default=datetime.utcnow)
     last_synced_at = Column(DateTime)
 
