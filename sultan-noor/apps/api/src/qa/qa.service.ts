@@ -12,9 +12,25 @@ export class QaService {
   ) {}
 
   listForProduct(productId: string) {
+    // select (not include) at every level so no raw userId scalar is ever
+    // returned to this public, unauthenticated endpoint.
     return this.prisma.question.findMany({
       where: { productId, isPublished: true },
-      include: { user: { select: { fullName: true } }, answers: { include: { user: { select: { fullName: true } } } } },
+      select: {
+        id: true,
+        body: true,
+        createdAt: true,
+        user: { select: { fullName: true } },
+        answers: {
+          select: {
+            id: true,
+            body: true,
+            isFromStaff: true,
+            createdAt: true,
+            user: { select: { fullName: true } },
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }

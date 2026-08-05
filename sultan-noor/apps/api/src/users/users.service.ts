@@ -1,7 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit/audit-log.service';
+
+const ADMIN_TIER_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN];
 
 @Injectable()
 export class UsersService {
@@ -26,9 +28,18 @@ export class UsersService {
     return { items, total };
   }
 
-  async updateRole(adminId: string, targetUserId: string, role: Role) {
+  async updateRole(adminId: string, adminRole: Role, targetUserId: string, role: Role) {
     const before = await this.prisma.user.findUnique({ where: { id: targetUserId } });
     if (!before) throw new NotFoundException('کاربر یافت نشد');
+
+    // Only SUPER_ADMIN may grant/revoke admin-tier roles or touch an
+    // existing admin-tier account — an ADMIN must not be able to promote
+    // itself (or anyone) to SUPER_ADMIN/ADMIN, nor modify one.
+    if (adminRole !== Role.SUPER_ADMIN) {
+      if (ADMIN_TIER_ROLES.includes(role) || ADMIN_TIER_ROLES.includes(before.role)) {
+        throw new ForbiddenException('فقط مدیر ارشد می‌تواند نقش‌های مدیریتی را تغییر دهد');
+      }
+    }
 
     const after = await this.prisma.user.update({ where: { id: targetUserId }, data: { role } });
 

@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
+import * as fs from 'fs';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -52,5 +54,18 @@ export class OrdersController {
   @Roles(...STAFF_ROLES)
   generateInvoice(@Param('id') id: string) {
     return this.invoiceService.generateForOrder(id);
+  }
+
+  @Get(':id/invoice/download')
+  async downloadInvoice(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Res() res: Response) {
+    // Reuses the same ownership/staff check as GET /orders/:id — never trust
+    // the order id alone.
+    const order = await this.ordersService.get(user.id, id, STAFF_ROLES.includes(user.role as Role));
+    if (!order.invoice) throw new NotFoundException('فاکتور هنوز صادر نشده است');
+
+    const filePath = this.invoiceService.getFilePath(order.invoice.invoiceNumber);
+    if (!fs.existsSync(filePath)) throw new NotFoundException('فایل فاکتور یافت نشد');
+
+    res.download(filePath, `${order.invoice.invoiceNumber}.pdf`);
   }
 }

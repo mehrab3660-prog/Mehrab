@@ -1,8 +1,10 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import { ProductsService } from './products.service';
 import { CreateProductDto, ListProductsQueryDto, UpdateProductDto } from './dto/product.dto';
 
@@ -11,13 +13,15 @@ export class ProductsController {
   constructor(private productsService: ProductsService) {}
 
   @Get()
-  list(@Query() query: ListProductsQueryDto) {
-    return this.productsService.list(query);
+  @UseGuards(OptionalJwtAuthGuard)
+  list(@CurrentUser() requester: AuthenticatedUser | undefined, @Query() query: ListProductsQueryDto) {
+    return this.productsService.list(query, requester);
   }
 
   @Get(':idOrSlug')
-  get(@Param('idOrSlug') idOrSlug: string) {
-    return this.productsService.get(idOrSlug);
+  @UseGuards(OptionalJwtAuthGuard)
+  get(@CurrentUser() requester: AuthenticatedUser | undefined, @Param('idOrSlug') idOrSlug: string) {
+    return this.productsService.get(idOrSlug, requester);
   }
 
   @Post()

@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SearchService } from '../../search/search.service';
+import { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import { CreateProductDto, ListProductsQueryDto, UpdateProductDto } from './dto/product.dto';
 
 const productInclude = {
@@ -11,6 +12,12 @@ const productInclude = {
   variants: true,
 };
 
+const STAFF_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN, Role.STAFF];
+
+function isStaff(requester: AuthenticatedUser | undefined): boolean {
+  return !!requester && STAFF_ROLES.includes(requester.role as Role);
+}
+
 @Injectable()
 export class ProductsService {
   constructor(
@@ -18,11 +25,14 @@ export class ProductsService {
     private search: SearchService,
   ) {}
 
-  async list(query: ListProductsQueryDto) {
+  async list(query: ListProductsQueryDto, requester?: AuthenticatedUser) {
+    const staff = isStaff(requester);
     const where: Prisma.ProductWhereInput = {
       categoryId: query.categoryId,
       brandId: query.brandId,
-      status: query.status ?? 'PUBLISHED',
+      // Only staff may request non-published products; everyone else always
+      // sees the published catalog regardless of what they pass.
+      status: staff ? (query.status ?? 'PUBLISHED') : 'PUBLISHED',
     };
     const [items, total] = await Promise.all([
       this.prisma.product.findMany({
@@ -37,15 +47,25 @@ export class ProductsService {
     return { items, total };
   }
 
-  async get(idOrSlug: string) {
+  async get(idOrSlug: string, requester?: AuthenticatedUser) {
+    const staff = isStaff(requester);
     const product = await this.prisma.product.findFirst({
-      where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+      where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }], ...(staff ? {} : { status: 'PUBLISHED' }) },
       include: {
         ...productInclude,
-        supplier: true,
-        priceTiers: { include: { customerGroup: true } },
+        // Supplier contacts and B2B wholesale price tiers are internal data
+        // — never returned to anonymous/customer callers.
+        ...(staff ? { supplier: true, priceTiers: { include: { customerGroup: true } } } : {}),
       },
     });
+    if (!product) throw new NotFoundException('محصول یافت نشد');
+    return product;
+  }
+
+  // Internal existence lookup for update()/remove(), which are already staff-gated
+  // at the controller level — must not apply the public PUBLISHED-only filter.
+  private async findRawById(id: string) {
+    const product = await this.prisma.product.findUnique({ where: { id } });
     if (!product) throw new NotFoundException('محصول یافت نشد');
     return product;
   }
@@ -78,7 +98,7 @@ export class ProductsService {
   }
 
   async update(id: string, dto: UpdateProductDto) {
-    await this.get(id);
+    await this.findRawById(id);
     const product = await this.prisma.product.update({
       where: { id },
       data: dto,
@@ -89,7 +109,7 @@ export class ProductsService {
   }
 
   async remove(id: string) {
-    await this.get(id);
+    await this.findRawById(id);
     await this.prisma.product.delete({ where: { id } });
     await this.search.removeProduct(id);
     return { success: true };

@@ -2,8 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { ServeStaticModule } from '@nestjs/serve-static';
-import * as path from 'path';
 
 import { AppController } from './app.controller';
 import { PrismaModule } from './prisma/prisma.module';
@@ -40,12 +38,6 @@ import { DashboardModule } from './dashboard/dashboard.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 120 }]),
-    ServeStaticModule.forRoot({
-      rootPath: process.env.INVOICE_STORAGE_DIR
-        ? path.resolve(process.env.INVOICE_STORAGE_DIR)
-        : path.join(process.cwd(), 'storage', 'invoices'),
-      serveRoot: '/invoices',
-    }),
 
     PrismaModule,
     AuditModule,

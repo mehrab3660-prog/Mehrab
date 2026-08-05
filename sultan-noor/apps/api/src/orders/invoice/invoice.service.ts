@@ -25,11 +25,13 @@ export class InvoiceService {
 
     const invoiceNumber = `INV-${order.orderNumber}`;
     fs.mkdirSync(INVOICE_DIR, { recursive: true });
-    const filePath = path.join(INVOICE_DIR, `${invoiceNumber}.pdf`);
+    const filePath = this.getFilePath(invoiceNumber);
 
     await this.renderPdf(filePath, order, invoiceNumber);
 
-    const pdfUrl = `/invoices/${invoiceNumber}.pdf`;
+    // Not a directly browsable path — /orders/:id/invoice/download enforces
+    // ownership/staff auth before streaming the file (see OrdersController).
+    const pdfUrl = `/api/orders/${orderId}/invoice/download`;
     await this.prisma.invoice.upsert({
       where: { orderId },
       create: { orderId, invoiceNumber, pdfUrl },
@@ -37,6 +39,10 @@ export class InvoiceService {
     });
 
     return { invoiceNumber, pdfUrl };
+  }
+
+  getFilePath(invoiceNumber: string): string {
+    return path.join(INVOICE_DIR, `${invoiceNumber}.pdf`);
   }
 
   private renderPdf(filePath: string, order: OrderWithInvoiceRelations, invoiceNumber: string) {

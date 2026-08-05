@@ -7,9 +7,18 @@ export class ReviewsService {
   constructor(private prisma: PrismaService) {}
 
   listForProduct(productId: string) {
+    // select (not include) so the review's own userId scalar is never
+    // returned to this public, unauthenticated endpoint.
     return this.prisma.review.findMany({
       where: { productId, isApproved: true },
-      include: { user: { select: { fullName: true } } },
+      select: {
+        id: true,
+        rating: true,
+        title: true,
+        body: true,
+        createdAt: true,
+        user: { select: { fullName: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
