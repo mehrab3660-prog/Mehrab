@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { randomInt } from 'crypto';
@@ -14,6 +14,8 @@ const OTP_MAX_ATTEMPTS = 5;
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwt: JwtService,
@@ -34,7 +36,14 @@ export class AuthService {
       },
     });
 
-    await this.sms.sendOtp(dto.phone, code);
+    try {
+      await this.sms.sendOtp(dto.phone, code);
+    } catch (err) {
+      // The OTP row above still exists and is verifiable, but the user never
+      // received it — fail loudly instead of claiming success.
+      this.logger.error(`ارسال پیامک OTP به ${dto.phone} ناموفق بود: ${(err as Error).message}`);
+      throw new ServiceUnavailableException('ارسال پیامک تایید ناموفق بود، لطفاً کمی بعد دوباره تلاش کنید');
+    }
 
     return { message: 'کد تایید ارسال شد', expiresInSeconds: OTP_TTL_MINUTES * 60 };
   }
