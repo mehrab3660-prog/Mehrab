@@ -1,0 +1,14 @@
+{
+  "name": "sultan-noor",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev:api": "pnpm --filter @sultan-noor/api run start:dev",
+    "dev:web": "pnpm --filter @sultan-noor/web run dev",
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

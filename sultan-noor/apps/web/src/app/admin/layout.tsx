@@ -1,0 +1,42 @@
+"use client";
+
+import Link from "next/link";
+import { useAuth } from "@/context/AuthContext";
+
+const STAFF_ROLES = ["SUPER_ADMIN", "ADMIN", "STAFF", "WAREHOUSE_MANAGER"];
+
+const NAV = [
+  { href: "/admin", label: "داشبورد" },
+  { href: "/admin/products", label: "محصولات" },
+  { href: "/admin/orders", label: "سفارش‌ها" },
+  { href: "/admin/categories", label: "دسته‌بندی‌ها" },
+  { href: "/admin/brands", label: "برندها" },
+  { href: "/admin/banners", label: "بنرها" },
+];
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+
+  if (loading) return <div className="p-8 text-center">در حال بارگذاری...</div>;
+
+  if (!user || !STAFF_ROLES.includes(user.role)) {
+    return <div className="p-8 text-center text-red-500">شما به این بخش دسترسی ندارید.</div>;
+  }
+
+  return (
+    <div className="mx-auto flex max-w-6xl gap-6 px-4 py-8">
+      <aside className="w-48 shrink-0 space-y-1">
+        {NAV.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className="block rounded-lg px-3 py-2 text-sm hover:bg-surface"
+          >
+            {item.label}
+          </Link>
+        ))}
+      </aside>
+      <div className="flex-1">{children}</div>
+    </div>
+  );
+}

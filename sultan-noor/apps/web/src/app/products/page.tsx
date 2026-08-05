@@ -1,0 +1,54 @@
+import { apiFetch } from "@/lib/api";
+import { Product } from "@/lib/types";
+import ProductCard from "@/components/ProductCard";
+
+async function safeGet<T>(path: string, fallback: T): Promise<T> {
+  try {
+    return await apiFetch<T>(path);
+  } catch {
+    return fallback;
+  }
+}
+
+export default async function ProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; category?: string; brand?: string }>;
+}) {
+  const params = await searchParams;
+
+  let products: Product[] = [];
+  let note: string | null = null;
+
+  if (params.q) {
+    const searchRes = await safeGet<{ hits: { id: string }[] }>(`/search/products?q=${encodeURIComponent(params.q)}`, {
+      hits: [],
+    });
+    if (searchRes.hits.length === 0) {
+      note = `نتیجه‌ای برای «${params.q}» یافت نشد.`;
+    } else {
+      const detailed = await Promise.all(
+        searchRes.hits.map((h) => safeGet<Product | null>(`/products/${h.id}`, null)),
+      );
+      products = detailed.filter((p): p is Product => Boolean(p));
+    }
+  } else {
+    const qs = new URLSearchParams();
+    if (params.category) qs.set("categoryId", params.category);
+    if (params.brand) qs.set("brandId", params.brand);
+    const res = await safeGet<{ items: Product[] }>(`/products?${qs.toString()}`, { items: [] });
+    products = res.items;
+  }
+
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-8">
+      <h1 className="mb-6 text-2xl font-bold">{params.q ? `نتایج جستجو: ${params.q}` : "همه محصولات"}</h1>
+      {note && <p className="text-foreground/60">{note}</p>}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+        {products.map((p) => (
+          <ProductCard key={p.id} product={p} />
+        ))}
+      </div>
+    </div>
+  );
+}
