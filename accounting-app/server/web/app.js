@@ -2020,9 +2020,22 @@ async function loadMonthly() {
 }
 
 // ===================== گزارش‌های تکمیلی =====================
+let extraReportsSubnavBound = false;
+function bindExtraReportsSubnav() {
+  if (extraReportsSubnavBound) return;
+  extraReportsSubnavBound = true;
+  $$('.extra-subnav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $$('.extra-subnav-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      $$('.extra-subpage').forEach(p => p.classList.remove('active'));
+      $('#extra-subpage-' + btn.dataset.extraSubtab).classList.add('active');
+    });
+  });
+}
 async function loadExtraReports() {
+  bindExtraReportsSubnav();
   const isAdmin = state.user.role === 'admin';
-  $('#admin-only-reports-grid').classList.toggle('hidden', !isAdmin);
   const [debtors, creditors, topItems, byEmployee, expenses, profitByItem, reorder, yoy] = await Promise.all([
     api('GET', '/reports/debtors'), api('GET', '/reports/creditors'), api('GET', '/reports/top-items'),
     isAdmin ? api('GET', '/reports/by-employee') : Promise.resolve(null),

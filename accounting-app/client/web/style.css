@@ -406,16 +406,16 @@ table.totals tr.grand td { border-top: 1px solid var(--border); padding-top: 10p
 .chart-card canvas { width: 100% !important; }
 .report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
-/* ===== زیرتب‌های صفحه تنظیمات کلی ===== */
-.settings-subnav { display: flex; gap: 6px; margin-bottom: 18px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-.settings-subnav-btn {
+/* ===== زیرتب‌های صفحه تنظیمات کلی، و صفحه گزارش‌های تکمیلی ===== */
+.settings-subnav, .extra-subnav { display: flex; gap: 6px; margin-bottom: 18px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.settings-subnav-btn, .extra-subnav-btn {
   background: none; border: none; padding: 10px 16px; font-family: var(--font); font-size: 13.5px;
   font-weight: 600; color: var(--text-2); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
-.settings-subnav-btn:hover { color: var(--text); }
-.settings-subnav-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
-.settings-subpage { display: none; }
-.settings-subpage.active { display: block; }
+.settings-subnav-btn:hover, .extra-subnav-btn:hover { color: var(--text); }
+.settings-subnav-btn.active, .extra-subnav-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+.settings-subpage, .extra-subpage { display: none; }
+.settings-subpage.active, .extra-subpage.active { display: block; }
 .dash-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 18px; }
 @media (max-width: 1100px) { .dash-grid-3 { grid-template-columns: 1fr 1fr; } .dash-grid-3 > *[style*="span 2"] { grid-column: span 2; } }
 @media (max-width: 700px) { .dash-grid-3 { grid-template-columns: 1fr; } .dash-grid-3 > * { grid-column: span 1 !important; } }

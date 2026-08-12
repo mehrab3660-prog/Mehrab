@@ -476,43 +476,62 @@
 
       <!-- گزارش‌های تکمیلی -->
       <section class="page" id="page-extra-reports">
-        <div class="page-header"><div><h2>بدهکاران، بستانکاران و پرفروش‌ترین‌ها</h2><p class="page-sub">یک نگاه سریع به اینکه چه کسی به تو بدهکاره، تو به چه کسی بدهکاری، و کدوم کالاها این یک ماه بیشتر فروش رفته.</p></div></div>
-        <div class="report-grid">
-          <div class="card">
-            <div class="card-title">مشتریان بدهکار</div>
-            <table class="data-table"><thead><tr><th>نام</th><th>تلفن</th><th>بدهی</th></tr></thead><tbody id="debtors-tbody"></tbody></table>
-          </div>
-          <div class="card">
-            <div class="card-title">تامین‌کنندگان بستانکار</div>
-            <table class="data-table"><thead><tr><th>نام</th><th>تلفن</th><th>بدهی ما</th></tr></thead><tbody id="creditors-tbody"></tbody></table>
+        <div class="page-header"><div><h2>گزارش‌های تکمیلی</h2><p class="page-sub">یک نگاه سریع به اینکه چه کسی به تو بدهکاره، کدوم کالاها بیشتر فروش رفته، و روند مغازه چطوره.</p></div></div>
+
+        <div class="extra-subnav">
+          <button class="extra-subnav-btn active" data-extra-subtab="debts">💳 بدهکاران و بستانکاران</button>
+          <button class="extra-subnav-btn" data-extra-subtab="sales-insight">🏆 پرفروش‌ترین‌ها و سود</button>
+          <button class="extra-subnav-btn" data-extra-subtab="planning">📦 سفارش مجدد و مقایسه فروش</button>
+          <button class="extra-subnav-btn admin-only" data-extra-subtab="staff-expenses">👥 کارمندها و هزینه‌ها</button>
+        </div>
+
+        <div class="extra-subpage active" id="extra-subpage-debts">
+          <div class="report-grid">
+            <div class="card">
+              <div class="card-title">مشتریان بدهکار</div>
+              <table class="data-table"><thead><tr><th>نام</th><th>تلفن</th><th>بدهی</th></tr></thead><tbody id="debtors-tbody"></tbody></table>
+            </div>
+            <div class="card">
+              <div class="card-title">تامین‌کنندگان بستانکار</div>
+              <table class="data-table"><thead><tr><th>نام</th><th>تلفن</th><th>بدهی ما</th></tr></thead><tbody id="creditors-tbody"></tbody></table>
+            </div>
           </div>
         </div>
-        <div class="card">
-          <div class="card-title">پرفروش‌ترین کالاها (۳۰ روز اخیر)</div>
-          <table class="data-table"><thead><tr><th>کالا</th><th>برند</th><th>تعداد</th><th>جمع فروش</th></tr></thead><tbody id="top-items-tbody"></tbody></table>
-        </div>
-        <div class="report-grid" id="admin-only-reports-grid">
+
+        <div class="extra-subpage" id="extra-subpage-sales-insight">
           <div class="card">
-            <div class="card-title">فروش هر کارمند</div>
-            <table class="data-table"><thead><tr><th>کارمند</th><th>تعداد فاکتور</th><th>جمع فروش</th></tr></thead><tbody id="by-employee-tbody"></tbody></table>
+            <div class="card-title">پرفروش‌ترین کالاها (۳۰ روز اخیر)</div>
+            <table class="data-table"><thead><tr><th>کالا</th><th>برند</th><th>تعداد</th><th>جمع فروش</th></tr></thead><tbody id="top-items-tbody"></tbody></table>
           </div>
-          <div class="card">
-            <div class="card-title">هزینه‌های جاری بر اساس دسته</div>
-            <table class="data-table"><thead><tr><th>دسته</th><th>تعداد</th><th>جمع مبلغ</th></tr></thead><tbody id="expenses-tbody"></tbody></table>
-          </div>
-          <div class="card">
+          <div class="card admin-only">
             <div class="card-title">سود به‌تفکیک هر کالا (۳۰ روز اخیر)</div>
             <table class="data-table"><thead><tr><th>کالا</th><th>تعداد فروش</th><th>جمع فروش</th><th>بهای تمام‌شده تخمینی</th><th>سود تخمینی</th></tr></thead><tbody id="profit-by-item-tbody"></tbody></table>
           </div>
         </div>
-        <div class="card">
-          <div class="card-title">پیشنهاد سفارش مجدد</div>
-          <p class="muted" style="margin-bottom:10px">کالاهایی که با روند فروش فعلی، تا حداکثر ۱۴ روز دیگر موجودیشان تمام می‌شود.</p>
-          <table class="data-table"><thead><tr><th>کالا</th><th>موجودی فعلی</th><th>میانگین فروش روزانه</th><th>تا چند روز دیگر تمام می‌شود</th><th>پیشنهاد سفارش</th></tr></thead><tbody id="reorder-tbody"></tbody></table>
+
+        <div class="extra-subpage" id="extra-subpage-planning">
+          <div class="card">
+            <div class="card-title">پیشنهاد سفارش مجدد</div>
+            <p class="muted" style="margin-bottom:10px">کالاهایی که با روند فروش فعلی، تا حداکثر ۱۴ روز دیگر موجودیشان تمام می‌شود.</p>
+            <table class="data-table"><thead><tr><th>کالا</th><th>موجودی فعلی</th><th>میانگین فروش روزانه</th><th>تا چند روز دیگر تمام می‌شود</th><th>پیشنهاد سفارش</th></tr></thead><tbody id="reorder-tbody"></tbody></table>
+          </div>
+          <div class="card">
+            <div class="card-title">مقایسه فروش با سال قبل</div>
+            <div class="stat-grid" id="yoy-stat-grid"></div>
+          </div>
         </div>
-        <div class="card">
-          <div class="card-title">مقایسه فروش با سال قبل</div>
-          <div class="stat-grid" id="yoy-stat-grid"></div>
+
+        <div class="extra-subpage admin-only" id="extra-subpage-staff-expenses">
+          <div class="report-grid">
+            <div class="card">
+              <div class="card-title">فروش هر کارمند</div>
+              <table class="data-table"><thead><tr><th>کارمند</th><th>تعداد فاکتور</th><th>جمع فروش</th></tr></thead><tbody id="by-employee-tbody"></tbody></table>
+            </div>
+            <div class="card">
+              <div class="card-title">هزینه‌های جاری بر اساس دسته</div>
+              <table class="data-table"><thead><tr><th>دسته</th><th>تعداد</th><th>جمع مبلغ</th></tr></thead><tbody id="expenses-tbody"></tbody></table>
+            </div>
+          </div>
         </div>
       </section>
 
