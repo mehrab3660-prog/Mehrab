@@ -41,7 +41,18 @@ def load_shop_settings():
                 return json.load(f)
         except Exception:
             pass
-    return {"name": "حسابداری", "phones": "", "address": "", "logo_filename": None}
+    return {"name": "حسابداری", "phones": "", "address": "", "logo_filename": None, "invoice_number_offset": 0}
+
+
+def get_next_invoice_id(conn):
+    """
+    شماره‌ی بعدی که SQLite برای ستون AUTOINCREMENT جدول invoices اختصاص می‌دهد.
+    از sqlite_sequence استفاده می‌شود (نه MAX(id)) چون AUTOINCREMENT حتی بعد از حذف
+    فاکتورها هم دوباره از یک شماره‌ی قبلی استفاده نمی‌کند.
+    """
+    row = conn.execute("SELECT seq FROM sqlite_sequence WHERE name='invoices'").fetchone()
+    last_seq = row["seq"] if row else 0
+    return last_seq + 1
 
 
 def save_shop_settings(data):
@@ -108,6 +119,10 @@ def require_admin():
 def get_shop_settings():
     s = load_shop_settings()
     s["logo_url"] = f"/assets/{s['logo_filename']}" if s.get("logo_filename") else None
+    conn = get_connection()
+    next_id = get_next_invoice_id(conn)
+    conn.close()
+    s["next_invoice_number"] = next_id + (s.get("invoice_number_offset", 0) or 0)
     return jsonify(s)
 
 
@@ -121,6 +136,17 @@ def update_shop_settings():
     s["name"] = d.get("name", s.get("name"))
     s["phones"] = d.get("phones", s.get("phones"))
     s["address"] = d.get("address", s.get("address"))
+    if d.get("next_invoice_number") not in (None, ""):
+        try:
+            next_number = int(d["next_invoice_number"])
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "message": "شماره فاکتور بعدی باید عدد باشد"}), 400
+        if next_number < 1:
+            return jsonify({"ok": False, "message": "شماره فاکتور بعدی باید حداقل ۱ باشد"}), 400
+        conn = get_connection()
+        next_id = get_next_invoice_id(conn)
+        conn.close()
+        s["invoice_number_offset"] = next_number - next_id
     save_shop_settings(s)
     return jsonify({"ok": True})
 
@@ -505,7 +531,10 @@ def add_invoice():
               (invoice_type, None, d.get("party_id"), now(),
                total, paid, d.get("payment_type", "cash"), d.get("description", ""), discount))
     invoice_id = c.lastrowid
-    invoice_number = f"{prefix}-{invoice_id:05d}"
+    # اگر از تنظیمات یه «شماره فاکتور بعدی» دلخواه تنظیم شده باشه (مثلاً برای ادامه‌ی شماره‌گذاری
+    # فاکتورهای کاغذی قبلی)، همون افستِ ذخیره‌شده روی شماره‌ی داخلی دیتابیس اعمال می‌شه
+    offset = load_shop_settings().get("invoice_number_offset", 0) or 0
+    invoice_number = f"{prefix}-{(invoice_id + offset):05d}"
     c.execute("UPDATE invoices SET number=? WHERE id=?", (invoice_number, invoice_id))
 
     for it in d["items"]:

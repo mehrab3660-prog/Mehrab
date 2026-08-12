@@ -477,6 +477,12 @@
             <button class="btn btn-primary" id="btn-save-shop-info">ذخیره اطلاعات</button>
           </div>
           <div class="card">
+            <div class="card-title">شماره‌گذاری فاکتور</div>
+            <div class="field"><label>شماره فاکتور بعدی از این عدد شروع بشه</label><input type="number" min="1" id="shop-next-invoice-number"></div>
+            <p class="muted" style="margin-bottom:10px">مثلاً اگه تا الان فاکتورهای کاغذی رو تا شماره ۲۹۹ نوشتی و می‌خوای برنامه از ۳۰۰ ادامه بده، همینجا بزن ۳۰۰. فقط رو فاکتورهای بعدی اثر می‌ذاره، فاکتورهای قبلی تغییر نمی‌کنن.</p>
+            <button class="btn btn-primary" id="btn-save-next-invoice-number">ذخیره شماره فاکتور بعدی</button>
+          </div>
+          <div class="card">
             <div class="card-title">لوگوی فاکتور</div>
             <div id="shop-logo-preview" style="margin-bottom:12px"></div>
             <input type="file" id="shop-logo-file" accept="image/png,image/jpeg,image/gif,image/webp">

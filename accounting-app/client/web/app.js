@@ -1492,6 +1492,7 @@ async function loadShopSettings() {
   $('#shop-name').value = s.name || '';
   $('#shop-phones').value = s.phones || '';
   $('#shop-address').value = s.address || '';
+  $('#shop-next-invoice-number').value = s.next_invoice_number || '';
   renderLogoPreview(s.logo_url);
 }
 function renderLogoPreview(logoUrl) {
@@ -1506,13 +1507,26 @@ $('#btn-save-shop-info').addEventListener('click', async () => {
   });
   if (res && res.ok) toast('اطلاعات مغازه ذخیره شد', 'success');
 });
+$('#btn-save-next-invoice-number').addEventListener('click', async () => {
+  const val = $('#shop-next-invoice-number').value;
+  if (!val) { toast('یک شماره وارد کن', 'danger'); return; }
+  const res = await api('POST', '/settings/shop', { next_invoice_number: val });
+  if (res && res.ok) {
+    toast('شماره فاکتور بعدی ذخیره شد', 'success');
+    loadShopSettings();
+  } else if (res) {
+    toast(res.message || 'خطا در ذخیره', 'danger');
+  }
+});
 $('#btn-upload-logo').addEventListener('click', async () => {
   const fileInput = $('#shop-logo-file');
   if (!fileInput.files.length) { toast('یک فایل انتخاب کن', 'danger'); return; }
   const formData = new FormData();
   formData.append('logo', fileInput.files[0]);
   try {
-    const res = await fetch('/settings/shop/logo', { method: 'POST', body: formData });
+    const headers = {};
+    if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
+    const res = await fetch('/settings/shop/logo', { method: 'POST', body: formData, headers });
     const data = await res.json();
     if (data.ok) {
       toast('لوگو آپلود شد', 'success');
@@ -1562,7 +1576,9 @@ $('#btn-ai-scan').addEventListener('click', async () => {
   formData.append('method', $('#ai-scan-method').value);
   let result;
   try {
-    const res = await fetch('/ai/analyze-invoice-photo', { method: 'POST', body: formData });
+    const headers = {};
+    if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
+    const res = await fetch('/ai/analyze-invoice-photo', { method: 'POST', body: formData, headers });
     result = await res.json();
   } catch (e) {
     $('#ai-scan-loading').classList.add('hidden');
