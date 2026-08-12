@@ -38,6 +38,10 @@
           <button type="button" class="btn btn-ghost btn-sm" id="login-captcha-refresh" title="کد جدید">🔄</button>
         </div>
       </div>
+      <div class="field hidden" id="login-totp-field">
+        <label>کد ورود دو مرحله‌ای (از اپ احراز هویت)</label>
+        <input type="text" inputmode="numeric" id="login-totp-code" autocomplete="off" maxlength="6">
+      </div>
       <button class="btn btn-primary btn-block" id="login-btn">ورود</button>
       <p class="login-error" id="login-error"></p>
     </div>
@@ -121,10 +125,13 @@
         <li class="nav-item" data-page="cash"><span class="nav-icon">💰</span><span class="nav-label">صندوق</span></li>
         <li class="nav-item" data-page="monthly"><span class="nav-icon">📈</span><span class="nav-label">گزارش ماهانه</span></li>
         <li class="nav-item" data-page="extra-reports"><span class="nav-icon">📋</span><span class="nav-label">بدهکاران و پرفروش‌ها</span></li>
+        <li class="nav-item" data-page="warranty"><span class="nav-icon">🔧</span><span class="nav-label">گارانتی و تعمیرات</span></li>
+        <li class="nav-item" data-page="stocktake"><span class="nav-icon">📊</span><span class="nav-label">انبارگردانی</span></li>
         <li class="nav-item admin-only" data-page="bulk-price"><span class="nav-icon">💹</span><span class="nav-label">افزایش قیمت گروهی</span></li>
         <li class="nav-item admin-only" data-page="settings-hub"><span class="nav-icon">⚙️</span><span class="nav-label">تنظیمات کلی</span></li>
       </ul>
       <button class="btn btn-ghost btn-block" id="btn-change-own-password">تغییر رمز عبور من</button>
+      <button class="btn btn-ghost btn-block" id="btn-manage-2fa">ورود دو مرحله‌ای</button>
       <button class="btn btn-ghost btn-block logout-btn" id="logout-btn">خروج از حساب</button>
     </nav>
 
@@ -244,7 +251,7 @@
           <table class="data-table">
             <thead><tr>
               <th><input type="checkbox" id="items-select-all" style="width:auto"></th>
-              <th>کد/بارکد</th><th>نام</th><th>برند</th><th>واحد</th>
+              <th>عکس</th><th>کد/بارکد</th><th>نام</th><th>برند</th><th>واحد</th>
               <th>قیمت خرید</th><th>قیمت فروش</th><th>موجودی</th><th>عملیات</th>
             </tr></thead>
             <tbody id="items-tbody"></tbody>
@@ -493,6 +500,48 @@
             <div class="card-title">هزینه‌های جاری بر اساس دسته</div>
             <table class="data-table"><thead><tr><th>دسته</th><th>تعداد</th><th>جمع مبلغ</th></tr></thead><tbody id="expenses-tbody"></tbody></table>
           </div>
+          <div class="card">
+            <div class="card-title">سود به‌تفکیک هر کالا (۳۰ روز اخیر)</div>
+            <table class="data-table"><thead><tr><th>کالا</th><th>تعداد فروش</th><th>جمع فروش</th><th>بهای تمام‌شده تخمینی</th><th>سود تخمینی</th></tr></thead><tbody id="profit-by-item-tbody"></tbody></table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">پیشنهاد سفارش مجدد</div>
+          <p class="muted" style="margin-bottom:10px">کالاهایی که با روند فروش فعلی، تا حداکثر ۱۴ روز دیگر موجودیشان تمام می‌شود.</p>
+          <table class="data-table"><thead><tr><th>کالا</th><th>موجودی فعلی</th><th>میانگین فروش روزانه</th><th>تا چند روز دیگر تمام می‌شود</th><th>پیشنهاد سفارش</th></tr></thead><tbody id="reorder-tbody"></tbody></table>
+        </div>
+        <div class="card">
+          <div class="card-title">مقایسه فروش با سال قبل</div>
+          <div class="stat-grid" id="yoy-stat-grid"></div>
+        </div>
+      </section>
+
+      <!-- گارانتی و تعمیرات -->
+      <section class="page" id="page-warranty">
+        <div class="page-header">
+          <div><h2>گارانتی و تعمیرات</h2><p class="page-sub">وقتی مشتری با کالای معیوب برگشت، اینجا ثبت کن — با چه شماره سریالی، چه ایرادی داشت، و پیگیری کن تا کِی تعمیر/تعویض شده و تحویل داده شده.</p></div>
+          <button class="btn btn-primary" id="btn-new-warranty-claim">+ ثبت درخواست جدید</button>
+        </div>
+        <div class="card">
+          <table class="data-table">
+            <thead><tr><th>تاریخ</th><th>کالا</th><th>سریال</th><th>مشتری</th><th>شرح ایراد</th><th>وضعیت</th><th>عملیات</th></tr></thead>
+            <tbody id="warranty-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- انبارگردانی با بارکد -->
+      <section class="page" id="page-stocktake">
+        <div class="page-header"><div><h2>انبارگردانی</h2><p class="page-sub">بارکد کالاها رو پشت‌سرهم اسکن کن تا هر کدوم چند بار دیده شد بشمره، بعد با موجودی سیستم مقایسه کن و اختلاف‌ها رو اصلاح کن.</p></div></div>
+        <div class="card">
+          <input type="text" id="stocktake-barcode" placeholder="بارکد را با دستگاه اسکن کن یا کد کالا را تایپ و Enter بزن..." autocomplete="off" style="font-size:16px;padding:10px">
+          <p class="muted" style="margin-top:6px" id="stocktake-status"></p>
+          <table class="data-table" style="margin-top:14px">
+            <thead><tr><th>کالا</th><th>تعداد شمارش‌شده</th><th>موجودی سیستم</th><th>اختلاف</th></tr></thead>
+            <tbody id="stocktake-tbody"></tbody>
+          </table>
+          <button class="btn btn-primary" id="btn-apply-stocktake" style="margin-top:14px">اعمال اصلاحات موجودی</button>
+          <button class="btn btn-secondary" id="btn-clear-stocktake" style="margin-top:14px">پاک کردن لیست</button>
         </div>
       </section>
 
@@ -566,6 +615,14 @@
             <button class="btn btn-primary" id="btn-upload-logo">آپلود لوگو</button>
             <button class="btn btn-secondary" id="btn-remove-logo">حذف لوگو</button>
             <p class="muted" style="margin-top:10px">فرمت‌های مجاز: PNG، JPG، GIF، WEBP</p>
+          </div>
+          <div class="card">
+            <div class="card-title">هشدار به تلگرام</div>
+            <p class="muted" style="margin-bottom:10px">وقتی کالایی تمام بشه یا چکی برگشت بخوره، یک پیام تلگرام برای شما ارسال می‌شود. برای فعال‌سازی: یک ربات از @BotFather بسازید، توکنش رو اینجا بزنید، و شناسه چت خودتون رو (مثلاً از @userinfobot) وارد کنید.</p>
+            <div class="field"><label>توکن ربات تلگرام</label><input type="text" id="shop-telegram-token" placeholder="123456:ABC-..." dir="ltr"></div>
+            <div class="field"><label>شناسه چت (Chat ID)</label><input type="text" id="shop-telegram-chat-id" placeholder="مثلاً 123456789" dir="ltr"></div>
+            <button class="btn btn-primary" id="btn-save-telegram">ذخیره</button>
+            <button class="btn btn-secondary" id="btn-test-telegram">ارسال پیام تستی</button>
           </div>
         </div>
 

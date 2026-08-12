@@ -376,7 +376,8 @@ async function doLogin() {
   const username = $('#login-username').value.trim();
   const password = $('#login-password').value;
   const captcha_answer = $('#login-captcha-answer').value.trim();
-  const res = await api('POST', '/login', { username, password, captcha_id: state.captchaId, captcha_answer });
+  const totp_code = $('#login-totp-code').value.trim();
+  const res = await api('POST', '/login', { username, password, captcha_id: state.captchaId, captcha_answer, totp_code });
   if (res && res.ok) {
     state.user = res.user;
     state.token = res.token;
@@ -390,6 +391,10 @@ async function doLogin() {
     }
     enterApp();
   } else {
+    if (res && res.need_totp) {
+      $('#login-totp-field').classList.remove('hidden');
+      $('#login-totp-code').focus();
+    }
     $('#login-error').textContent = (res && res.message) || 'ورود ناموفق بود';
     refreshCaptcha(); // هر کد امنیتی فقط یک‌بار مصرفه، پس چه موفق چه ناموفق باید تازه بشه
   }
@@ -449,6 +454,42 @@ $('#logout-btn').addEventListener('click', () => {
   forceLogout();
 });
 
+$('#btn-manage-2fa').addEventListener('click', async () => {
+  if (state.user.totp_enabled) {
+    openModal(`
+      <h3>ورود دو مرحله‌ای</h3>
+      <p class="muted">ورود دو مرحله‌ای برای این حساب فعال است. برای غیرفعال کردن، رمز عبورت را وارد کن.</p>
+      <div class="field"><label>رمز عبور</label><input type="password" id="disable-2fa-password"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal()">انصراف</button>
+        <button class="btn btn-danger" id="disable-2fa-btn">غیرفعال کردن</button>
+      </div>`);
+    $('#disable-2fa-btn').addEventListener('click', async () => {
+      const res = await api('POST', '/users/me/2fa/disable', { password: $('#disable-2fa-password').value });
+      if (res && res.ok) { toast('ورود دو مرحله‌ای غیرفعال شد', 'success'); state.user.totp_enabled = 0; closeModal(); }
+      else if (res) toast(res.message || 'خطا', 'danger');
+    });
+    return;
+  }
+  const setup = await api('POST', '/users/me/2fa/setup');
+  if (!setup || !setup.ok) return;
+  openModal(`
+    <h3>راه‌اندازی ورود دو مرحله‌ای</h3>
+    <p class="muted">این کد را در اپ Google Authenticator، Authy یا مشابه، به‌صورت دستی («ورود دستی کلید») اضافه کن:</p>
+    <div class="ai-summary-box"><div class="item"><span class="k">کلید</span><span class="v" dir="ltr" style="font-family:monospace;font-size:15px">${setup.secret}</span></div></div>
+    <p class="muted" style="margin-top:10px">بعد از اضافه کردن، کد ۶ رقمی نمایش‌داده‌شده در اپ را اینجا وارد کن تا فعال شود:</p>
+    <div class="field"><label>کد تایید</label><input type="text" inputmode="numeric" id="verify-2fa-code" maxlength="6"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">انصراف</button>
+      <button class="btn btn-primary" id="verify-2fa-btn">تایید و فعال‌سازی</button>
+    </div>`);
+  $('#verify-2fa-btn').addEventListener('click', async () => {
+    const res = await api('POST', '/users/me/2fa/verify', { code: $('#verify-2fa-code').value.trim() });
+    if (res && res.ok) { toast('ورود دو مرحله‌ای فعال شد', 'success'); state.user.totp_enabled = 1; closeModal(); }
+    else if (res) toast(res.message || 'کد اشتباه است', 'danger');
+  });
+});
+
 // ===================== ناوبری =====================
 $$('.nav-item').forEach(item => {
   item.addEventListener('click', () => {
@@ -478,7 +519,7 @@ function loadPage(page) {
     checks: loadChecks, cash: loadCash, bank: loadBankPage, monthly: loadMonthly, 'extra-reports': loadExtraReports,
     'settings-hub': loadSettingsHub,
     'ai-scan': loadAiScanPage, 'bulk-price': loadBulkPricePage, 'quick-sale': loadQuickSalePage,
-    'send-invoice': loadSendInvoicePage,
+    'send-invoice': loadSendInvoicePage, warranty: loadWarrantyPage, stocktake: loadStocktakePage,
   };
   if (loaders[page]) loaders[page]();
 }
@@ -859,12 +900,38 @@ function renderItemsTable() {
   $('#items-tbody').innerHTML = state.items.map(it => `
     <tr>
       <td><input type="checkbox" class="item-select-checkbox" value="${it.id}" style="width:auto"></td>
+      <td>
+        ${it.photo_filename ? `<img src="/assets/${it.photo_filename}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;cursor:pointer" onclick="openItemPhotoModal(${it.id})">` : `<button class="btn btn-sm btn-secondary" onclick="openItemPhotoModal(${it.id})">+ عکس</button>`}
+      </td>
       <td>${it.code || '—'}</td><td>${it.name}</td><td>${it.brand || '—'}</td><td>${it.unit}</td>
       <td title="${it.purchase_price ? 'به حروف: ' + numberToPersianWords(it.purchase_price) + ' تومان' : ''}">${it.purchase_price === null ? '—' : fmt(it.purchase_price)}</td>
       <td title="${it.sale_price ? 'به حروف: ' + numberToPersianWords(it.sale_price) + ' تومان' : ''}">${fmt(it.sale_price)}</td>
       <td>${it.stock_qty <= 0 ? `<span class="badge badge-red">تمام شده${it.stock_qty < 0 ? ' (' + fmt(Math.abs(it.stock_qty)) + ' کسری)' : ''}</span>` : (it.stock_qty <= it.min_stock ? `<span class="badge badge-orange">${fmt(it.stock_qty)}</span>` : fmt(it.stock_qty))}</td>
       <td><button class="btn btn-sm btn-secondary" onclick="showStockLedger(${it.id})">گردش انبار</button></td>
     </tr>`).join('');
+}
+function openItemPhotoModal(itemId) {
+  const it = state.items.find(x => x.id === itemId);
+  if (!it) return;
+  openModal(`
+    <h3>عکس کالا: ${escHtml(it.name)}</h3>
+    ${it.photo_filename ? `<img src="/assets/${it.photo_filename}?t=${Date.now()}" alt="" style="max-width:100%;max-height:240px;border-radius:8px;margin-bottom:12px">` : ''}
+    <input type="file" id="item-photo-file" accept="image/png,image/jpeg,image/gif,image/webp">
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">بستن</button><button class="btn btn-primary" id="upload-item-photo-btn">آپلود</button></div>`);
+  $('#upload-item-photo-btn').addEventListener('click', async () => {
+    const fileInput = $('#item-photo-file');
+    if (!fileInput.files.length) { toast('یک فایل انتخاب کن', 'danger'); return; }
+    const formData = new FormData();
+    formData.append('photo', fileInput.files[0]);
+    const headers = {};
+    if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
+    try {
+      const resp = await fetch(`/items/${itemId}/photo`, { method: 'POST', headers, body: formData });
+      const res = await resp.json();
+      if (res && res.ok) { toast('عکس آپلود شد', 'success'); closeModal(); loadItems(); }
+      else toast((res && res.message) || 'خطا در آپلود', 'danger');
+    } catch (e) { toast('ارتباط با سرور برقرار نشد', 'danger'); }
+  });
 }
 $('#items-select-all').addEventListener('change', (e) => {
   $$('.item-select-checkbox').forEach(cb => { if (cb.closest('tr').style.display !== 'none') cb.checked = e.target.checked; });
@@ -984,8 +1051,18 @@ function loadInvoiceForm(type) {
     const wantedType = type === 'sale' ? 'customer' : 'supplier';
     const filteredParties = state.parties.filter(p => p.type === wantedType);
 
-    const partySS = createSearchableSelect(`${type}-party`, filteredParties.map(p => ({ value: p.id, label: p.name })),
-      { placeholder: `جستجوی ${partyLabel}...`, emptyLabel: '— بدون طرف‌حساب —' });
+    const partySS = createSearchableSelect(`${type}-party`, filteredParties.map(p => ({ value: p.id, label: p.name, discountPercent: p.special_discount_percent })),
+      {
+        placeholder: `جستجوی ${partyLabel}...`, emptyLabel: '— بدون طرف‌حساب —',
+        onSelect: (val, found) => {
+          if (type !== 'sale') return;
+          state.invoiceUI[type].partyDiscountPercent = (found && found.discountPercent) || 0;
+          if (state.invoiceUI[type].partyDiscountPercent) {
+            toast(`تخفیف ویژه ${state.invoiceUI[type].partyDiscountPercent}٪ این مشتری روی سبد فعلی و کالاهای بعدی اعمال می‌شود`, 'success');
+          }
+          applyAutoDiscount(type);
+        },
+      });
 
     const priceField = type === 'sale' ? 'sale_price' : 'purchase_price';
     const itemSS = createSearchableSelect(`${type}-item`,
@@ -1035,6 +1112,7 @@ function loadInvoiceForm(type) {
     }
     state[cartKey].push(cartItem);
     renderCart(type);
+    applyAutoDiscount(type);
   });
 
   // ===== اسکن بارکد: دستگاه بارکدخوان مثل کیبورد عمل می‌کند (کد را تایپ و Enter می‌زند) =====
@@ -1068,6 +1146,7 @@ function loadInvoiceForm(type) {
       state[cartKey].push({ item_id: itemObj.id, item_name: itemObj.name, qty: 1, unit_price: itemObj[priceField] || 0 });
     }
     renderCart(type);
+    applyAutoDiscount(type);
     barcodeStatus.textContent = `✅ «${itemObj.name}» اضافه شد`;
     barcodeStatus.style.color = 'var(--accent, green)';
   });
@@ -1152,6 +1231,17 @@ function loadInvoiceForm(type) {
     }
   }
 }
+function applyAutoDiscount(type) {
+  if (type !== 'sale') return;
+  const ui = state.invoiceUI && state.invoiceUI[type];
+  const percent = ui && ui.partyDiscountPercent;
+  if (!percent) return;
+  const cart = state[type + 'Cart'] || [];
+  const subtotal = cart.reduce((s, c) => s + c.qty * c.unit_price, 0);
+  const suggested = Math.round(subtotal * percent / 100);
+  $(`#${type}-discount`).value = suggested.toLocaleString('en-US');
+  $(`#${type}-discount`).dispatchEvent(new Event('input'));
+}
 function renderCart(type) {
   const cartKey = type + 'Cart';
   const cart = state[cartKey];
@@ -1192,17 +1282,87 @@ async function loadHistory() {
   state.invoicesById = {};
   data.forEach(inv => { state.invoicesById[inv.id] = inv; });
   $('#history-tbody').innerHTML = data.map(inv => `
-    <tr>
-      <td>${inv.number || inv.id}</td><td>${typeLabel[inv.invoice_type] || inv.invoice_type}</td><td>${toJalaliDate(inv.date, true)}</td>
-      <td>${inv.party_name || '—'}</td><td>${inv.description || '—'}</td><td title="${wordsTitle(inv.total)}">${fmt(inv.total)}</td><td title="${wordsTitle(inv.paid)}">${fmt(inv.paid)}</td>
+    <tr${inv.voided ? ' style="opacity:0.55"' : ''}>
+      <td>${inv.number || inv.id}${inv.voided ? ' <span class="badge badge-red">باطل‌شده</span>' : ''}</td><td>${typeLabel[inv.invoice_type] || inv.invoice_type}</td><td>${toJalaliDate(inv.date, true)}</td>
+      <td>${inv.party_name || '—'}</td><td>${inv.voided ? `دلیل ابطال: ${escHtml(inv.void_reason)}` : (inv.description || '—')}</td><td title="${wordsTitle(inv.total)}">${fmt(inv.total)}</td><td title="${wordsTitle(inv.paid)}">${fmt(inv.paid)}</td>
       <td>${escHtml(inv.created_by) || '—'}</td>
       <td>
+        ${inv.voided ? '' : `
         <button class="btn btn-sm btn-secondary" onclick="askPrintInvoice(${inv.id})">چاپ</button>
         ${state.user.role === 'admin' ? `<button class="btn btn-sm btn-secondary" onclick="openEditInvoiceModal(${inv.id})">ویرایش</button>` : ''}
         ${['sale', 'purchase'].includes(inv.invoice_type) ? `<button class="btn btn-sm btn-danger" onclick="openReturnModal(${inv.id})">ثبت مرجوعی</button>` : ''}
+        ${inv.invoice_type === 'sale' && inv.payment_type === 'credit' ? `<button class="btn btn-sm btn-secondary" onclick="openInstallmentsModal(${inv.id})">اقساط</button>` : ''}
+        ${state.user.role === 'admin' ? `<button class="btn btn-sm btn-danger" onclick="voidInvoice(${inv.id})">باطل کردن</button>` : ''}
         ${state.user.role === 'admin' ? `<button class="btn btn-sm btn-danger" onclick="deleteInvoice(${inv.id})">حذف</button>` : ''}
+        `}
       </td>
     </tr>`).join('');
+}
+async function openInstallmentsModal(invoiceId) {
+  const inv = state.invoicesById[invoiceId];
+  if (!inv) return;
+  const remaining = inv.total - inv.paid;
+  const existing = await api('GET', `/invoices/${invoiceId}/installments`);
+  if (existing === null) return;
+
+  const existingRows = existing.map(i => `
+    <tr><td>${escHtml(i.due_date)}</td><td title="${wordsTitle(i.amount)}">${fmt(i.amount)}</td>
+    <td>${i.paid ? `<span class="badge badge-green">پرداخت‌شده</span>` : `<button class="btn btn-sm btn-success" onclick="payInstallment(${i.id}, ${invoiceId})">ثبت پرداخت</button>`}</td></tr>`).join('');
+
+  openModal(`
+    <h3>اقساط فاکتور ${inv.number || inv.id}</h3>
+    <p>مانده فاکتور: <strong title="${wordsTitle(remaining)}">${fmt(remaining)} تومان</strong></p>
+    <table class="data-table" style="margin-top:10px">
+      <thead><tr><th>سررسید</th><th>مبلغ</th><th>وضعیت</th></tr></thead>
+      <tbody>${existingRows || '<tr><td colspan="3" class="muted">هنوز قسطی تعریف نشده</td></tr>'}</tbody>
+    </table>
+    <div class="card" style="margin-top:14px">
+      <div class="card-title">تعریف/جایگزینی اقساط</div>
+      <div class="form-row"><div><label>تعداد قسط</label><input type="number" min="2" max="24" id="inst-count" value="3"></div>
+        <div style="align-self:flex-end"><button class="btn btn-secondary" id="btn-build-installment-rows">ساخت ردیف‌ها</button></div></div>
+      <div id="inst-rows" style="margin-top:10px"></div>
+      <button class="btn btn-primary hidden" id="btn-save-installments" style="margin-top:10px">ثبت اقساط</button>
+    </div>
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">بستن</button></div>`);
+
+  $('#btn-build-installment-rows').addEventListener('click', () => {
+    const count = parseInt($('#inst-count').value) || 0;
+    if (count < 2) { toast('حداقل ۲ قسط لازم است', 'danger'); return; }
+    const perAmount = Math.floor(remaining / count);
+    const lastAmount = remaining - perAmount * (count - 1);
+    $('#inst-rows').innerHTML = Array.from({ length: count }, (_, i) => `
+      <div class="form-row">
+        <div><label>سررسید قسط ${toFaDigits(i + 1)} (مثلاً 1404-07-01)</label><input type="text" class="inst-due-date" placeholder="1404-07-01"></div>
+        <div><label>مبلغ (تومان)</label><input type="text" inputmode="decimal" class="inst-amount" value="${(i === count - 1 ? lastAmount : perAmount).toLocaleString('en-US')}"></div>
+      </div>`).join('');
+    $('#btn-save-installments').classList.remove('hidden');
+  });
+
+  $('#btn-save-installments').addEventListener('click', async () => {
+    const dateInputs = $$('.inst-due-date');
+    const amountInputs = $$('.inst-amount');
+    const installments = dateInputs.map((el, i) => ({
+      due_date: el.value.trim(),
+      amount: parseFloat((amountInputs[i].value || '').replace(/,/g, '')) || 0,
+    }));
+    if (installments.some(i => !i.due_date || !i.amount)) { toast('تاریخ و مبلغ همه اقساط را پر کن', 'danger'); return; }
+    const res = await api('POST', `/invoices/${invoiceId}/installments`, { installments, username: state.user.username });
+    if (res && res.ok) { toast('اقساط ثبت شد', 'success'); openInstallmentsModal(invoiceId); }
+    else if (res) toast(res.message || 'خطا در ثبت اقساط', 'danger');
+  });
+}
+async function payInstallment(installmentId, invoiceId) {
+  if (!confirm('پرداخت این قسط ثبت شود؟')) return;
+  const res = await api('POST', `/installments/${installmentId}/pay`, { username: state.user.username });
+  if (res && res.ok) { toast('پرداخت ثبت شد', 'success'); openInstallmentsModal(invoiceId); loadHistory(); }
+  else if (res) toast(res.message || 'خطا', 'danger');
+}
+async function voidInvoice(invoiceId) {
+  const reason = prompt('دلیل باطل کردن این فاکتور را بنویس:');
+  if (!reason || !reason.trim()) return;
+  const res = await api('POST', `/invoices/${invoiceId}/void`, { reason: reason.trim() });
+  if (res && res.ok) { toast(res.message || 'فاکتور باطل شد', 'success'); loadHistory(); }
+  else if (res) toast(res.message || 'خطا در باطل کردن فاکتور', 'danger');
 }
 $('#history-type-filter').addEventListener('change', loadHistory);
 $('#btn-refresh-history').addEventListener('click', loadHistory);
@@ -1426,6 +1586,7 @@ async function loadParties() {
       <td>
         <button class="btn btn-sm btn-secondary" onclick="showLedger(${p.id})">ریز حساب</button>
         <button class="btn btn-sm btn-success" onclick="settlePayment(${p.id}, '${p.name.replace(/'/g, "")}')">تسویه</button>
+        <button class="btn btn-sm btn-secondary" onclick="openEditPartyModal(${p.id})">ویرایش</button>
       </td>
     </tr>`).join('');
 }
@@ -1438,6 +1599,7 @@ $('#btn-new-party').addEventListener('click', () => {
     <div class="field"><label>نوع</label><select id="np-type"><option value="customer">مشتری</option><option value="supplier">تامین‌کننده</option></select></div>
     <div class="field"><label>سقف اعتبار نسیه (تومان — صفر یعنی بدون محدودیت)</label><input type="text" inputmode="decimal" id="np-credit-limit" value="0"></div>
     <div class="field"><label>یادداشت (اختیاری)</label><input id="np-note" placeholder="مثلاً: همیشه سروقت پول می‌ده"></div>
+    <div class="field"><label>تخفیف ویژه دائمی (٪ — اختیاری)</label><input type="number" min="0" max="100" step="0.5" id="np-discount-percent" value="0"></div>
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:6px">
       <input type="checkbox" id="np-vip" style="width:auto"> مشتری ویژه (VIP)
     </label>
@@ -1459,11 +1621,41 @@ $('#btn-new-party').addEventListener('click', () => {
       name, phone: phoneDigits, address, type: $('#np-type').value,
       credit_limit: readAmount($('#np-credit-limit')), note: $('#np-note').value.trim(),
       is_vip: $('#np-vip').checked ? 1 : 0,
+      special_discount_percent: parseFloat($('#np-discount-percent').value) || 0,
     });
     if (res && res.ok) { toast('طرف‌حساب اضافه شد', 'success'); closeModal(); loadParties(); }
     else if (res) toast(res.message || 'خطا در ثبت', 'danger');
   });
 });
+function openEditPartyModal(partyId) {
+  const p = state.parties.find(x => x.id === partyId);
+  if (!p) return;
+  openModal(`
+    <h3>ویرایش طرف‌حساب: ${escHtml(p.name)}</h3>
+    <div class="field"><label>نام</label><input id="ep-name" value="${escHtml(p.name)}"></div>
+    <div class="field"><label>شماره تماس</label><input id="ep-phone" value="${escHtml(p.phone) || ''}"></div>
+    <div class="field"><label>آدرس</label><input id="ep-address" value="${escHtml(p.address) || ''}"></div>
+    <div class="field"><label>سقف اعتبار نسیه (تومان — صفر یعنی بدون محدودیت)</label><input type="text" inputmode="decimal" id="ep-credit-limit" value="${p.credit_limit || 0}"></div>
+    <div class="field"><label>یادداشت</label><input id="ep-note" value="${escHtml(p.note) || ''}"></div>
+    <div class="field"><label>تخفیف ویژه دائمی (٪)</label><input type="number" min="0" max="100" step="0.5" id="ep-discount-percent" value="${p.special_discount_percent || 0}"></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:6px">
+      <input type="checkbox" id="ep-vip" style="width:auto" ${p.is_vip ? 'checked' : ''}> مشتری ویژه (VIP)
+    </label>
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-edit-party-btn">ذخیره</button></div>`);
+  attachThousandsFormatting($('#ep-credit-limit'));
+  $('#save-edit-party-btn').addEventListener('click', async () => {
+    const name = $('#ep-name').value.trim();
+    if (!name) { toast('نام الزامی است', 'danger'); return; }
+    const res = await api('PUT', `/parties/${partyId}`, {
+      name, phone: $('#ep-phone').value.trim(), address: $('#ep-address').value.trim(),
+      credit_limit: readAmount($('#ep-credit-limit')), note: $('#ep-note').value.trim(),
+      is_vip: $('#ep-vip').checked ? 1 : 0,
+      special_discount_percent: parseFloat($('#ep-discount-percent').value) || 0,
+    });
+    if (res && res.ok) { toast('ذخیره شد', 'success'); closeModal(); loadParties(); }
+    else if (res) toast(res.message || 'خطا در ذخیره', 'danger');
+  });
+}
 async function showLedger(partyId) {
   const data = await api('GET', `/parties/${partyId}/ledger`);
   if (!data) return;
@@ -1560,6 +1752,118 @@ async function setCheckStatus(id, status) {
   const res = await api('PUT', `/checks/${id}`, { status });
   if (res && res.ok) { toast('بروزرسانی شد', 'success'); loadChecks(); }
 }
+
+// ===================== گارانتی و تعمیرات =====================
+const WARRANTY_STATUS_LABELS = { received: ['دریافت‌شده', 'orange'], in_repair: ['در حال تعمیر', 'orange'], done: ['آماده تحویل', 'green'], returned: ['تحویل داده‌شده', 'green'] };
+async function loadWarrantyPage() {
+  const [claims, parties, items] = await Promise.all([
+    api('GET', '/warranty-claims'), api('GET', '/parties'), api('GET', `/items?role=${state.user.role}`),
+  ]);
+  if (parties) state.parties = parties;
+  if (items) state.items = items;
+  if (!claims) return;
+  $('#warranty-tbody').innerHTML = claims.map(c => {
+    const st = WARRANTY_STATUS_LABELS[c.status] || ['—', 'gray'];
+    return `<tr>
+      <td>${toJalaliDate(c.created_at, true)}</td><td>${escHtml(c.item_name) || '—'}</td><td>${escHtml(c.serial_number) || '—'}</td>
+      <td>${escHtml(c.party_name) || '—'}</td><td>${escHtml(c.issue_description) || '—'}</td>
+      <td><span class="badge badge-${st[1]}">${st[0]}</span></td>
+      <td>
+        ${c.status !== 'returned' ? `
+        <select onchange="updateWarrantyClaimStatus(${c.id}, this.value)">
+          <option value="">تغییر وضعیت...</option>
+          <option value="received">دریافت‌شده</option>
+          <option value="in_repair">در حال تعمیر</option>
+          <option value="done">آماده تحویل</option>
+          <option value="returned">تحویل داده‌شده</option>
+        </select>` : '—'}
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" class="muted">درخواستی ثبت نشده</td></tr>';
+}
+async function updateWarrantyClaimStatus(claimId, status) {
+  if (!status) return;
+  const res = await api('PUT', `/warranty-claims/${claimId}`, { status, username: state.user.username });
+  if (res && res.ok) { toast('وضعیت به‌روزرسانی شد', 'success'); loadWarrantyPage(); }
+}
+$('#btn-new-warranty-claim').addEventListener('click', () => {
+  const partyOptions = (state.parties || []).map(p => `<option value="${p.id}">${escHtml(p.name)}</option>`).join('');
+  const itemOptions = (state.items || []).map(it => `<option value="${it.id}">${escHtml(it.name)}</option>`).join('');
+  openModal(`
+    <h3>ثبت درخواست گارانتی/تعمیر</h3>
+    <div class="field"><label>کالا</label><select id="wc-item"><option value="">— انتخاب کالا —</option>${itemOptions}</select></div>
+    <div class="field"><label>شماره سریال (اختیاری)</label><input id="wc-serial"></div>
+    <div class="field"><label>مشتری</label><select id="wc-party"><option value="">— بدون مشتری —</option>${partyOptions}</select></div>
+    <div class="field"><label>شرح ایراد</label><input id="wc-issue" placeholder="مثلاً: روشن نمی‌شود"></div>
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-warranty-claim-btn">ثبت</button></div>`);
+  $('#save-warranty-claim-btn').addEventListener('click', async () => {
+    const itemId = $('#wc-item').value;
+    const serial = $('#wc-serial').value.trim();
+    if (!itemId && !serial) { toast('کالا یا شماره سریال را مشخص کن', 'danger'); return; }
+    const res = await api('POST', '/warranty-claims', {
+      item_id: itemId || null, serial_number: serial || null, party_id: $('#wc-party').value || null,
+      issue_description: $('#wc-issue').value.trim(), username: state.user.username,
+    });
+    if (res && res.ok) { toast('ثبت شد', 'success'); closeModal(); loadWarrantyPage(); }
+    else if (res) toast(res.message || 'خطا در ثبت', 'danger');
+  });
+});
+
+// ===================== انبارگردانی با بارکد =====================
+let stocktakeCounts = {};
+async function loadStocktakePage() {
+  const items = await api('GET', `/items?role=${state.user.role}`);
+  if (items) state.items = items;
+  renderStocktakeTable();
+  $('#stocktake-barcode').value = '';
+  $('#stocktake-status').textContent = '';
+  $('#stocktake-barcode').focus();
+}
+function renderStocktakeTable() {
+  const rows = Object.entries(stocktakeCounts).map(([itemId, count]) => {
+    const it = (state.items || []).find(x => x.id === parseInt(itemId));
+    if (!it) return '';
+    const diff = count - it.stock_qty;
+    return `<tr><td>${escHtml(it.name)}</td><td>${fmt(count)}</td><td>${fmt(it.stock_qty)}</td>
+      <td style="color:${diff === 0 ? 'var(--accent)' : 'var(--danger)'}">${diff > 0 ? '+' : ''}${fmt(diff)}</td></tr>`;
+  }).join('');
+  $('#stocktake-tbody').innerHTML = rows || '<tr><td colspan="4" class="muted">هنوز کالایی اسکن نشده</td></tr>';
+}
+$('#stocktake-barcode').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const input = $('#stocktake-barcode');
+  const code = input.value.trim();
+  input.value = '';
+  if (!code) return;
+  const it = (state.items || []).find(x => x.code && x.code.toLowerCase() === code.toLowerCase());
+  if (!it) {
+    $('#stocktake-status').textContent = `❌ کالایی با کد «${code}» پیدا نشد`;
+    $('#stocktake-status').style.color = 'var(--danger)';
+    return;
+  }
+  stocktakeCounts[it.id] = (stocktakeCounts[it.id] || 0) + 1;
+  renderStocktakeTable();
+  $('#stocktake-status').textContent = `✅ «${it.name}» — شمارش فعلی: ${stocktakeCounts[it.id]}`;
+  $('#stocktake-status').style.color = 'var(--accent, green)';
+});
+$('#btn-clear-stocktake').addEventListener('click', () => {
+  stocktakeCounts = {};
+  renderStocktakeTable();
+});
+$('#btn-apply-stocktake').addEventListener('click', async () => {
+  if (!Object.keys(stocktakeCounts).length) { toast('هنوز کالایی اسکن نشده', 'danger'); return; }
+  if (!confirm('موجودی سیستم برای کالاهای بالا با تعداد شمارش‌شده جایگزین شود؟')) return;
+  const res = await api('POST', '/items/stocktake', { counts: stocktakeCounts, username: state.user.username });
+  if (res && res.ok) {
+    toast(`اصلاح شد — ${res.changed_count} کالا تغییر کرد`, 'success');
+    stocktakeCounts = {};
+    renderStocktakeTable();
+    loadItems();
+  } else if (res) {
+    toast(res.message || 'خطا در اعمال اصلاحات', 'danger');
+  }
+});
 
 // ===================== صندوق =====================
 // ===================== بانک =====================
@@ -1719,13 +2023,25 @@ async function loadMonthly() {
 async function loadExtraReports() {
   const isAdmin = state.user.role === 'admin';
   $('#admin-only-reports-grid').classList.toggle('hidden', !isAdmin);
-  const [debtors, creditors, topItems, byEmployee, expenses] = await Promise.all([
+  const [debtors, creditors, topItems, byEmployee, expenses, profitByItem, reorder, yoy] = await Promise.all([
     api('GET', '/reports/debtors'), api('GET', '/reports/creditors'), api('GET', '/reports/top-items'),
     isAdmin ? api('GET', '/reports/by-employee') : Promise.resolve(null),
     isAdmin ? api('GET', '/reports/expenses') : Promise.resolve(null),
+    isAdmin ? api('GET', '/reports/profit-by-item') : Promise.resolve(null),
+    api('GET', '/reports/reorder-suggestions'),
+    api('GET', '/reports/yoy-comparison'),
   ]);
   if (byEmployee) $('#by-employee-tbody').innerHTML = byEmployee.map(e => `<tr><td>${escHtml(e.username)}</td><td>${fmt(e.invoice_count)}</td><td title="${wordsTitle(e.total_amount)}">${fmt(e.total_amount)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">فروشی ثبت نشده</td></tr>';
   if (expenses) $('#expenses-tbody').innerHTML = expenses.categories.map(c => `<tr><td>${EXPENSE_CATEGORY_LABELS[c.category] || c.category}</td><td>${fmt(c.tx_count)}</td><td title="${wordsTitle(c.total_amount)}">${fmt(c.total_amount)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">هزینه‌ای ثبت نشده</td></tr>';
+  if (profitByItem) $('#profit-by-item-tbody').innerHTML = profitByItem.map(it => `<tr><td>${it.name}</td><td>${fmt(it.total_qty)}</td><td title="${wordsTitle(it.total_sales)}">${fmt(it.total_sales)}</td><td title="${wordsTitle(it.estimated_cost)}">${fmt(it.estimated_cost)}</td><td style="color:${it.estimated_profit >= 0 ? 'var(--accent)' : 'var(--danger)'}" title="${wordsTitle(Math.abs(it.estimated_profit))}">${fmt(it.estimated_profit)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">فروشی ثبت نشده</td></tr>';
+  $('#reorder-tbody').innerHTML = (reorder || []).map(it => `<tr><td>${it.name}</td><td>${fmt(it.stock_qty)} ${it.unit}</td><td>${it.daily_rate}</td><td style="color:var(--danger)">${it.days_left} روز</td><td>${fmt(it.suggested_reorder_qty)} ${it.unit}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">فعلاً کالایی نیاز به سفارش فوری ندارد</td></tr>';
+  if (yoy) {
+    $('#yoy-stat-grid').innerHTML = `
+      <div class="stat-card primary" title="${wordsTitle(yoy.this_month)}"><div class="stat-label">فروش این ماه</div><div class="stat-value">${fmt(yoy.this_month)} تومان</div></div>
+      <div class="stat-card" title="${wordsTitle(yoy.same_month_last_year)}"><div class="stat-label">همین ماه سال قبل</div><div class="stat-value">${fmt(yoy.same_month_last_year)} تومان</div></div>
+      <div class="stat-card accent" title="${wordsTitle(yoy.this_year)}"><div class="stat-label">فروش امسال (از ابتدای سال میلادی)</div><div class="stat-value">${fmt(yoy.this_year)} تومان</div></div>
+      <div class="stat-card" title="${wordsTitle(yoy.last_year)}"><div class="stat-label">فروش سال قبل (همین بازه)</div><div class="stat-value">${fmt(yoy.last_year)} تومان</div></div>`;
+  }
   if (debtors) $('#debtors-tbody').innerHTML = debtors.map(p => `<tr><td>${p.name}</td><td>${p.phone || '—'}</td><td title="${wordsTitle(p.balance)}">${fmt(p.balance)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">بدهکاری ثبت نشده</td></tr>';
   if (creditors) $('#creditors-tbody').innerHTML = creditors.map(p => `<tr><td>${p.name}</td><td>${p.phone || '—'}</td><td title="${wordsTitle(p.owed_amount)}">${fmt(p.owed_amount)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">بدهی‌ای ثبت نشده</td></tr>';
   if (topItems) $('#top-items-tbody').innerHTML = topItems.map(it => `<tr><td>${it.name}</td><td>${it.brand || '—'}</td><td>${fmt(it.total_qty)}</td><td title="${wordsTitle(it.total_amount)}">${fmt(it.total_amount)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">فروشی ثبت نشده</td></tr>';
@@ -1768,8 +2084,22 @@ async function loadShopSettings() {
   $('#shop-phones').value = s.phones || '';
   $('#shop-address').value = s.address || '';
   $('#shop-next-invoice-number').value = s.next_invoice_number || '';
+  $('#shop-telegram-token').value = s.telegram_bot_token || '';
+  $('#shop-telegram-chat-id').value = s.telegram_chat_id || '';
   renderLogoPreview(s.logo_url);
 }
+$('#btn-save-telegram').addEventListener('click', async () => {
+  const res = await api('POST', '/settings/shop', {
+    telegram_bot_token: $('#shop-telegram-token').value.trim(),
+    telegram_chat_id: $('#shop-telegram-chat-id').value.trim(),
+  });
+  if (res && res.ok) toast('تنظیمات تلگرام ذخیره شد', 'success');
+});
+$('#btn-test-telegram').addEventListener('click', async () => {
+  const res = await api('POST', '/settings/telegram/test');
+  if (res && res.ok) toast('پیام تستی ارسال شد — تلگرام را چک کن', 'success');
+  else if (res) toast(res.message || 'خطا در ارسال', 'danger');
+});
 function renderLogoPreview(logoUrl) {
   const el = $('#shop-logo-preview');
   el.innerHTML = logoUrl
@@ -2321,9 +2651,38 @@ async function restoreBackup(filename) {
 // ===================== مدیریت کاربران =====================
 async function loadUsers() {
   const users = await api('GET', '/users');
+  state.usersById = {};
+  (users || []).forEach(u => { state.usersById[u.id] = u; });
   $('#users-tbody').innerHTML = (users || []).map(u => `
     <tr><td>${u.username}</td><td>${u.role === 'admin' ? 'مدیر' : 'کارمند'}</td>
-    <td>${u.id !== state.user.id ? `<button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id})">حذف</button>` : '—'}</td></tr>`).join('');
+    <td>
+      ${u.role !== 'admin' ? `<button class="btn btn-sm btn-secondary" onclick="openPermissionsModal(${u.id})">سطح دسترسی</button>` : ''}
+      ${u.id !== state.user.id ? `<button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id})">حذف</button>` : '—'}
+    </td></tr>`).join('');
+}
+const PERMISSION_LABELS = {
+  can_sell: 'ثبت فاکتور فروش', can_purchase: 'ثبت فاکتور خرید', can_manage_items: 'مدیریت کالاها',
+  can_manage_parties: 'مدیریت مشتریان/تامین‌کنندگان', can_manage_cash: 'ثبت تراکنش صندوق',
+};
+function openPermissionsModal(userId) {
+  const u = state.usersById[userId];
+  if (!u) return;
+  const perms = u.permissions || {};
+  openModal(`
+    <h3>سطح دسترسی: ${escHtml(u.username)}</h3>
+    <p class="muted" style="margin-bottom:10px">مواردی که تیک آن‌ها برداشته شود، برای این کاربر غیرفعال می‌شود.</p>
+    ${Object.entries(PERMISSION_LABELS).map(([key, label]) => `
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:8px">
+        <input type="checkbox" class="perm-checkbox" data-key="${key}" style="width:auto" ${perms[key] !== false ? 'checked' : ''}> ${label}
+      </label>`).join('')}
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-permissions-btn">ذخیره</button></div>`);
+  $('#save-permissions-btn').addEventListener('click', async () => {
+    const body = { username: state.user.username };
+    $$('.perm-checkbox').forEach(cb => { body[cb.dataset.key] = cb.checked; });
+    const res = await api('PUT', `/users/${userId}/permissions`, body);
+    if (res && res.ok) { toast('سطح دسترسی ذخیره شد', 'success'); closeModal(); loadUsers(); }
+    else if (res) toast(res.message || 'خطا', 'danger');
+  });
 }
 $('#btn-add-user').addEventListener('click', async () => {
   const username = $('#new-user-username').value.trim();

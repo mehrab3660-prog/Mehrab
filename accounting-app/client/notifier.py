@@ -7,6 +7,8 @@
 import json
 import os
 import smtplib
+import urllib.request
+import urllib.parse
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -31,10 +33,10 @@ def build_daily_summary(get_connection):
     today = datetime.now().strftime("%Y-%m-%d")
 
     sales_today = conn.execute(
-        "SELECT COUNT(*) as cnt, COALESCE(SUM(total),0) as total FROM invoices WHERE invoice_type='sale' AND date LIKE ?",
+        "SELECT COUNT(*) as cnt, COALESCE(SUM(total),0) as total FROM invoices WHERE invoice_type='sale' AND voided=0 AND date LIKE ?",
         (f"{today}%",)).fetchone()
     purchases_today = conn.execute(
-        "SELECT COUNT(*) as cnt, COALESCE(SUM(total),0) as total FROM invoices WHERE invoice_type='purchase' AND date LIKE ?",
+        "SELECT COUNT(*) as cnt, COALESCE(SUM(total),0) as total FROM invoices WHERE invoice_type='purchase' AND voided=0 AND date LIKE ?",
         (f"{today}%",)).fetchone()
     cash_balance = conn.execute(
         "SELECT COALESCE(SUM(CASE WHEN tx_type='in' THEN amount ELSE -amount END),0) as bal FROM cash_transactions"
@@ -47,7 +49,7 @@ def build_daily_summary(get_connection):
         FROM invoice_items
         JOIN invoices ON invoice_items.invoice_id = invoices.id
         JOIN items ON invoice_items.item_id = items.id
-        WHERE invoices.invoice_type='sale' AND invoices.date LIKE ?
+        WHERE invoices.invoice_type='sale' AND invoices.voided=0 AND invoices.date LIKE ?
         GROUP BY items.id ORDER BY total DESC LIMIT 5
     """, (f"{today}%",)).fetchall()
 
@@ -103,6 +105,22 @@ def send_email_summary(summary_text, backup_path=None):
         return True, "ایمیل با موفقیت ارسال شد"
     except Exception as e:
         return False, f"خطا در ارسال ایمیل: {e}"
+
+
+def send_telegram_message(bot_token, chat_id, text):
+    """پیام هشدار به تلگرام صاحب مغازه (کمبود موجودی، برگشت خوردن چک و...)"""
+    if not bot_token or not chat_id:
+        return False, "توکن ربات یا شناسه چت تلگرام تنظیم نشده"
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    data = urllib.parse.urlencode({"chat_id": chat_id, "text": text}).encode("utf-8")
+    try:
+        req = urllib.request.Request(url, data=data, method="POST")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            if resp.status == 200:
+                return True, "پیام تلگرام ارسال شد"
+            return False, f"خطای تلگرام: کد {resp.status}"
+    except Exception as e:
+        return False, f"خطا در ارسال پیام تلگرام: {e}"
 
 
 def upload_to_vps(backup_path):

@@ -175,6 +175,34 @@ def init_db():
         created_at TEXT NOT NULL
     )""")
 
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS invoice_installments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        invoice_id INTEGER NOT NULL,
+        due_date TEXT NOT NULL,
+        amount REAL NOT NULL,
+        paid INTEGER NOT NULL DEFAULT 0,
+        paid_at TEXT,
+        FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+    )""")
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS warranty_claims (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_id INTEGER,
+        serial_number TEXT,
+        party_id INTEGER,
+        invoice_id INTEGER,
+        issue_description TEXT,
+        status TEXT NOT NULL DEFAULT 'received',  -- received, in_repair, done, returned
+        created_at TEXT NOT NULL,
+        resolved_at TEXT,
+        note TEXT,
+        username TEXT,
+        FOREIGN KEY (item_id) REFERENCES items(id),
+        FOREIGN KEY (party_id) REFERENCES parties(id)
+    )""")
+
     # --- مهاجرت ستون‌های جدید برای دیتابیس‌های قبلی (اگر از قبل ساخته شده باشند) ---
     def add_column_if_missing(table, column, coltype):
         existing = [row["name"] for row in c.execute(f"PRAGMA table_info({table})").fetchall()]
@@ -192,6 +220,16 @@ def init_db():
     add_column_if_missing("invoice_items", "serial_number", "TEXT")
     add_column_if_missing("invoice_items", "warranty_months", "INTEGER")
     add_column_if_missing("cash_transactions", "expense_category", "TEXT")
+    add_column_if_missing("users", "permissions", "TEXT")
+    add_column_if_missing("users", "totp_secret", "TEXT")
+    add_column_if_missing("users", "totp_enabled", "INTEGER NOT NULL DEFAULT 0")
+    add_column_if_missing("invoices", "voided", "INTEGER NOT NULL DEFAULT 0")
+    add_column_if_missing("invoices", "void_reason", "TEXT")
+    add_column_if_missing("invoices", "voided_by", "TEXT")
+    add_column_if_missing("invoices", "voided_at", "TEXT")
+    add_column_if_missing("parties", "special_discount_percent", "REAL NOT NULL DEFAULT 0")
+    add_column_if_missing("items", "avg_cost", "REAL")
+    add_column_if_missing("items", "photo_filename", "TEXT")
 
     # مهاجرت امنیتی: هش کردن رمزهایی که هنوز به‌صورت متن ساده ذخیره شده‌اند
     from werkzeug.security import generate_password_hash

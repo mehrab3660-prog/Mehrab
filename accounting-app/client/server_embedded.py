@@ -61,6 +61,17 @@ def save_shop_settings(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+def notify_telegram_async(text):
+    """ارسال پیام هشدار به تلگرام صاحب مغازه در یک ترد جدا، تا کند بودن اینترنت
+    باعث معطل ماندن درخواست اصلی (مثلاً ثبت فاکتور) نشود."""
+    cfg = load_shop_settings()
+    token = cfg.get("telegram_bot_token")
+    chat_id = cfg.get("telegram_chat_id")
+    if not token or not chat_id:
+        return
+    threading.Thread(target=notifier.send_telegram_message, args=(token, chat_id, text), daemon=True).start()
+
+
 WEB_DIR = os.path.join(get_bundle_dir(), "web")
 app = Flask(__name__, static_folder=WEB_DIR, static_url_path="")
 
@@ -121,6 +132,67 @@ def verify_and_consume_captcha(captcha_id, answer):
         return False
 
 
+# ---------- ورود دو مرحله‌ای (TOTP سازگار با Google Authenticator/Authy و مشابه) ----------
+import base64
+import hmac
+import hashlib
+import struct
+
+
+def generate_totp_secret():
+    return base64.b32encode(secrets.token_bytes(10)).decode("utf-8")
+
+
+def totp_code_at(secret, for_time, interval=30, digits=6):
+    padded = secret.upper() + "=" * ((8 - len(secret) % 8) % 8)
+    key = base64.b32decode(padded)
+    counter = int(for_time // interval)
+    msg = struct.pack(">Q", counter)
+    h = hmac.new(key, msg, hashlib.sha1).digest()
+    offset = h[-1] & 0x0F
+    code_int = (struct.unpack(">I", h[offset:offset + 4])[0] & 0x7FFFFFFF) % (10 ** digits)
+    return str(code_int).zfill(digits)
+
+
+def verify_totp(secret, code, window=1):
+    """کد را با یک بازه‌ی ±۳۰ ثانیه بررسی می‌کند تا اختلاف جزئی ساعت گوشی مشکلی ایجاد نکند"""
+    if not secret or not code:
+        return False
+    code = str(code).strip()
+    now_ts = time.time()
+    for i in range(-window, window + 1):
+        if hmac.compare_digest(totp_code_at(secret, now_ts + i * 30), code):
+            return True
+    return False
+
+
+# ---------- سطح دسترسی سفارشی کارمندها (فراتر از مدیر/کارمند ساده) ----------
+PERMISSION_KEYS = ("can_sell", "can_purchase", "can_manage_items", "can_manage_parties", "can_manage_cash")
+
+
+def get_user_permissions(username):
+    conn = get_connection()
+    row = conn.execute("SELECT permissions FROM users WHERE username=?", (username,)).fetchone()
+    conn.close()
+    if not row or not row["permissions"]:
+        return {}
+    try:
+        return json.loads(row["permissions"])
+    except (TypeError, ValueError):
+        return {}
+
+
+def require_permission(key):
+    """اگر کاربر ادمین نباشد و صراحتاً این دسترسی از او گرفته شده باشد (پیش‌فرض همه چیز مجاز است
+    مگر مدیر آن را خاموش کرده باشد)، خطای ۴۰۳ برمی‌گرداند."""
+    if g.current_user.get("role") == "admin":
+        return None
+    perms = get_user_permissions(g.current_user["username"])
+    if perms.get(key, True) is False:
+        return jsonify({"ok": False, "message": "شما اجازه دسترسی به این بخش را ندارید — از مدیر بخواهید دسترسی لازم را فعال کند"}), 403
+    return None
+
+
 def create_session(username, role):
     token = secrets.token_hex(32)
     with SESSIONS_LOCK:
@@ -175,6 +247,10 @@ def update_shop_settings():
     s["name"] = d.get("name", s.get("name"))
     s["phones"] = d.get("phones", s.get("phones"))
     s["address"] = d.get("address", s.get("address"))
+    if "telegram_bot_token" in d:
+        s["telegram_bot_token"] = d.get("telegram_bot_token") or ""
+    if "telegram_chat_id" in d:
+        s["telegram_chat_id"] = d.get("telegram_chat_id") or ""
     if d.get("next_invoice_number") not in (None, ""):
         try:
             next_number = int(d["next_invoice_number"])
@@ -188,6 +264,19 @@ def update_shop_settings():
         s["invoice_number_offset"] = next_number - next_id
     save_shop_settings(s)
     return jsonify({"ok": True})
+
+
+@app.route("/settings/telegram/test", methods=["POST"])
+def test_telegram():
+    err = require_admin()
+    if err:
+        return err
+    s = load_shop_settings()
+    ok, message = notifier.send_telegram_message(
+        s.get("telegram_bot_token"), s.get("telegram_chat_id"),
+        "✅ این یک پیام تستی از برنامه حسابداری مغازه شماست."
+    )
+    return jsonify({"ok": ok, "message": message})
 
 
 @app.route("/settings/shop/logo", methods=["POST"])
@@ -300,11 +389,19 @@ def login():
     user = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
     conn.close()
     if user and check_password_hash(user["password"], data.get("password", "")):
+        if user["totp_enabled"]:
+            totp_code = (data.get("totp_code") or "").strip()
+            if not totp_code:
+                return jsonify({"ok": False, "need_totp": True, "message": "کد ورود دو مرحله‌ای را وارد کنید"}), 200
+            if not verify_totp(user["totp_secret"], totp_code):
+                log_security_event(user["username"], "ورود ناموفق", "کد دو مرحله‌ای اشتباه")
+                return jsonify({"ok": False, "need_totp": True, "message": "کد دو مرحله‌ای اشتباه است"}), 401
         with FAILED_LOGINS_LOCK:
             FAILED_LOGINS.pop(username_key, None)
         log_action(user["username"], "ورود به سیستم")
         user_dict = dict(user)
         user_dict.pop("password", None)  # رمز هش‌شده هم نباید به کلاینت فرستاده بشه
+        user_dict.pop("totp_secret", None)
         token = create_session(user["username"], user["role"])
         return jsonify({"ok": True, "user": user_dict, "token": token})
 
@@ -344,6 +441,9 @@ def get_items():
 
 @app.route("/items", methods=["POST"])
 def add_item():
+    err = require_permission("can_manage_items")
+    if err:
+        return err
     d = request.json
     conn = get_connection()
     conn.execute("""INSERT INTO items (code, name, category_id, unit, purchase_price, sale_price, stock_qty, min_stock, brand)
@@ -358,6 +458,9 @@ def add_item():
 
 @app.route("/items/<int:item_id>", methods=["PUT"])
 def update_item(item_id):
+    err = require_permission("can_manage_items")
+    if err:
+        return err
     d = request.json
     conn = get_connection()
     conn.execute("""UPDATE items SET code=?, name=?, category_id=?, unit=?, purchase_price=?,
@@ -372,11 +475,45 @@ def update_item(item_id):
 
 @app.route("/items/<int:item_id>", methods=["DELETE"])
 def delete_item(item_id):
+    err = require_permission("can_manage_items")
+    if err:
+        return err
     conn = get_connection()
     conn.execute("DELETE FROM items WHERE id=?", (item_id,))
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
+
+
+@app.route("/items/<int:item_id>/photo", methods=["POST"])
+def upload_item_photo(item_id):
+    if "photo" not in request.files:
+        return jsonify({"ok": False, "message": "فایلی ارسال نشده"}), 400
+    file = request.files["photo"]
+    if not file or file.filename == "":
+        return jsonify({"ok": False, "message": "فایلی انتخاب نشده"}), 400
+    ext = os.path.splitext(file.filename)[1].lower()
+    # svg عمداً مجاز نیست: چون این فایل مستقیماً به‌عنوان یک فایل استاتیک سرو می‌شود،
+    # svg با اسکریپت داخلش می‌تواند حمله XSS ذخیره‌شده ایجاد کند
+    if ext not in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
+        return jsonify({"ok": False, "message": "فرمت فایل باید png، jpg، gif یا webp باشد"}), 400
+    conn = get_connection()
+    item = conn.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
+    if not item:
+        conn.close()
+        return jsonify({"ok": False, "message": "کالا پیدا نشد"}), 404
+    os.makedirs(ASSETS_DIR, exist_ok=True)
+    filename = f"item_{item_id}_{secrets.token_hex(4)}{ext}"
+    old_photo = item["photo_filename"]
+    file.save(os.path.join(ASSETS_DIR, filename))
+    conn.execute("UPDATE items SET photo_filename=? WHERE id=?", (filename, item_id))
+    conn.commit()
+    conn.close()
+    if old_photo:
+        old_path = os.path.join(ASSETS_DIR, old_photo)
+        if os.path.exists(old_path):
+            os.remove(old_path)
+    return jsonify({"ok": True, "photo_url": f"/assets/{filename}"})
 
 
 # ---------- طرف‌حساب‌ها (مشتری/تامین‌کننده) ----------
@@ -418,14 +555,18 @@ def validate_party_input(d):
 def add_party():
     d = request.json
     if not d.get("_auto_created"):
+        err = require_permission("can_manage_parties")
+        if err:
+            return err
         error = validate_party_input(d)
         if error:
             return jsonify({"ok": False, "message": error}), 400
     conn = get_connection()
-    cur = conn.execute("""INSERT INTO parties (name, phone, address, type, balance, note, credit_limit, is_vip)
-                     VALUES (?,?,?,?,?,?,?,?)""",
+    cur = conn.execute("""INSERT INTO parties (name, phone, address, type, balance, note, credit_limit, is_vip, special_discount_percent)
+                     VALUES (?,?,?,?,?,?,?,?,?)""",
                  (d["name"], d.get("phone"), d.get("address"), d.get("type", "customer"), d.get("balance", 0),
-                  d.get("note", ""), d.get("credit_limit", 0) or 0, 1 if d.get("is_vip") else 0))
+                  d.get("note", ""), d.get("credit_limit", 0) or 0, 1 if d.get("is_vip") else 0,
+                  d.get("special_discount_percent", 0) or 0))
     conn.commit()
     new_id = cur.lastrowid
     conn.close()
@@ -434,10 +575,16 @@ def add_party():
 
 @app.route("/parties/<int:party_id>", methods=["PUT"])
 def update_party(party_id):
+    err = require_permission("can_manage_parties")
+    if err:
+        return err
     d = request.json
     conn = get_connection()
-    conn.execute("UPDATE parties SET name=?, phone=?, address=? WHERE id=?",
-                 (d["name"], d.get("phone"), d.get("address"), party_id))
+    conn.execute(
+        "UPDATE parties SET name=?, phone=?, address=?, note=?, credit_limit=?, is_vip=?, special_discount_percent=? WHERE id=?",
+        (d["name"], d.get("phone"), d.get("address"), d.get("note", ""), d.get("credit_limit", 0) or 0,
+         1 if d.get("is_vip") else 0, d.get("special_discount_percent", 0) or 0, party_id)
+    )
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
@@ -481,7 +628,7 @@ def party_ledger(party_id):
         conn.close()
         return jsonify({"ok": False, "message": "طرف حساب پیدا نشد"}), 404
     invoices = conn.execute(
-        "SELECT * FROM invoices WHERE party_id=? ORDER BY date", (party_id,)
+        "SELECT * FROM invoices WHERE party_id=? AND voided=0 ORDER BY date", (party_id,)
     ).fetchall()
     conn.close()
     return jsonify({"party": dict(party), "invoices": [dict(r) for r in invoices]})
@@ -553,10 +700,15 @@ def add_invoice():
     مرجوعی خرید/فروش موجودی انبار را برعکسِ خرید/فروش عادی تغییر می‌دهد.
     """
     d = request.json
+    invoice_type = d["invoice_type"]
+    perm_key = "can_sell" if invoice_type in ("sale", "purchase_return") else "can_purchase"
+    err = require_permission(perm_key)
+    if err:
+        return err
+
     conn = get_connection()
     c = conn.cursor()
 
-    invoice_type = d["invoice_type"]
     is_return = invoice_type in ("sale_return", "purchase_return")
     discount = d.get("discount", 0) or 0
     subtotal = sum(it["qty"] * it["unit_price"] for it in d["items"])
@@ -623,6 +775,17 @@ def add_invoice():
             c.execute("UPDATE items SET stock_qty = stock_qty - ? WHERE id=?", (it["qty"], it["item_id"]))
         else:
             c.execute("UPDATE items SET stock_qty = stock_qty + ? WHERE id=?", (it["qty"], it["item_id"]))
+            if invoice_type == "purchase":
+                # میانگین موزون قیمت خرید: هر بار که خرید جدید می‌آید، با موجودی قبلی ترکیب می‌شود
+                # تا هزینه‌ی واقعی‌تری برای محاسبه‌ی سود به‌دست بیاید (نه فقط آخرین قیمت خرید)
+                row = c.execute("SELECT stock_qty, avg_cost, purchase_price FROM items WHERE id=?", (it["item_id"],)).fetchone()
+                old_qty = (row["stock_qty"] or 0) - it["qty"]  # موجودی قبل از این خرید (چون بالا آپدیت شد)
+                old_cost = row["avg_cost"] if row["avg_cost"] is not None else row["purchase_price"]
+                if old_qty > 0 and old_cost is not None:
+                    new_avg = (old_qty * old_cost + it["qty"] * it["unit_price"]) / (old_qty + it["qty"])
+                else:
+                    new_avg = it["unit_price"]
+                c.execute("UPDATE items SET avg_cost=? WHERE id=?", (new_avg, it["item_id"]))
 
     # به‌روزرسانی حساب طرف‌حساب در صورت نسیه (برای مرجوعی، اثر معکوس اعمال می‌شود)
     if d.get("party_id") and d.get("payment_type") in ("credit",):
@@ -640,6 +803,16 @@ def add_invoice():
         label = {"sale": "فروش", "purchase": "خرید", "sale_return": "مرجوعی فروش", "purchase_return": "مرجوعی خرید"}[invoice_type]
         c.execute("INSERT INTO cash_transactions (date, tx_type, amount, description, invoice_id) VALUES (?,?,?,?,?)",
                   (now(), tx_type, paid, f"فاکتور {label} شماره {invoice_number}", invoice_id))
+
+    if invoice_type == "sale":
+        sold_item_ids = {it["item_id"] for it in d["items"]}
+        newly_out = c.execute(
+            f"SELECT name, stock_qty FROM items WHERE id IN ({','.join('?' * len(sold_item_ids))}) AND stock_qty <= 0",
+            tuple(sold_item_ids)
+        ).fetchall()
+        if newly_out:
+            names = "، ".join(r["name"] for r in newly_out)
+            notify_telegram_async(f"⚠️ موجودی این کالا(ها) تمام شد: {names}")
 
     conn.commit()
     conn.close()
@@ -837,6 +1010,68 @@ def delete_invoice(invoice_id):
     return jsonify({"ok": True, "message": f"فاکتور و همه موارد مرتبط حذف شد{checks_note}"})
 
 
+@app.route("/invoices/<int:invoice_id>/void", methods=["POST"])
+def void_invoice(invoice_id):
+    """
+    باطل کردن فاکتور با ثبت دلیل: برخلاف حذف کامل، خودِ فاکتور برای سابقه/حسابرسی
+    باقی می‌ماند (با برچسب «باطل‌شده» و دلیل)، ولی اثرات آن (موجودی انبار، مانده حساب
+    طرف‌حساب، تراکنش صندوق) دقیقاً مثل حذف برگردانده می‌شود و در گزارش‌ها لحاظ نمی‌شود.
+    """
+    err = require_admin()
+    if err:
+        return err
+    d = request.json or {}
+    reason = (d.get("reason") or "").strip()
+    if not reason:
+        return jsonify({"ok": False, "message": "برای باطل کردن فاکتور، دلیل را وارد کنید"}), 400
+
+    conn = get_connection()
+    invoice = conn.execute("SELECT * FROM invoices WHERE id=?", (invoice_id,)).fetchone()
+    if not invoice:
+        conn.close()
+        return jsonify({"ok": False, "message": "فاکتور پیدا نشد"}), 404
+    if invoice["voided"]:
+        conn.close()
+        return jsonify({"ok": False, "message": "این فاکتور قبلاً باطل شده است"}), 400
+
+    items = conn.execute("SELECT * FROM invoice_items WHERE invoice_id=?", (invoice_id,)).fetchall()
+    invoice_type = invoice["invoice_type"]
+
+    sale_like = invoice_type in ("sale", "purchase_return")
+    for it in items:
+        if sale_like:
+            conn.execute("UPDATE items SET stock_qty = stock_qty + ? WHERE id=?", (it["qty"], it["item_id"]))
+        else:
+            conn.execute("UPDATE items SET stock_qty = stock_qty - ? WHERE id=?", (it["qty"], it["item_id"]))
+
+    if invoice["party_id"] and invoice["payment_type"] == "credit":
+        remaining = invoice["total"] - invoice["paid"]
+        sign_map = {"sale": 1, "purchase": -1, "sale_return": -1, "purchase_return": 1}
+        sign = sign_map.get(invoice_type, 0)
+        conn.execute("UPDATE parties SET balance = balance - ? WHERE id=?", (sign * remaining, invoice["party_id"]))
+
+    conn.execute("DELETE FROM cash_transactions WHERE invoice_id=?", (invoice_id,))
+
+    related_checks = conn.execute("SELECT * FROM checks WHERE invoice_id=?", (invoice_id,)).fetchall()
+    checks_note = ""
+    for ch in related_checks:
+        if ch["status"] == "cashed":
+            conn.execute("DELETE FROM cash_transactions WHERE description=?", (f"وصول چک شماره {ch['id']}",))
+        checks_note = " (چک‌های مرتبط هم لغو شدند)"
+    conn.execute("DELETE FROM checks WHERE invoice_id=?", (invoice_id,))
+
+    conn.execute(
+        "UPDATE invoices SET voided=1, void_reason=?, voided_by=?, voided_at=? WHERE id=?",
+        (reason, g.current_user["username"], now(), invoice_id)
+    )
+    conn.commit()
+    conn.close()
+
+    log_action(g.current_user["username"], "باطل کردن فاکتور", f'فاکتور شماره {invoice["number"] or invoice_id} — دلیل: {reason}{checks_note}')
+    log_security_event(g.current_user["username"], "باطل کردن فاکتور", f'فاکتور شماره {invoice["number"] or invoice_id} — مبلغ {invoice["total"]:,.0f} — دلیل: {reason}')
+    return jsonify({"ok": True, "message": f"فاکتور باطل شد{checks_note}"})
+
+
 # ---------- صندوق ----------
 # ---------- بانک ----------
 @app.route("/bank-accounts", methods=["GET"])
@@ -981,6 +1216,9 @@ def get_cash():
 
 @app.route("/cash", methods=["POST"])
 def add_cash():
+    err = require_permission("can_manage_cash")
+    if err:
+        return err
     d = request.json
     conn = get_connection()
     # دسته‌بندی هزینه فقط برای تراکنش‌های خروج دستی معنا دارد (نه پرداخت‌های مربوط به فاکتور
@@ -1037,6 +1275,158 @@ def add_cash_closing():
     return jsonify({"ok": True, "expected_balance": expected, "difference": difference})
 
 
+@app.route("/invoices/<int:invoice_id>/installments", methods=["GET"])
+def get_installments(invoice_id):
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM invoice_installments WHERE invoice_id=? ORDER BY due_date", (invoice_id,)).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/invoices/<int:invoice_id>/installments", methods=["POST"])
+def set_installments(invoice_id):
+    """
+    تعریف اقساط برای فاکتور نسیه: مانده‌ی فاکتور را به چند قسط با تاریخ سررسید تقسیم می‌کند.
+    اقساط قبلی این فاکتور (اگر بود) جایگزین می‌شوند.
+    """
+    err = require_admin()
+    if err:
+        return err
+    d = request.json or {}
+    installments = d.get("installments") or []
+    if not installments:
+        return jsonify({"ok": False, "message": "حداقل یک قسط لازم است"}), 400
+    conn = get_connection()
+    invoice = conn.execute("SELECT * FROM invoices WHERE id=?", (invoice_id,)).fetchone()
+    if not invoice:
+        conn.close()
+        return jsonify({"ok": False, "message": "فاکتور پیدا نشد"}), 404
+    if invoice["invoice_type"] != "sale" or invoice["payment_type"] != "credit":
+        conn.close()
+        return jsonify({"ok": False, "message": "اقساط فقط برای فاکتور فروش نسیه قابل تعریف است"}), 400
+    remaining = invoice["total"] - invoice["paid"]
+    total_installments = sum(i["amount"] for i in installments)
+    if abs(total_installments - remaining) > 1:
+        conn.close()
+        return jsonify({"ok": False, "message": f"جمع اقساط ({total_installments:,.0f}) باید برابر مانده فاکتور ({remaining:,.0f}) باشد"}), 400
+    conn.execute("DELETE FROM invoice_installments WHERE invoice_id=?", (invoice_id,))
+    for i in installments:
+        conn.execute("INSERT INTO invoice_installments (invoice_id, due_date, amount) VALUES (?,?,?)",
+                     (invoice_id, i["due_date"], i["amount"]))
+    conn.commit()
+    conn.close()
+    log_action(d.get("username"), "تعریف اقساط فاکتور", f'فاکتور شماره {invoice["number"] or invoice_id} — {len(installments)} قسط')
+    return jsonify({"ok": True})
+
+
+@app.route("/installments/<int:installment_id>/pay", methods=["POST"])
+def pay_installment(installment_id):
+    """پرداخت یک قسط: مبلغش به صندوق واریز و از بدهی طرف‌حساب کم می‌شود"""
+    d = request.json or {}
+    conn = get_connection()
+    inst = conn.execute("SELECT * FROM invoice_installments WHERE id=?", (installment_id,)).fetchone()
+    if not inst:
+        conn.close()
+        return jsonify({"ok": False, "message": "قسط پیدا نشد"}), 404
+    if inst["paid"]:
+        conn.close()
+        return jsonify({"ok": False, "message": "این قسط قبلاً پرداخت شده است"}), 400
+    invoice = conn.execute("SELECT * FROM invoices WHERE id=?", (inst["invoice_id"],)).fetchone()
+    conn.execute("UPDATE invoice_installments SET paid=1, paid_at=? WHERE id=?", (now(), installment_id))
+    conn.execute("INSERT INTO cash_transactions (date, tx_type, amount, description, invoice_id) VALUES (?,?,?,?,?)",
+                 (now(), "in", inst["amount"], f'پرداخت قسط فاکتور شماره {invoice["number"] or invoice["id"]}', invoice["id"]))
+    if invoice["party_id"]:
+        conn.execute("UPDATE parties SET balance = balance - ? WHERE id=?", (inst["amount"], invoice["party_id"]))
+    conn.execute("UPDATE invoices SET paid = paid + ? WHERE id=?", (inst["amount"], invoice["id"]))
+    conn.commit()
+    conn.close()
+    log_action(d.get("username"), "پرداخت قسط", f'فاکتور شماره {invoice["number"] or invoice["id"]} — مبلغ {inst["amount"]:,.0f} تومان')
+    return jsonify({"ok": True})
+
+
+@app.route("/items/stocktake", methods=["POST"])
+def apply_stocktake():
+    """
+    انبارگردانی: تعدادهای شمارش‌شده (با اسکن بارکد) را با موجودی فعلی سیستم مقایسه
+    و موجودی را با تعداد واقعی شمرده‌شده جایگزین می‌کند (نه جمع می‌زند).
+    """
+    err = require_admin()
+    if err:
+        return err
+    d = request.json or {}
+    counts = d.get("counts") or {}
+    if not counts:
+        return jsonify({"ok": False, "message": "لیست شمارش خالی است"}), 400
+    conn = get_connection()
+    changes = []
+    for item_id_str, counted_qty in counts.items():
+        item_id = int(item_id_str)
+        item = conn.execute("SELECT name, stock_qty FROM items WHERE id=?", (item_id,)).fetchone()
+        if not item:
+            continue
+        old_qty = item["stock_qty"]
+        if old_qty != counted_qty:
+            conn.execute("UPDATE items SET stock_qty=? WHERE id=?", (counted_qty, item_id))
+            changes.append(f'{item["name"]}: {old_qty:g} → {counted_qty:g}')
+    conn.commit()
+    conn.close()
+    if changes:
+        log_action(d.get("username"), "انبارگردانی", "؛ ".join(changes))
+        log_security_event(d.get("username"), "اصلاح موجودی (انبارگردانی)", "؛ ".join(changes))
+    return jsonify({"ok": True, "changed_count": len(changes)})
+
+
+@app.route("/warranty-claims", methods=["GET"])
+def get_warranty_claims():
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT warranty_claims.*, items.name as item_name, parties.name as party_name
+        FROM warranty_claims
+        LEFT JOIN items ON warranty_claims.item_id = items.id
+        LEFT JOIN parties ON warranty_claims.party_id = parties.id
+        ORDER BY warranty_claims.id DESC
+    """).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/warranty-claims", methods=["POST"])
+def add_warranty_claim():
+    d = request.json or {}
+    if not (d.get("item_id") or d.get("serial_number")):
+        return jsonify({"ok": False, "message": "کالا یا شماره سریال را مشخص کنید"}), 400
+    conn = get_connection()
+    conn.execute("""
+        INSERT INTO warranty_claims (item_id, serial_number, party_id, invoice_id, issue_description, status, created_at, username)
+        VALUES (?,?,?,?,?,?,?,?)
+    """, (d.get("item_id"), d.get("serial_number"), d.get("party_id"), d.get("invoice_id"),
+          d.get("issue_description", ""), "received", now(), d.get("username")))
+    conn.commit()
+    conn.close()
+    log_action(d.get("username"), "ثبت درخواست گارانتی/تعمیر", d.get("issue_description", ""))
+    return jsonify({"ok": True})
+
+
+@app.route("/warranty-claims/<int:claim_id>", methods=["PUT"])
+def update_warranty_claim(claim_id):
+    d = request.json or {}
+    conn = get_connection()
+    claim = conn.execute("SELECT * FROM warranty_claims WHERE id=?", (claim_id,)).fetchone()
+    if not claim:
+        conn.close()
+        return jsonify({"ok": False, "message": "درخواست پیدا نشد"}), 404
+    status = d.get("status", claim["status"])
+    resolved_at = now() if status in ("done", "returned") and claim["status"] not in ("done", "returned") else claim["resolved_at"]
+    conn.execute(
+        "UPDATE warranty_claims SET status=?, note=?, resolved_at=? WHERE id=?",
+        (status, d.get("note", claim["note"]), resolved_at, claim_id)
+    )
+    conn.commit()
+    conn.close()
+    log_action(d.get("username"), "به‌روزرسانی درخواست گارانتی/تعمیر", f"وضعیت: {status}")
+    return jsonify({"ok": True})
+
+
 @app.route("/reports/expenses", methods=["GET"])
 def report_expenses():
     """جمع هزینه‌های جاری (خروج دستی صندوق با دسته‌بندی) به تفکیک دسته، در N روز اخیر"""
@@ -1065,10 +1455,10 @@ def report_expenses():
 @app.route("/reports/summary", methods=["GET"])
 def report_summary():
     conn = get_connection()
-    sales = conn.execute("SELECT COALESCE(SUM(total),0) as t FROM invoices WHERE invoice_type='sale'").fetchone()["t"]
-    sales_returns = conn.execute("SELECT COALESCE(SUM(total),0) as t FROM invoices WHERE invoice_type='sale_return'").fetchone()["t"]
-    purchases = conn.execute("SELECT COALESCE(SUM(total),0) as t FROM invoices WHERE invoice_type='purchase'").fetchone()["t"]
-    purchase_returns = conn.execute("SELECT COALESCE(SUM(total),0) as t FROM invoices WHERE invoice_type='purchase_return'").fetchone()["t"]
+    sales = conn.execute("SELECT COALESCE(SUM(total),0) as t FROM invoices WHERE invoice_type='sale' AND voided=0").fetchone()["t"]
+    sales_returns = conn.execute("SELECT COALESCE(SUM(total),0) as t FROM invoices WHERE invoice_type='sale_return' AND voided=0").fetchone()["t"]
+    purchases = conn.execute("SELECT COALESCE(SUM(total),0) as t FROM invoices WHERE invoice_type='purchase' AND voided=0").fetchone()["t"]
+    purchase_returns = conn.execute("SELECT COALESCE(SUM(total),0) as t FROM invoices WHERE invoice_type='purchase_return' AND voided=0").fetchone()["t"]
     net_sales = sales - sales_returns
     net_purchases = purchases - purchase_returns
     operating_expenses = conn.execute("""
@@ -1102,7 +1492,7 @@ def stock_ledger(item_id):
                invoices.number as number, invoice_items.qty as qty
         FROM invoice_items
         JOIN invoices ON invoice_items.invoice_id = invoices.id
-        WHERE invoice_items.item_id = ?
+        WHERE invoice_items.item_id = ? AND invoices.voided=0
         ORDER BY invoices.date
     """, (item_id,)).fetchall()
     conn.close()
@@ -1182,6 +1572,9 @@ def update_check(check_id):
         tx_type = "in" if check["direction"] == "received" else "out"
         conn.execute("INSERT INTO cash_transactions (date, tx_type, amount, description) VALUES (?,?,?,?)",
                       (now(), tx_type, check["amount"], f"وصول چک شماره {check_id}"))
+    if check and d["status"] == "bounced" and check["status"] != "bounced":
+        party = conn.execute("SELECT name FROM parties WHERE id=?", (check["party_id"],)).fetchone() if check["party_id"] else None
+        notify_telegram_async(f"🔴 چک {check['amount']:,.0f} تومانی {party['name'] if party else ''} برگشت خورد")
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
@@ -1302,9 +1695,32 @@ def get_users():
     if err:
         return err
     conn = get_connection()
-    rows = conn.execute("SELECT id, username, role FROM users ORDER BY id").fetchall()
+    rows = conn.execute("SELECT id, username, role, permissions, totp_enabled FROM users ORDER BY id").fetchall()
     conn.close()
-    return jsonify([dict(r) for r in rows])
+    result = []
+    for r in rows:
+        row = dict(r)
+        try:
+            row["permissions"] = json.loads(row["permissions"]) if row["permissions"] else {}
+        except (TypeError, ValueError):
+            row["permissions"] = {}
+        result.append(row)
+    return jsonify(result)
+
+
+@app.route("/users/<int:user_id>/permissions", methods=["PUT"])
+def update_user_permissions(user_id):
+    err = require_admin()
+    if err:
+        return err
+    d = request.json or {}
+    perms = {k: bool(d.get(k, True)) for k in PERMISSION_KEYS}
+    conn = get_connection()
+    conn.execute("UPDATE users SET permissions=? WHERE id=?", (json.dumps(perms), user_id))
+    conn.commit()
+    conn.close()
+    log_security_event(d.get("username"), "تغییر سطح دسترسی کاربر", f"کاربر شماره {user_id}: {perms}")
+    return jsonify({"ok": True})
 
 
 @app.route("/users", methods=["POST"])
@@ -1366,6 +1782,56 @@ def change_own_password():
     conn.commit()
     conn.close()
     log_security_event(username, "تغییر رمز عبور توسط خود کاربر", "")
+    return jsonify({"ok": True})
+
+
+@app.route("/users/me/2fa/setup", methods=["POST"])
+def setup_2fa():
+    """مرحله اول فعال‌سازی ورود دو مرحله‌ای: یک کلید تصادفی جدید می‌سازد (هنوز فعال نیست
+    تا با /verify تایید شود) و کلید را برای وارد کردن دستی در اپ‌های Google Authenticator/Authy برمی‌گرداند."""
+    username = g.current_user["username"]
+    secret = generate_totp_secret()
+    conn = get_connection()
+    conn.execute("UPDATE users SET totp_secret=?, totp_enabled=0 WHERE username=?", (secret, username))
+    conn.commit()
+    conn.close()
+    otpauth_uri = f"otpauth://totp/AccountingApp:{username}?secret={secret}&issuer=AccountingApp"
+    return jsonify({"ok": True, "secret": secret, "otpauth_uri": otpauth_uri})
+
+
+@app.route("/users/me/2fa/verify", methods=["POST"])
+def verify_2fa():
+    """مرحله دوم: کاربر یک کد از اپ احراز هویتش وارد می‌کند تا مطمئن شویم درست تنظیم شده، سپس فعال می‌شود"""
+    d = request.json or {}
+    username = g.current_user["username"]
+    conn = get_connection()
+    user = conn.execute("SELECT totp_secret FROM users WHERE username=?", (username,)).fetchone()
+    if not user or not user["totp_secret"]:
+        conn.close()
+        return jsonify({"ok": False, "message": "ابتدا مرحله راه‌اندازی را انجام دهید"}), 400
+    if not verify_totp(user["totp_secret"], d.get("code")):
+        conn.close()
+        return jsonify({"ok": False, "message": "کد اشتباه است"}), 400
+    conn.execute("UPDATE users SET totp_enabled=1 WHERE username=?", (username,))
+    conn.commit()
+    conn.close()
+    log_security_event(username, "فعال‌سازی ورود دو مرحله‌ای", "")
+    return jsonify({"ok": True})
+
+
+@app.route("/users/me/2fa/disable", methods=["POST"])
+def disable_2fa():
+    d = request.json or {}
+    username = g.current_user["username"]
+    conn = get_connection()
+    user = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+    if not user or not check_password_hash(user["password"], d.get("password", "")):
+        conn.close()
+        return jsonify({"ok": False, "message": "رمز عبور اشتباه است"}), 401
+    conn.execute("UPDATE users SET totp_enabled=0, totp_secret=NULL WHERE username=?", (username,))
+    conn.commit()
+    conn.close()
+    log_security_event(username, "غیرفعال‌سازی ورود دو مرحله‌ای", "")
     return jsonify({"ok": True})
 
 
@@ -1446,13 +1912,115 @@ def report_top_items():
         FROM invoice_items
         JOIN invoices ON invoice_items.invoice_id = invoices.id
         JOIN items ON invoice_items.item_id = items.id
-        WHERE invoices.invoice_type='sale' AND invoices.date >= ?
+        WHERE invoices.invoice_type='sale' AND invoices.voided=0 AND invoices.date >= ?
         GROUP BY items.id
         ORDER BY total_amount DESC
         LIMIT 20
     """, (since,)).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
+
+
+@app.route("/reports/profit-by-item", methods=["GET"])
+def report_profit_by_item():
+    """سود تقریبی هر کالا در N روز اخیر — بر اساس قیمت فروش هر ردیف فاکتور منهای بهای
+    تمام‌شده‌ی فعلی کالا (میانگین موزون قیمت خرید، یا اگر نبود، آخرین قیمت خرید). فقط برای مدیر"""
+    err = require_admin()
+    if err:
+        return err
+    days = request.args.get("days", default=30, type=int)
+    conn = get_connection()
+    since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    rows = conn.execute("""
+        SELECT items.id as item_id, items.name as name, items.brand as brand,
+               COALESCE(items.avg_cost, items.purchase_price, 0) as unit_cost,
+               SUM(invoice_items.qty) as total_qty, SUM(invoice_items.total) as total_sales
+        FROM invoice_items
+        JOIN invoices ON invoice_items.invoice_id = invoices.id
+        JOIN items ON invoice_items.item_id = items.id
+        WHERE invoices.invoice_type='sale' AND invoices.voided=0 AND invoices.date >= ?
+        GROUP BY items.id
+        ORDER BY total_sales DESC
+    """, (since,)).fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["estimated_cost"] = d["unit_cost"] * d["total_qty"]
+        d["estimated_profit"] = d["total_sales"] - d["estimated_cost"]
+        result.append(d)
+    return jsonify(result)
+
+
+@app.route("/reports/reorder-suggestions", methods=["GET"])
+def report_reorder_suggestions():
+    """پیشنهاد سفارش مجدد: بر اساس میانگین فروش روزانه‌ی هر کالا در ۳۰ روز اخیر،
+    تخمین می‌زند چند روز دیگر موجودی تمام می‌شود و چقدر باید سفارش داد."""
+    conn = get_connection()
+    since = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    rows = conn.execute("""
+        SELECT items.id as item_id, items.name as name, items.brand as brand,
+               items.stock_qty as stock_qty, items.min_stock as min_stock, items.unit as unit,
+               COALESCE(SUM(invoice_items.qty), 0) as sold_30d
+        FROM items
+        LEFT JOIN invoice_items ON invoice_items.item_id = items.id
+        LEFT JOIN invoices ON invoice_items.invoice_id = invoices.id
+            AND invoices.invoice_type='sale' AND invoices.voided=0 AND invoices.date >= ?
+        GROUP BY items.id
+    """, (since,)).fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        daily_rate = d["sold_30d"] / 30.0
+        if daily_rate <= 0:
+            continue
+        days_left = d["stock_qty"] / daily_rate if daily_rate > 0 else None
+        if days_left is None or days_left > 14:
+            continue
+        suggested_qty = max((daily_rate * 30) - d["stock_qty"], 0)
+        d["daily_rate"] = round(daily_rate, 2)
+        d["days_left"] = round(days_left, 1)
+        d["suggested_reorder_qty"] = round(suggested_qty, 2)
+        result.append(d)
+    result.sort(key=lambda x: x["days_left"])
+    return jsonify(result)
+
+
+@app.route("/reports/yoy-comparison", methods=["GET"])
+def report_yoy_comparison():
+    """مقایسه فروش این ماه و امسال با همان بازه در سال قبل (تقویم میلادی، چون تاریخ‌ها
+    در دیتابیس میلادی ذخیره می‌شوند؛ فقط برای مقایسه‌ی نسبی کاربردی است)"""
+    conn = get_connection()
+    now_dt = datetime.now()
+
+    def sales_since(since_dt, until_dt=None):
+        q = "SELECT COALESCE(SUM(total),0) as t FROM invoices WHERE invoice_type='sale' AND voided=0 AND date >= ?"
+        params = [since_dt.strftime("%Y-%m-%d")]
+        if until_dt:
+            q += " AND date < ?"
+            params.append(until_dt.strftime("%Y-%m-%d"))
+        return conn.execute(q, params).fetchone()["t"]
+
+    this_month_start = now_dt.replace(day=1)
+    last_month_year_start = this_month_start.replace(year=this_month_start.year - 1)
+    try:
+        last_month_year_end = last_month_year_start.replace(month=last_month_year_start.month % 12 + 1) \
+            if last_month_year_start.month != 12 else last_month_year_start.replace(year=last_month_year_start.year + 1, month=1)
+    except ValueError:
+        last_month_year_end = last_month_year_start + timedelta(days=28)
+
+    this_year_start = now_dt.replace(month=1, day=1)
+    last_year_start = this_year_start.replace(year=this_year_start.year - 1)
+    last_year_end = this_year_start
+
+    conn.close()
+    return jsonify({
+        "this_month": sales_since(this_month_start),
+        "same_month_last_year": sales_since(last_month_year_start, last_month_year_end),
+        "this_year": sales_since(this_year_start),
+        "last_year": sales_since(last_year_start, last_year_end),
+    })
 
 
 @app.route("/reports/by-employee", methods=["GET"])
@@ -1468,7 +2036,7 @@ def report_by_employee():
         SELECT COALESCE(created_by, 'نامشخص') as username,
                COUNT(*) as invoice_count, SUM(total) as total_amount
         FROM invoices
-        WHERE invoice_type='sale' AND date >= ?
+        WHERE invoice_type='sale' AND voided=0 AND date >= ?
         GROUP BY username
         ORDER BY total_amount DESC
     """, (since,)).fetchall()
@@ -1557,7 +2125,7 @@ def party_statement_print(party_id):
     if not party:
         conn.close()
         return "طرف حساب پیدا نشد", 404
-    invoices = conn.execute("SELECT * FROM invoices WHERE party_id=? ORDER BY date", (party_id,)).fetchall()
+    invoices = conn.execute("SELECT * FROM invoices WHERE party_id=? AND voided=0 ORDER BY date", (party_id,)).fetchall()
     conn.close()
 
     cfg = load_shop_settings()
@@ -1578,7 +2146,7 @@ def party_statement_pdf(party_id):
     if not party:
         conn.close()
         return jsonify({"ok": False, "message": "طرف حساب پیدا نشد"}), 404
-    invoices = conn.execute("SELECT * FROM invoices WHERE party_id=? ORDER BY date", (party_id,)).fetchall()
+    invoices = conn.execute("SELECT * FROM invoices WHERE party_id=? AND voided=0 ORDER BY date", (party_id,)).fetchall()
     conn.close()
 
     cfg = load_shop_settings()

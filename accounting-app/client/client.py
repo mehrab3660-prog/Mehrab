@@ -33,16 +33,39 @@ _BASE_APP = ttkb.Window if _HAS_TTKBOOTSTRAP else tk.Tk
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 
 
-def load_server_url():
+def load_client_config():
     if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f).get("server_url", "http://127.0.0.1:5050")
-    return "http://127.0.0.1:5050"
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {}
+
+
+def save_client_config(updates):
+    cfg = load_client_config()
+    cfg.update(updates)
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, ensure_ascii=False)
+
+
+def load_server_url():
+    return load_client_config().get("server_url", "http://127.0.0.1:5050")
 
 
 def save_server_url(url):
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump({"server_url": url}, f)
+    save_client_config({"server_url": url})
+
+
+def load_receipt_printer():
+    """نام چاپگر فیش (رسید) انتخاب‌شده برای این کامپیوتر — اگر تنظیم نشده باشد،
+    چاپ مستقیم از چاپگر پیش‌فرض ویندوز استفاده می‌کند."""
+    return load_client_config().get("receipt_printer") or None
+
+
+def save_receipt_printer(name):
+    save_client_config({"receipt_printer": name})
 
 
 class App(_BASE_APP):
@@ -142,6 +165,7 @@ class App(_BASE_APP):
         ttk.Label(top_bar, text=f'کاربر: {self.user["username"]} ({"مدیر" if self.user.get("role")=="admin" else "کارمند"})',
                   font=("Tahoma", 10)).pack(side="right", padx=10)
         ttk.Button(top_bar, text="تغییر رمز عبور من", command=self.open_change_own_password_dialog).pack(side="right", padx=10)
+        ttk.Button(top_bar, text="تنظیم چاپگر فیش", command=self.open_receipt_printer_dialog).pack(side="right", padx=10)
         ttk.Button(top_bar, text="تغییر حالت تاریک/روشن", command=self.toggle_dark_mode).pack(side="left", padx=10)
 
         notebook = ttk.Notebook(self)
@@ -312,6 +336,44 @@ class App(_BASE_APP):
         ttk.Button(win, text="ذخیره", command=save).pack(pady=15)
         win.bind("<Return>", lambda e: save())
 
+    def open_receipt_printer_dialog(self):
+        """
+        انتخاب یک چاپگر مشخص روی این کامپیوتر برای «چاپ مستقیم» فاکتور/فیش، تا هر بار
+        نیاز به انتخاب دستی از دیالوگ چاپ ویندوز نباشد — مخصوصاً برای پرینترهای فیش حرارتی
+        که معمولاً چاپگر پیش‌فرض سیستم نیستند.
+        """
+        win = tk.Toplevel(self)
+        win.title("تنظیم چاپگر فیش")
+
+        if not sys.platform.startswith("win"):
+            ttk.Label(win, text="این قابلیت فقط روی ویندوز در دسترس است.", padding=20).pack()
+            return
+
+        try:
+            import win32print
+            printers = [p[2] for p in win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS)]
+        except ImportError:
+            ttk.Label(win, text="کتابخانه pywin32 نصب نیست.", padding=20).pack()
+            return
+        except Exception as e:
+            ttk.Label(win, text=f"خطا در خواندن لیست چاپگرها: {e}", padding=20).pack()
+            return
+
+        ttk.Label(win, text="چاپگر فیش/رسید را انتخاب کن:", padding=(20, 20, 20, 5)).pack(anchor="e")
+        current = load_receipt_printer()
+        options = ["(چاپگر پیش‌فرض ویندوز)"] + printers
+        var = tk.StringVar(value=current if current in printers else options[0])
+        combo = ttk.Combobox(win, textvariable=var, values=options, state="readonly", width=40, justify="right")
+        combo.pack(padx=20, pady=5)
+
+        def save():
+            chosen = var.get()
+            save_receipt_printer(None if chosen == options[0] else chosen)
+            messagebox.showinfo("ذخیره شد", "چاپگر فیش ذخیره شد.")
+            win.destroy()
+
+        ttk.Button(win, text="ذخیره", command=save).pack(pady=15)
+
     def export_to_excel(self, headers, rows, filename_prefix):
         """ساخت فایل اکسل از یک لیست هدر و ردیف‌ها و باز کردن آن"""
         try:
@@ -349,13 +411,15 @@ class App(_BASE_APP):
             messagebox.showerror("خطا در تولید PDF", str(e))
             return
 
+        receipt_printer = load_receipt_printer()
+        printer_label = receipt_printer or "چاپگر پیش‌فرض"
         want_direct_print = messagebox.askyesno(
             "چاپ فاکتور",
-            "فایل فاکتور ساخته شد.\n\nآیا می‌خواهید مستقیم به چاپگر پیش‌فرض ارسال شود؟\n"
-            "(اگر «خیر» را بزنید، فقط فایل باز می‌شود تا خودتان چاپ کنید)"
+            f"فایل فاکتور ساخته شد.\n\nآیا می‌خواهید مستقیم به «{printer_label}» ارسال شود؟\n"
+            "(اگر «خیر» را بزنید، فقط فایل باز می‌شود تا خودتان چاپ کنید — از «تنظیم چاپگر فیش» بالای صفحه می‌توانی چاپگر دیگری انتخاب کنی)"
         )
         if want_direct_print:
-            ok, msg = pdf_generator.print_pdf_direct(out_path)
+            ok, msg = pdf_generator.print_pdf_direct(out_path, printer_name=receipt_printer)
             if ok:
                 messagebox.showinfo("ارسال به چاپگر", msg)
                 return
