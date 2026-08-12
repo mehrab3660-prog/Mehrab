@@ -84,13 +84,38 @@ class App(_BASE_APP):
         pass_entry = ttk.Entry(frame, width=30, show="*", justify="left")
         pass_entry.grid(row=3, column=0, pady=5)
 
+        captcha_state = {"id": None}
+        captcha_label_var = tk.StringVar(value="...")
+
+        ttk.Label(frame, text="کد امنیتی:").grid(row=4, column=1, sticky="e", pady=5)
+        captcha_row = ttk.Frame(frame)
+        captcha_row.grid(row=4, column=0, pady=5, sticky="w")
+        ttk.Label(captcha_row, textvariable=captcha_label_var, font=("Tahoma", 11, "bold")).pack(side="right", padx=(0, 6))
+        captcha_entry = ttk.Entry(captcha_row, width=10, justify="left")
+        captcha_entry.pack(side="right")
+
+        def refresh_captcha():
+            server = server_entry.get().strip()
+            try:
+                r = requests.get(f"{server}/captcha", timeout=5)
+                data = r.json()
+                captcha_state["id"] = data.get("captcha_id")
+                captcha_label_var.set(data.get("question", "?"))
+                captcha_entry.delete(0, tk.END)
+            except requests.exceptions.RequestException:
+                captcha_label_var.set("خطا در دریافت کد")
+
+        ttk.Button(captcha_row, text="🔄", width=3, command=refresh_captcha).pack(side="right", padx=(6, 0))
+
         def do_login():
             self.server_url = server_entry.get().strip()
             save_server_url(self.server_url)
             try:
                 r = requests.post(f"{self.server_url}/login", json={
                     "username": user_entry.get(),
-                    "password": pass_entry.get()
+                    "password": pass_entry.get(),
+                    "captcha_id": captcha_state["id"],
+                    "captcha_answer": captcha_entry.get(),
                 }, timeout=5)
                 data = r.json()
                 if data.get("ok"):
@@ -99,11 +124,13 @@ class App(_BASE_APP):
                     self.show_main()
                 else:
                     messagebox.showerror("خطا", data.get("message", "ورود ناموفق بود"))
+                    refresh_captcha()
             except requests.exceptions.RequestException:
                 messagebox.showerror("خطا در اتصال",
                                       "اتصال به سرور برقرار نشد.\nمطمئن شوید سرور روشن است و آدرس آن درست وارد شده.")
 
-        ttk.Button(frame, text="ورود", command=do_login).grid(row=4, column=0, columnspan=2, pady=20)
+        ttk.Button(frame, text="ورود", command=do_login).grid(row=5, column=0, columnspan=2, pady=20)
+        refresh_captcha()
 
     # ---------------- صفحه اصلی ----------------
     def show_main(self):

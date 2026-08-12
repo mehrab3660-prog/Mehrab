@@ -2,6 +2,7 @@
 const state = {
   user: null,
   token: null,
+  captchaId: null,
   items: [],
   categories: [],
   parties: [],
@@ -219,7 +220,7 @@ async function api(method, path, body) {
       forceLogout('نشست شما منقضی شده، دوباره وارد شوید');
       return null;
     }
-    if (!res.ok && res.status !== 400 && res.status !== 404 && res.status !== 403) {
+    if (!res.ok && res.status !== 400 && res.status !== 404 && res.status !== 403 && res.status !== 429) {
       throw new Error('server error ' + res.status);
     }
     return await res.json();
@@ -330,6 +331,8 @@ $('#modal-overlay').addEventListener('click', (e) => {
 // ===================== ورود =====================
 $('#login-btn').addEventListener('click', doLogin);
 $('#login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+$('#login-captcha-answer').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+$('#login-captcha-refresh').addEventListener('click', refreshCaptcha);
 
 // نمایش نام و لوگوی مغازه (در صورت تنظیم‌شدن) روی پنل صفحه ورود
 (async function loadLoginBranding() {
@@ -347,10 +350,22 @@ $('#login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter')
   } catch (e) { /* اگر سرور آماده نبود، از نام پیش‌فرض استفاده می‌شود */ }
 })();
 
+async function refreshCaptcha() {
+  $('#login-captcha-question').textContent = '...';
+  $('#login-captcha-answer').value = '';
+  const res = await api('GET', '/captcha');
+  if (res) {
+    state.captchaId = res.captcha_id;
+    $('#login-captcha-question').textContent = res.question;
+  }
+}
+refreshCaptcha();
+
 async function doLogin() {
   const username = $('#login-username').value.trim();
   const password = $('#login-password').value;
-  const res = await api('POST', '/login', { username, password });
+  const captcha_answer = $('#login-captcha-answer').value.trim();
+  const res = await api('POST', '/login', { username, password, captcha_id: state.captchaId, captcha_answer });
   if (res && res.ok) {
     state.user = res.user;
     state.token = res.token;
@@ -362,6 +377,7 @@ async function doLogin() {
     initApp();
   } else {
     $('#login-error').textContent = (res && res.message) || 'ورود ناموفق بود';
+    refreshCaptcha(); // هر کد امنیتی فقط یک‌بار مصرفه، پس چه موفق چه ناموفق باید تازه بشه
   }
 }
 

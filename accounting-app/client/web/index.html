@@ -31,6 +31,13 @@
         <label>رمز عبور</label>
         <input type="password" id="login-password" autocomplete="current-password">
       </div>
+      <div class="field">
+        <label>کد امنیتی — <span id="login-captcha-question">...</span></label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" inputmode="numeric" id="login-captcha-answer" autocomplete="off" style="flex:1">
+          <button type="button" class="btn btn-ghost btn-sm" id="login-captcha-refresh" title="کد جدید">🔄</button>
+        </div>
+      </div>
       <button class="btn btn-primary btn-block" id="login-btn">ورود</button>
       <p class="login-error" id="login-error"></p>
     </div>

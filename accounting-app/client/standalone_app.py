@@ -62,12 +62,37 @@ class StandaloneApp(App):
         pass_entry = ttk.Entry(frame, width=28, show="*", justify="left")
         pass_entry.grid(row=2, column=0, pady=8)
 
+        captcha_state = {"id": None}
+        captcha_label_var = tk.StringVar(value="...")
+
+        ttk.Label(frame, text="کد امنیتی:").grid(row=3, column=1, sticky="e", pady=8, padx=5)
+        captcha_row = ttk.Frame(frame)
+        captcha_row.grid(row=3, column=0, pady=8, sticky="w")
+        ttk.Label(captcha_row, textvariable=captcha_label_var, font=("Tahoma", 11, "bold")).pack(side="right", padx=(0, 6))
+        captcha_entry = ttk.Entry(captcha_row, width=10, justify="left")
+        captcha_entry.pack(side="right")
+
+        def refresh_captcha():
+            import requests
+            try:
+                r = requests.get(f"{self.server_url}/captcha", timeout=5)
+                data = r.json()
+                captcha_state["id"] = data.get("captcha_id")
+                captcha_label_var.set(data.get("question", "?"))
+                captcha_entry.delete(0, tk.END)
+            except Exception:
+                captcha_label_var.set("خطا در دریافت کد")
+
+        ttk.Button(captcha_row, text="🔄", width=3, command=refresh_captcha).pack(side="right", padx=(6, 0))
+
         def do_login():
             import requests
             try:
                 r = requests.post(f"{self.server_url}/login", json={
                     "username": user_entry.get(),
-                    "password": pass_entry.get()
+                    "password": pass_entry.get(),
+                    "captcha_id": captcha_state["id"],
+                    "captcha_answer": captcha_entry.get(),
                 }, timeout=5)
                 data = r.json()
                 if data.get("ok"):
@@ -76,16 +101,18 @@ class StandaloneApp(App):
                     self.show_main()
                 else:
                     messagebox.showerror("خطا", data.get("message", "ورود ناموفق بود"))
+                    refresh_captcha()
             except Exception:
                 messagebox.showerror("خطا در اتصال", "سرور محلی هنوز آماده نیست. چند لحظه صبر کن و دوباره امتحان کن.")
 
         pass_entry.bind("<Return>", lambda e: do_login())
-        ttk.Button(frame, text="ورود", command=do_login).grid(row=3, column=0, columnspan=2, pady=25)
+        ttk.Button(frame, text="ورود", command=do_login).grid(row=4, column=0, columnspan=2, pady=25)
         ttk.Label(
             frame,
             text="اولین بار اجرا می‌کنید؟ رمز مدیر یک‌بار در فایل\nFIRST_LOGIN_ADMIN_PASSWORD.txt کنار برنامه نوشته می‌شود.",
             foreground="gray", justify="center"
-        ).grid(row=4, column=0, columnspan=2)
+        ).grid(row=5, column=0, columnspan=2)
+        refresh_captcha()
 
 
 if __name__ == "__main__":

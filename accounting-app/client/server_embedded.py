@@ -10,6 +10,7 @@ from werkzeug.utils import secure_filename
 from database import init_db, get_connection, DB_PATH
 from datetime import datetime, timedelta
 import os
+import random
 import secrets
 import shutil
 import threading
@@ -79,7 +80,45 @@ SESSIONS = {}
 SESSIONS_LOCK = threading.Lock()
 
 # مسیرهایی که قبل از لاگین هم باید در دسترس باشند (صفحه ورود، فایل‌های استاتیک آن، پینگ)
-PUBLIC_ENDPOINTS = {"static", "index", "login", "logout", "ping", "assets", "get_shop_settings"}
+PUBLIC_ENDPOINTS = {"static", "index", "login", "logout", "ping", "assets", "get_shop_settings", "get_captcha"}
+
+# ---------- کد امنیتی (کپچا) و قفل موقت بعد از تلاش‌های ناموفق ورود ----------
+CAPTCHAS = {}
+CAPTCHA_LOCK = threading.Lock()
+CAPTCHA_TTL_SECONDS = 300  # هر کد امنیتی حداکثر ۵ دقیقه معتبر است
+
+FAILED_LOGINS = {}  # username (lowercase) -> {"count": int, "locked_until": timestamp}
+FAILED_LOGINS_LOCK = threading.Lock()
+MAX_LOGIN_ATTEMPTS = 5
+LOCKOUT_SECONDS = 300  # قفل ۵ دقیقه‌ای بعد از ۵ تلاش ناموفق پشت سر هم
+
+
+def generate_captcha():
+    a, b = random.randint(1, 9), random.randint(1, 9)
+    op = random.choice(["+", "-"])
+    answer = a + b if op == "+" else a - b
+    captcha_id = secrets.token_hex(16)
+    now_ts = time.time()
+    with CAPTCHA_LOCK:
+        expired = [cid for cid, v in CAPTCHAS.items() if v["expires_at"] < now_ts]
+        for cid in expired:
+            CAPTCHAS.pop(cid, None)
+        CAPTCHAS[captcha_id] = {"answer": answer, "expires_at": now_ts + CAPTCHA_TTL_SECONDS}
+    return captcha_id, f"{a} {op} {b} = ?"
+
+
+def verify_and_consume_captcha(captcha_id, answer):
+    """هر کد امنیتی فقط یک‌بار قابل استفاده است (بلافاصله بعد از بررسی حذف می‌شود)"""
+    if not captcha_id:
+        return False
+    with CAPTCHA_LOCK:
+        data = CAPTCHAS.pop(captcha_id, None)
+    if not data or data["expires_at"] < time.time():
+        return False
+    try:
+        return int(answer) == data["answer"]
+    except (TypeError, ValueError):
+        return False
 
 
 def create_session(username, role):
@@ -233,21 +272,50 @@ def log_security_event(username, event, details=""):
 
 
 # ---------- ورود ----------
+@app.route("/captcha", methods=["GET"])
+def get_captcha():
+    captcha_id, question = generate_captcha()
+    return jsonify({"captcha_id": captcha_id, "question": question})
+
+
 @app.route("/login", methods=["POST"])
 def login():
-    data = request.json
+    data = request.json or {}
+    username = (data.get("username") or "").strip()
+    username_key = username.lower()
+
+    with FAILED_LOGINS_LOCK:
+        rec = FAILED_LOGINS.get(username_key)
+        if rec and rec.get("locked_until", 0) > time.time():
+            remaining = int(rec["locked_until"] - time.time()) + 1
+            return jsonify({
+                "ok": False,
+                "message": f"به‌خاطر تلاش‌های ناموفق زیاد، این حساب موقتاً قفل شده. {remaining} ثانیه دیگر دوباره امتحان کنید."
+            }), 429
+
+    if not verify_and_consume_captcha(data.get("captcha_id"), data.get("captcha_answer")):
+        return jsonify({"ok": False, "message": "کد امنیتی اشتباه است یا منقضی شده", "captcha_error": True}), 400
+
     conn = get_connection()
-    user = conn.execute(
-        "SELECT * FROM users WHERE username=?", (data.get("username"),)
-    ).fetchone()
+    user = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
     conn.close()
     if user and check_password_hash(user["password"], data.get("password", "")):
+        with FAILED_LOGINS_LOCK:
+            FAILED_LOGINS.pop(username_key, None)
         log_action(user["username"], "ورود به سیستم")
         user_dict = dict(user)
         user_dict.pop("password", None)  # رمز هش‌شده هم نباید به کلاینت فرستاده بشه
         token = create_session(user["username"], user["role"])
         return jsonify({"ok": True, "user": user_dict, "token": token})
-    log_security_event(data.get("username"), "ورود ناموفق", "نام کاربری یا رمز اشتباه")
+
+    if username_key:
+        with FAILED_LOGINS_LOCK:
+            rec = FAILED_LOGINS.setdefault(username_key, {"count": 0, "locked_until": 0})
+            rec["count"] += 1
+            if rec["count"] >= MAX_LOGIN_ATTEMPTS:
+                rec["locked_until"] = time.time() + LOCKOUT_SECONDS
+                rec["count"] = 0
+    log_security_event(username, "ورود ناموفق", "نام کاربری یا رمز اشتباه")
     return jsonify({"ok": False, "message": "نام کاربری یا رمز عبور اشتباه است"}), 401
 
 
