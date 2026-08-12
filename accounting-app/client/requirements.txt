@@ -10,3 +10,4 @@ Flask==3.0.3
 paramiko==3.4.0
 pytesseract==0.3.13
 pymupdf==1.24.11
+python-barcode==0.15.1

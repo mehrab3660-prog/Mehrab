@@ -257,3 +257,71 @@ def generate_invoice_pdf(output_path, invoice, items, party_name=None, shop_name
 
     c.save()
     return output_path
+
+
+def generate_statement_pdf(output_path, party, invoices, shop_name="مغازه لوازم الکتریکی"):
+    """
+    صورت‌حساب کامل یک طرف‌حساب (لیست فاکتورها + مانده فعلی) به‌صورت PDF — برای چاپ یا
+    اشتراک‌گذاری با خود مشتری/تامین‌کننده. همیشه با فرمت A4 (چون ممکنه فاکتور زیاد باشه).
+    """
+    if not _reportlab_ready:
+        raise RuntimeError("کتابخانه reportlab نصب نیست. دستور 'pip install reportlab arabic-reshaper python-bidi' را اجرا کنید.")
+
+    type_titles = {"sale": "فروش", "purchase": "خرید", "sale_return": "مرجوعی فروش", "purchase_return": "مرجوعی خرید"}
+    margin = 30
+    base_font_size = 10
+    c = canvas.Canvas(output_path, pagesize=A4)
+    width, height = A4
+    font = FONT_NAME if _font_ready else "Helvetica"
+
+    def draw_header():
+        y = height - 40
+        c.setFont(font, base_font_size + 4)
+        c.drawRightString(width - margin, y, rtl(shop_name))
+        y -= 25
+        c.setFont(font, base_font_size + 2)
+        c.drawRightString(width - margin, y, rtl(f'صورت‌حساب: {party.get("name", "")}'))
+        y -= 18
+        c.setFont(font, base_font_size)
+        c.drawRightString(width - margin, y, rtl(f'تلفن: {party.get("phone") or "—"}'))
+        y -= 10
+        c.line(margin, y, width - margin, y)
+        y -= 20
+        c.drawRightString(width - margin, y, rtl("تاریخ"))
+        c.drawRightString(width - 150, y, rtl("شماره فاکتور"))
+        c.drawRightString(width - 260, y, rtl("نوع"))
+        c.drawRightString(width - 340, y, rtl("جمع کل"))
+        c.drawRightString(width - 420, y, rtl("پرداخت‌شده"))
+        c.drawRightString(width - 500, y, rtl("مانده"))
+        y -= 12
+        c.line(margin, y, width - margin, y)
+        y -= 15
+        return y
+
+    y = draw_header()
+    c.setFont(font, base_font_size)
+    for inv in invoices:
+        remaining = (inv.get("total") or 0) - (inv.get("paid") or 0)
+        c.drawRightString(width - margin, y, rtl(str(inv.get("date", ""))[:10]))
+        c.drawRightString(width - 150, y, rtl(str(inv.get("number") or inv.get("id"))))
+        c.drawRightString(width - 260, y, rtl(type_titles.get(inv.get("invoice_type"), inv.get("invoice_type"))))
+        c.drawRightString(width - 340, y, rtl(f'{inv.get("total", 0):,.0f}'))
+        c.drawRightString(width - 420, y, rtl(f'{inv.get("paid", 0):,.0f}'))
+        c.drawRightString(width - 500, y, rtl(f'{remaining:,.0f}'))
+        y -= 16
+        if y < 60:
+            c.showPage()
+            c.setFont(font, base_font_size)
+            y = draw_header()
+            c.setFont(font, base_font_size)
+
+    y -= 10
+    c.line(margin, y, width - margin, y)
+    y -= 22
+    balance = party.get("balance") or 0
+    label = "بدهکار به ما" if balance > 0 else ("بستانکار از ما" if balance < 0 else "تسویه")
+    c.setFont(font, base_font_size + 3)
+    c.drawRightString(width - margin, y, rtl(f'مانده فعلی: {abs(balance):,.0f} تومان ({label})'))
+
+    c.save()
+    return output_path

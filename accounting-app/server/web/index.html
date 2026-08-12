@@ -135,6 +135,8 @@
       <section class="page active" id="page-dashboard">
         <div class="page-header"><div><h2>داشبورد</h2><p class="page-sub">خلاصه وضعیت لحظه‌ای مغازه — مثلاً می‌بینی امروز چقدر فروختی و چقدر سود کردی، بدون اینکه لازم باشه دنبال فاکتورها بگردی.</p></div></div>
 
+        <div id="low-stock-banner" class="low-stock-banner hidden"></div>
+
         <div class="kpi-grid" id="stat-grid"></div>
 
         <div class="dash-row-2">
@@ -237,9 +239,11 @@
             <input type="text" id="items-filter" placeholder="فیلتر بر اساس نام یا کد...">
             <button class="btn btn-secondary" id="btn-new-category">+ دسته‌بندی جدید</button>
             <button class="btn btn-secondary" id="btn-export-items">خروجی اکسل</button>
+            <button class="btn btn-secondary" id="btn-print-labels">چاپ برچسب کالاهای انتخاب‌شده</button>
           </div>
           <table class="data-table">
             <thead><tr>
+              <th><input type="checkbox" id="items-select-all" style="width:auto"></th>
               <th>کد/بارکد</th><th>نام</th><th>برند</th><th>واحد</th>
               <th>قیمت خرید</th><th>قیمت فروش</th><th>موجودی</th><th>عملیات</th>
             </tr></thead>
@@ -310,7 +314,7 @@
             <button class="btn btn-secondary" id="btn-refresh-history">بروزرسانی</button>
           </div>
           <table class="data-table">
-            <thead><tr><th>شماره</th><th>نوع</th><th>تاریخ</th><th>طرف حساب</th><th>یادداشت</th><th>جمع کل</th><th>پرداخت‌شده</th><th>عملیات</th></tr></thead>
+            <thead><tr><th>شماره</th><th>نوع</th><th>تاریخ</th><th>طرف حساب</th><th>یادداشت</th><th>جمع کل</th><th>پرداخت‌شده</th><th>کارمند</th><th>عملیات</th></tr></thead>
             <tbody id="history-tbody"></tbody>
           </table>
         </div>
@@ -353,7 +357,10 @@
 
       <!-- چک‌ها -->
       <section class="page" id="page-checks">
-        <div class="page-header"><div><h2>چک‌ها</h2><p class="page-sub">چک‌هایی که از مشتری گرفتی یا به تامین‌کننده دادی و هنوز نقد نشده‌اند — مثلاً «چک ۵۰۰,۰۰۰ تومانی سررسید ماه بعد». وقتی وصول یا برگشت خورد، وضعیتش رو اینجا آپدیت کن.</p></div></div>
+        <div class="page-header">
+          <div><h2>چک‌ها</h2><p class="page-sub">چک‌هایی که از مشتری گرفتی یا به تامین‌کننده دادی و هنوز نقد نشده‌اند — مثلاً «چک ۵۰۰,۰۰۰ تومانی سررسید ماه بعد». وقتی وصول یا برگشت خورد، وضعیتش رو اینجا آپدیت کن.</p></div>
+          <button class="btn btn-primary hidden" id="btn-settle-due-checks">تسویه سریع چک‌های سررسید شده</button>
+        </div>
         <div class="card">
           <table class="data-table">
             <thead><tr><th>طرف حساب</th><th>مبلغ</th><th>سررسید</th><th>نوع</th><th>وضعیت</th><th>عملیات</th></tr></thead>
@@ -412,12 +419,36 @@
             <select id="cash-type"><option value="in">دریافت</option><option value="out">پرداخت</option></select>
             <input type="text" inputmode="decimal" id="cash-amount" placeholder="مبلغ">
             <div class="words-hint" id="cash-amount-words"></div>
+            <select id="cash-expense-category" style="display:none">
+              <option value="">— دسته هزینه —</option>
+              <option value="rent">اجاره</option>
+              <option value="salary">حقوق پرسنل</option>
+              <option value="utilities">قبوض (آب/برق/گاز/تلفن)</option>
+              <option value="repairs">تعمیر و نگهداری</option>
+              <option value="transport">حمل و نقل</option>
+              <option value="supplies">لوازم مصرفی مغازه</option>
+              <option value="other">متفرقه</option>
+            </select>
             <input type="text" id="cash-desc" placeholder="توضیحات">
             <button class="btn btn-primary" id="btn-add-cash">ثبت تراکنش</button>
           </div>
           <table class="data-table">
-            <thead><tr><th>تاریخ</th><th>نوع</th><th>مبلغ</th><th>توضیحات</th></tr></thead>
+            <thead><tr><th>تاریخ</th><th>نوع</th><th>مبلغ</th><th>دسته هزینه</th><th>توضیحات</th></tr></thead>
             <tbody id="cash-tbody"></tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-title">بستن روزانه صندوق</div>
+          <p class="page-sub">موجودی فعلی صندوق طبق سیستم را با پول واقعی داخل صندوق مقایسه و ثبت کن.</p>
+          <div class="table-toolbar">
+            <input type="text" inputmode="decimal" id="cash-closing-counted" placeholder="مبلغ شمارش‌شده واقعی">
+            <div class="words-hint" id="cash-closing-counted-words"></div>
+            <input type="text" id="cash-closing-note" placeholder="یادداشت (اختیاری)">
+            <button class="btn btn-primary" id="btn-close-cash">ثبت بستن صندوق</button>
+          </div>
+          <table class="data-table">
+            <thead><tr><th>تاریخ</th><th>موجودی مورد انتظار</th><th>شمارش‌شده</th><th>اختلاف</th><th>یادداشت</th><th>کاربر</th></tr></thead>
+            <tbody id="cash-closings-tbody"></tbody>
           </table>
         </div>
       </section>
@@ -452,6 +483,16 @@
         <div class="card">
           <div class="card-title">پرفروش‌ترین کالاها (۳۰ روز اخیر)</div>
           <table class="data-table"><thead><tr><th>کالا</th><th>برند</th><th>تعداد</th><th>جمع فروش</th></tr></thead><tbody id="top-items-tbody"></tbody></table>
+        </div>
+        <div class="report-grid" id="admin-only-reports-grid">
+          <div class="card">
+            <div class="card-title">فروش هر کارمند</div>
+            <table class="data-table"><thead><tr><th>کارمند</th><th>تعداد فاکتور</th><th>جمع فروش</th></tr></thead><tbody id="by-employee-tbody"></tbody></table>
+          </div>
+          <div class="card">
+            <div class="card-title">هزینه‌های جاری بر اساس دسته</div>
+            <table class="data-table"><thead><tr><th>دسته</th><th>تعداد</th><th>جمع مبلغ</th></tr></thead><tbody id="expenses-tbody"></tbody></table>
+          </div>
         </div>
       </section>
 

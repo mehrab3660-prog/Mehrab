@@ -163,6 +163,18 @@ def init_db():
         details TEXT
     )""")
 
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS cash_closings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        expected_balance REAL NOT NULL,
+        counted_balance REAL NOT NULL,
+        difference REAL NOT NULL,
+        note TEXT,
+        username TEXT,
+        created_at TEXT NOT NULL
+    )""")
+
     # --- مهاجرت ستون‌های جدید برای دیتابیس‌های قبلی (اگر از قبل ساخته شده باشند) ---
     def add_column_if_missing(table, column, coltype):
         existing = [row["name"] for row in c.execute(f"PRAGMA table_info({table})").fetchall()]
@@ -176,6 +188,10 @@ def init_db():
     add_column_if_missing("parties", "is_vip", "INTEGER NOT NULL DEFAULT 0")
     add_column_if_missing("cash_transactions", "invoice_id", "INTEGER")
     add_column_if_missing("users", "must_change_password", "INTEGER NOT NULL DEFAULT 0")
+    add_column_if_missing("invoices", "created_by", "TEXT")
+    add_column_if_missing("invoice_items", "serial_number", "TEXT")
+    add_column_if_missing("invoice_items", "warranty_months", "INTEGER")
+    add_column_if_missing("cash_transactions", "expense_category", "TEXT")
 
     # مهاجرت امنیتی: هش کردن رمزهایی که هنوز به‌صورت متن ساده ذخیره شده‌اند
     from werkzeug.security import generate_password_hash

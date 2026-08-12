@@ -598,10 +598,11 @@ def add_invoice():
     prefix_map = {"sale": "", "purchase": "PU", "sale_return": "SR", "purchase_return": "PR"}
     prefix = prefix_map.get(invoice_type, "IN")
 
-    c.execute("""INSERT INTO invoices (invoice_type, number, party_id, date, total, paid, payment_type, description, discount)
-                 VALUES (?,?,?,?,?,?,?,?,?)""",
+    c.execute("""INSERT INTO invoices (invoice_type, number, party_id, date, total, paid, payment_type, description, discount, created_by)
+                 VALUES (?,?,?,?,?,?,?,?,?,?)""",
               (invoice_type, None, d.get("party_id"), now(),
-               total, paid, d.get("payment_type", "cash"), d.get("description", ""), discount))
+               total, paid, d.get("payment_type", "cash"), d.get("description", ""), discount,
+               g.current_user["username"]))
     invoice_id = c.lastrowid
     # اگر از تنظیمات یه «شماره فاکتور بعدی» دلخواه تنظیم شده باشه (مثلاً برای ادامه‌ی شماره‌گذاری
     # فاکتورهای کاغذی قبلی)، همون افستِ ذخیره‌شده روی شماره‌ی داخلی دیتابیس اعمال می‌شه
@@ -612,9 +613,10 @@ def add_invoice():
 
     for it in d["items"]:
         line_total = it["qty"] * it["unit_price"]
-        c.execute("""INSERT INTO invoice_items (invoice_id, item_id, qty, unit_price, total)
-                     VALUES (?,?,?,?,?)""",
-                  (invoice_id, it["item_id"], it["qty"], it["unit_price"], line_total))
+        c.execute("""INSERT INTO invoice_items (invoice_id, item_id, qty, unit_price, total, serial_number, warranty_months)
+                     VALUES (?,?,?,?,?,?,?)""",
+                  (invoice_id, it["item_id"], it["qty"], it["unit_price"], line_total,
+                   it.get("serial_number"), it.get("warranty_months")))
         # به‌روزرسانی موجودی انبار (مرجوعی برعکسِ حالت عادی عمل می‌کند)
         sale_like = invoice_type in ("sale", "purchase_return")
         if sale_like:
@@ -741,9 +743,10 @@ def update_invoice(invoice_id):
     # ---------- اعمال اثرات جدید ----------
     for it in new_items:
         line_total = it["qty"] * it["unit_price"]
-        conn.execute("""INSERT INTO invoice_items (invoice_id, item_id, qty, unit_price, total)
-                        VALUES (?,?,?,?,?)""",
-                     (invoice_id, it["item_id"], it["qty"], it["unit_price"], line_total))
+        conn.execute("""INSERT INTO invoice_items (invoice_id, item_id, qty, unit_price, total, serial_number, warranty_months)
+                        VALUES (?,?,?,?,?,?,?)""",
+                     (invoice_id, it["item_id"], it["qty"], it["unit_price"], line_total,
+                      it.get("serial_number"), it.get("warranty_months")))
         if sale_like:
             conn.execute("UPDATE items SET stock_qty = stock_qty - ? WHERE id=?", (it["qty"], it["item_id"]))
         else:
@@ -980,13 +983,82 @@ def get_cash():
 def add_cash():
     d = request.json
     conn = get_connection()
-    conn.execute("INSERT INTO cash_transactions (date, tx_type, amount, description) VALUES (?,?,?,?)",
-                 (now(), d["tx_type"], d["amount"], d.get("description", "")))
+    # دسته‌بندی هزینه فقط برای تراکنش‌های خروج دستی معنا دارد (نه پرداخت‌های مربوط به فاکتور
+    # که خودکار ثبت می‌شوند)؛ همین باعث می‌شه محاسبه‌ی سود، هزینه‌ها رو دوبار حساب نکنه
+    expense_category = d.get("expense_category") if d.get("tx_type") == "out" else None
+    conn.execute("INSERT INTO cash_transactions (date, tx_type, amount, description, expense_category) VALUES (?,?,?,?,?)",
+                 (now(), d["tx_type"], d["amount"], d.get("description", ""), expense_category))
     conn.commit()
     conn.close()
     log_action(d.get("username"), "ثبت تراکنش صندوق",
-               f'{"دریافت" if d["tx_type"]=="in" else "پرداخت"}: {d["amount"]:,.0f} تومان')
+               f'{"دریافت" if d["tx_type"]=="in" else "پرداخت"}: {d["amount"]:,.0f} تومان'
+               + (f' ({expense_category})' if expense_category else ''))
     return jsonify({"ok": True})
+
+
+@app.route("/cash/closings", methods=["GET"])
+def get_cash_closings():
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM cash_closings ORDER BY id DESC LIMIT 90").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/cash/closings", methods=["POST"])
+def add_cash_closing():
+    """
+    بستن روزانه صندوق: مبلغ نقد واقعی شمرده‌شده در کشو رو با موجودی محاسبه‌شده توسط
+    سیستم مقایسه می‌کنه و اختلاف (اگه بود) رو ثبت می‌کنه — برای کشف زودهنگام کم‌فروشی
+    یا اشتباه در پول برگشت.
+    """
+    d = request.json or {}
+    try:
+        counted = float(d.get("counted_balance"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "message": "مبلغ شمرده‌شده باید عدد باشد"}), 400
+
+    conn = get_connection()
+    expected = conn.execute("""SELECT
+        COALESCE(SUM(CASE WHEN tx_type='in' THEN amount ELSE -amount END),0) as bal
+        FROM cash_transactions""").fetchone()["bal"]
+    difference = counted - expected
+    conn.execute(
+        "INSERT INTO cash_closings (date, expected_balance, counted_balance, difference, note, username, created_at) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (d.get("date") or now()[:10], expected, counted, difference, d.get("note", ""), d.get("username"), now())
+    )
+    conn.commit()
+    conn.close()
+    log_action(d.get("username"), "بستن روزانه صندوق",
+               f'محاسبه‌شده: {expected:,.0f} — شمرده‌شده: {counted:,.0f} — اختلاف: {difference:,.0f} تومان')
+    if abs(difference) > 0:
+        log_security_event(d.get("username"), "اختلاف در بستن صندوق",
+                            f'اختلاف {difference:,.0f} تومان (محاسبه‌شده: {expected:,.0f}، شمرده‌شده: {counted:,.0f})')
+    return jsonify({"ok": True, "expected_balance": expected, "difference": difference})
+
+
+@app.route("/reports/expenses", methods=["GET"])
+def report_expenses():
+    """جمع هزینه‌های جاری (خروج دستی صندوق با دسته‌بندی) به تفکیک دسته، در N روز اخیر"""
+    err = require_admin()
+    if err:
+        return err
+    days = request.args.get("days", default=30, type=int)
+    conn = get_connection()
+    since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    rows = conn.execute("""
+        SELECT COALESCE(expense_category, 'سایر') as category, SUM(amount) as total_amount, COUNT(*) as tx_count
+        FROM cash_transactions
+        WHERE tx_type='out' AND invoice_id IS NULL AND expense_category IS NOT NULL AND date >= ?
+        GROUP BY category
+        ORDER BY total_amount DESC
+    """, (since,)).fetchall()
+    total = conn.execute("""
+        SELECT COALESCE(SUM(amount),0) as t FROM cash_transactions
+        WHERE tx_type='out' AND invoice_id IS NULL AND expense_category IS NOT NULL AND date >= ?
+    """, (since,)).fetchone()["t"]
+    conn.close()
+    return jsonify({"categories": [dict(r) for r in rows], "total": total})
 
 
 # ---------- گزارش‌ها ----------
@@ -999,6 +1071,10 @@ def report_summary():
     purchase_returns = conn.execute("SELECT COALESCE(SUM(total),0) as t FROM invoices WHERE invoice_type='purchase_return'").fetchone()["t"]
     net_sales = sales - sales_returns
     net_purchases = purchases - purchase_returns
+    operating_expenses = conn.execute("""
+        SELECT COALESCE(SUM(amount),0) as t FROM cash_transactions
+        WHERE tx_type='out' AND invoice_id IS NULL AND expense_category IS NOT NULL
+    """).fetchone()["t"]
     debtors = conn.execute("SELECT COALESCE(SUM(balance),0) as t FROM parties WHERE balance > 0").fetchone()["t"]
     low_stock = conn.execute("SELECT * FROM items WHERE stock_qty <= min_stock").fetchall()
     conn.close()
@@ -1006,7 +1082,8 @@ def report_summary():
     return jsonify({
         "total_sales": net_sales,
         "total_purchases": net_purchases if is_admin else None,
-        "estimated_profit": (net_sales - net_purchases) if is_admin else None,
+        "total_operating_expenses": operating_expenses if is_admin else None,
+        "estimated_profit": (net_sales - net_purchases - operating_expenses) if is_admin else None,
         "total_debtors": debtors,
         "low_stock_items": [dict(r) for r in low_stock]
     })
@@ -1378,6 +1455,27 @@ def report_top_items():
     return jsonify([dict(r) for r in rows])
 
 
+@app.route("/reports/by-employee", methods=["GET"])
+def report_by_employee():
+    """فروش هر کارمند در N روز اخیر (پیش‌فرض ۳۰ روز) — فقط برای مدیر"""
+    err = require_admin()
+    if err:
+        return err
+    days = request.args.get("days", default=30, type=int)
+    conn = get_connection()
+    since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    rows = conn.execute("""
+        SELECT COALESCE(created_by, 'نامشخص') as username,
+               COUNT(*) as invoice_count, SUM(total) as total_amount
+        FROM invoices
+        WHERE invoice_type='sale' AND date >= ?
+        GROUP BY username
+        ORDER BY total_amount DESC
+    """, (since,)).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
 @app.route("/invoices/<int:invoice_id>/print", methods=["GET"])
 def invoice_print(invoice_id):
     """
@@ -1394,6 +1492,7 @@ def invoice_print(invoice_id):
         return "فاکتور پیدا نشد", 404
     items = conn.execute("""
         SELECT invoice_items.qty, invoice_items.unit_price, invoice_items.total,
+               invoice_items.serial_number, invoice_items.warranty_months,
                items.name as item_name, items.brand as brand, categories.name as category_name
         FROM invoice_items
         JOIN items ON invoice_items.item_id = items.id
@@ -1450,6 +1549,46 @@ def invoice_pdf(invoice_id):
     return send_file(tmp_path, mimetype="application/pdf")
 
 
+@app.route("/parties/<int:party_id>/statement/print", methods=["GET"])
+def party_statement_print(party_id):
+    """صورت‌حساب کامل یک طرف‌حساب به‌صورت HTML آماده چاپ (مثل چاپ فاکتور تکی)"""
+    conn = get_connection()
+    party = conn.execute("SELECT * FROM parties WHERE id=?", (party_id,)).fetchone()
+    if not party:
+        conn.close()
+        return "طرف حساب پیدا نشد", 404
+    invoices = conn.execute("SELECT * FROM invoices WHERE party_id=? ORDER BY date", (party_id,)).fetchall()
+    conn.close()
+
+    cfg = load_shop_settings()
+    html = invoice_html.build_statement_html(
+        dict(party), [dict(r) for r in invoices],
+        shop_name=cfg.get("name") or "حسابداری",
+        shop_phones=cfg.get("phones", ""),
+        shop_address=cfg.get("address", ""),
+        logo_url=(f"/assets/{cfg['logo_filename']}" if cfg.get("logo_filename") else None),
+    )
+    return html
+
+
+@app.route("/parties/<int:party_id>/statement/pdf", methods=["GET"])
+def party_statement_pdf(party_id):
+    conn = get_connection()
+    party = conn.execute("SELECT * FROM parties WHERE id=?", (party_id,)).fetchone()
+    if not party:
+        conn.close()
+        return jsonify({"ok": False, "message": "طرف حساب پیدا نشد"}), 404
+    invoices = conn.execute("SELECT * FROM invoices WHERE party_id=? ORDER BY date", (party_id,)).fetchall()
+    conn.close()
+
+    cfg = load_shop_settings()
+    tmp_path = os.path.join(tempfile.gettempdir(), f"statement_{party_id}.pdf")
+    pdf_generator.generate_statement_pdf(
+        tmp_path, dict(party), [dict(r) for r in invoices], shop_name=cfg.get("name") or "حسابداری"
+    )
+    return send_file(tmp_path, mimetype="application/pdf")
+
+
 @app.route("/export/items.xlsx", methods=["GET"])
 def export_items_excel():
     import openpyxl
@@ -1466,6 +1605,26 @@ def export_items_excel():
     tmp_path = os.path.join(tempfile.gettempdir(), "items_export.xlsx")
     wb.save(tmp_path)
     return send_file(tmp_path, as_attachment=True, download_name="کالاها.xlsx")
+
+
+@app.route("/items/labels/print", methods=["GET"])
+def print_item_labels():
+    """برگه برچسب قیمت/بارکد آماده چاپ برای کالاهای انتخاب‌شده (?ids=1,2,3)"""
+    ids_param = request.args.get("ids", "")
+    try:
+        item_ids = [int(x) for x in ids_param.split(",") if x.strip()]
+    except ValueError:
+        return "شناسه کالا نامعتبر است", 400
+    if not item_ids:
+        return "کالایی انتخاب نشده", 400
+
+    conn = get_connection()
+    placeholders = ",".join("?" * len(item_ids))
+    rows = conn.execute(f"SELECT * FROM items WHERE id IN ({placeholders})", item_ids).fetchall()
+    conn.close()
+    items_by_id = {r["id"]: dict(r) for r in rows}
+    ordered_items = [items_by_id[i] for i in item_ids if i in items_by_id]
+    return invoice_html.build_labels_html(ordered_items)
 
 
 @app.route("/ai/analyze-invoice-photo", methods=["POST"])

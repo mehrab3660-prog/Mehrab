@@ -66,6 +66,11 @@ function toJalaliDate(dateTimeStr, withTime = false) {
     return dateTimeStr;
   }
 }
+function todayJalaliStr() {
+  const now = new Date();
+  const [jy, jm, jd] = gregorianToJalali(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  return `${jy}-${String(jm).padStart(2, '0')}-${String(jd).padStart(2, '0')}`;
+}
 function toJalaliMonthLabel(yyyyMm) {
   // ورودی مثل "2026-07" (فرمت ماه میلادی از دیتابیس) -> برچسب شمسی کوتاه برای نمودار/جدول
   try {
@@ -456,6 +461,16 @@ $$('.nav-item').forEach(item => {
   });
 });
 
+function navigateToPage(page) {
+  $$('.nav-item').forEach(i => i.classList.remove('active'));
+  const navItem = $$('.nav-item').find(i => i.dataset.page === page);
+  if (navItem) navItem.classList.add('active');
+  $$('.page').forEach(p => p.classList.remove('active'));
+  $('#page-' + page).classList.add('active');
+  $('#sidebar').classList.remove('open');
+  loadPage(page);
+}
+
 function loadPage(page) {
   const loaders = {
     dashboard: loadDashboard, items: loadItems, sale: () => loadInvoiceForm('sale'),
@@ -767,6 +782,35 @@ async function loadDashboard() {
     `<li><span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${s.color};margin-left:6px"></span>${s.label}</span><strong>${fmt(s.value)}</strong></li>`
   ).join('');
 
+  // ---- بنر هشدار موجودی کم (پررنگ و واضح، بالای داشبورد) ----
+  const lowStockItems = data.low_stock_items || [];
+  const outOfStockCount = lowStockItems.filter(it => it.stock_qty <= 0).length;
+  const banner = $('#low-stock-banner');
+  if (lowStockItems.length) {
+    banner.classList.remove('hidden');
+    banner.innerHTML = `
+      <span class="lsb-text"><span class="lsb-icon">⚠️</span>
+        ${outOfStockCount > 0 ? `${toFaDigits(outOfStockCount)} کالا تمام شده` + (lowStockItems.length > outOfStockCount ? ` و ${toFaDigits(lowStockItems.length - outOfStockCount)} کالا موجودی کم دارد` : '') : `${toFaDigits(lowStockItems.length)} کالا موجودی کم دارد`}
+      </span>
+      <span class="lsb-count">${toFaDigits(lowStockItems.length)}</span>`;
+    banner.onclick = () => { navigateToPage('items'); };
+    if (outOfStockCount > 0 && !state._lowStockBeeped) {
+      state._lowStockBeeped = true;
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine'; osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(); osc.stop(ctx.currentTime + 0.4);
+      } catch (e) { /* صدا اختیاری است، اگر مرورگر پشتیبانی نکرد نادیده گرفته می‌شود */ }
+    }
+  } else {
+    banner.classList.add('hidden');
+  }
+
   // ---- یادآوری‌ها (کالای کم‌موجود + چک در انتظار) ----
   const reminders = [];
   (data.low_stock_items || []).forEach(it => {
@@ -814,6 +858,7 @@ async function loadItems() {
 function renderItemsTable() {
   $('#items-tbody').innerHTML = state.items.map(it => `
     <tr>
+      <td><input type="checkbox" class="item-select-checkbox" value="${it.id}" style="width:auto"></td>
       <td>${it.code || '—'}</td><td>${it.name}</td><td>${it.brand || '—'}</td><td>${it.unit}</td>
       <td title="${it.purchase_price ? 'به حروف: ' + numberToPersianWords(it.purchase_price) + ' تومان' : ''}">${it.purchase_price === null ? '—' : fmt(it.purchase_price)}</td>
       <td title="${it.sale_price ? 'به حروف: ' + numberToPersianWords(it.sale_price) + ' تومان' : ''}">${fmt(it.sale_price)}</td>
@@ -821,6 +866,14 @@ function renderItemsTable() {
       <td><button class="btn btn-sm btn-secondary" onclick="showStockLedger(${it.id})">گردش انبار</button></td>
     </tr>`).join('');
 }
+$('#items-select-all').addEventListener('change', (e) => {
+  $$('.item-select-checkbox').forEach(cb => { if (cb.closest('tr').style.display !== 'none') cb.checked = e.target.checked; });
+});
+$('#btn-print-labels').addEventListener('click', () => {
+  const ids = $$('.item-select-checkbox:checked').map(cb => cb.value);
+  if (!ids.length) { toast('حداقل یک کالا را انتخاب کن', 'danger'); return; }
+  openAuthedInNewTab(`/items/labels/print?ids=${ids.join(',')}`, 'text/html');
+});
 $('#items-filter').addEventListener('input', (e) => {
   const q = e.target.value.trim();
   $$('#items-tbody tr').forEach(row => row.style.display = !q || row.textContent.includes(q) ? '' : 'none');
@@ -912,8 +965,11 @@ function loadInvoiceForm(type) {
         <div class="form-row"><div><label>کالا</label><div id="${type}-item"></div></div>
           <div><label>تعداد</label><input type="number" step="any" id="${type}-qty"></div>
           <div><label>قیمت واحد</label><input type="text" inputmode="decimal" id="${type}-price"><div class="words-hint" id="${type}-price-words"></div></div></div>
+        ${type === 'sale' ? `
+        <div class="form-row"><div><label>شماره سریال (اختیاری)</label><input type="text" id="${type}-serial" placeholder="مثلاً SN-12345"></div>
+          <div><label>گارانتی (ماه، اختیاری)</label><input type="number" step="1" min="0" id="${type}-warranty" placeholder="مثلاً 12"></div></div>` : ''}
         <button class="btn btn-secondary" id="${type}-add-line">+ افزودن به سبد فاکتور</button>
-        <table class="data-table" style="margin-top:14px"><thead><tr><th>کالا</th><th>تعداد</th><th>قیمت</th><th>جمع</th></tr></thead><tbody id="${type}-cart-tbody"></tbody></table>
+        <table class="data-table" style="margin-top:14px"><thead><tr><th>کالا</th><th>تعداد</th><th>قیمت</th><th>جمع</th>${type === 'sale' ? '<th>سریال/گارانتی</th>' : ''}</tr></thead><tbody id="${type}-cart-tbody"></tbody></table>
         <div class="cart-total" id="${type}-cart-total">جمع کل: ۰ تومان</div>
         <div class="words-hint" id="${type}-cart-total-words"></div>
         <button class="btn btn-primary btn-block" id="${type}-submit" style="margin-top:14px">ثبت فاکتور</button>
@@ -968,7 +1024,16 @@ function loadInvoiceForm(type) {
         return;
       }
     }
-    state[cartKey].push({ item_id: itemId, item_name: itemObj?.name, qty, unit_price: price });
+    const cartItem = { item_id: itemId, item_name: itemObj?.name, qty, unit_price: price };
+    if (type === 'sale') {
+      const serial = $(`#${type}-serial`).value.trim();
+      const warranty = $(`#${type}-warranty`).value;
+      if (serial) cartItem.serial_number = serial;
+      if (warranty) cartItem.warranty_months = parseInt(warranty);
+      $(`#${type}-serial`).value = '';
+      $(`#${type}-warranty`).value = '';
+    }
+    state[cartKey].push(cartItem);
     renderCart(type);
   });
 
@@ -1062,7 +1127,7 @@ function loadInvoiceForm(type) {
     const payload = {
       invoice_type: effectiveType, party_id: partyVal || null, payment_type: payType,
       discount, username: state.user.username, description: note,
-      items: state[cartKey].map(c => ({ item_id: c.item_id, qty: c.qty, unit_price: c.unit_price })),
+      items: state[cartKey].map(c => ({ item_id: c.item_id, qty: c.qty, unit_price: c.unit_price, serial_number: c.serial_number, warranty_months: c.warranty_months })),
     };
     const res = await api('POST', '/invoices', payload);
     if (res && res.ok) {
@@ -1093,7 +1158,8 @@ function renderCart(type) {
   $(`#${type}-cart-tbody`).innerHTML = cart.map(c =>
     `<tr><td>${c.item_name}</td><td>${fmt(c.qty)}</td>
      <td title="به حروف: ${numberToPersianWords(c.unit_price)} تومان">${fmt(c.unit_price)}</td>
-     <td title="به حروف: ${numberToPersianWords(c.qty * c.unit_price)} تومان">${fmt(c.qty * c.unit_price)}</td></tr>`).join('');
+     <td title="به حروف: ${numberToPersianWords(c.qty * c.unit_price)} تومان">${fmt(c.qty * c.unit_price)}</td>
+     ${type === 'sale' ? `<td>${[c.serial_number ? escHtml(c.serial_number) : '', c.warranty_months ? `${c.warranty_months} ماه گارانتی` : ''].filter(Boolean).join(' / ') || '—'}</td>` : ''}</tr>`).join('');
   const total = cart.reduce((s, c) => s + c.qty * c.unit_price, 0);
   $(`#${type}-cart-total`).textContent = `جمع کل: ${fmt(total)} تومان`;
   $(`#${type}-cart-total-words`).textContent = total ? `به حروف: ${numberToPersianWords(total)} تومان` : '';
@@ -1129,6 +1195,7 @@ async function loadHistory() {
     <tr>
       <td>${inv.number || inv.id}</td><td>${typeLabel[inv.invoice_type] || inv.invoice_type}</td><td>${toJalaliDate(inv.date, true)}</td>
       <td>${inv.party_name || '—'}</td><td>${inv.description || '—'}</td><td title="${wordsTitle(inv.total)}">${fmt(inv.total)}</td><td title="${wordsTitle(inv.paid)}">${fmt(inv.paid)}</td>
+      <td>${escHtml(inv.created_by) || '—'}</td>
       <td>
         <button class="btn btn-sm btn-secondary" onclick="askPrintInvoice(${inv.id})">چاپ</button>
         ${state.user.role === 'admin' ? `<button class="btn btn-sm btn-secondary" onclick="openEditInvoiceModal(${inv.id})">ویرایش</button>` : ''}
@@ -1405,7 +1472,31 @@ async function showLedger(partyId) {
     <h3>ریز حساب: ${data.party.name}</h3>
     <p>مانده فعلی: <strong title="${wordsTitle(data.party.balance)}">${fmt(data.party.balance)} تومان</strong></p>
     <table class="data-table" style="margin-top:12px"><thead><tr><th>تاریخ</th><th>نوع</th><th>جمع کل</th><th>پرداخت‌شده</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">فاکتوری ثبت نشده</td></tr>'}</tbody></table>
-    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">بستن</button></div>`);
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">بستن</button>
+      <button class="btn btn-secondary" id="ledger-print-btn">چاپ صورت‌حساب کامل</button>
+      <button class="btn btn-secondary" id="ledger-download-btn">دانلود PDF</button>
+      ${navigator.share ? '<button class="btn btn-primary" id="ledger-share-btn">ارسال صورت‌حساب</button>' : ''}
+    </div>`);
+  $('#ledger-print-btn').addEventListener('click', () => openAuthedInNewTab(`/parties/${partyId}/statement/print`, 'text/html'));
+  $('#ledger-download-btn').addEventListener('click', () => downloadAuthed(`/parties/${partyId}/statement/pdf`, `صورت‌حساب-${data.party.name}.pdf`));
+  const shareBtn = $('#ledger-share-btn');
+  if (shareBtn) {
+    shareBtn.addEventListener('click', async () => {
+      const blob = await fetchAuthedBlob(`/parties/${partyId}/statement/pdf`);
+      if (!blob) return;
+      const file = new File([blob], `صورت‌حساب-${data.party.name}.pdf`, { type: 'application/pdf' });
+      try {
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: `صورت‌حساب ${data.party.name}` });
+        } else {
+          toast('مرورگر شما اشتراک‌گذاری مستقیم فایل را پشتیبانی نمی‌کند — از دکمه «دانلود PDF» استفاده کن', 'danger');
+        }
+      } catch (e) {
+        if (e.name !== 'AbortError') { console.error(e); toast('خطا در اشتراک‌گذاری', 'danger'); }
+      }
+    });
+  }
 }
 function settlePayment(partyId, partyName) {
   openModal(`
@@ -1423,15 +1514,22 @@ function settlePayment(partyId, partyName) {
 }
 
 // ===================== چک‌ها =====================
+function normalizeDigitsForCompare(s) {
+  return String(s || '').replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
+}
 async function loadChecks() {
   const checks = await api('GET', '/checks');
   if (!checks) return;
   const statusLabel = { pending: ['در انتظار', 'orange'], cashed: ['وصول‌شده', 'green'], bounced: ['برگشتی', 'red'] };
   const dirLabel = { received: 'دریافتی', issued: 'صادرشده' };
+  const today = todayJalaliStr();
+  const dueTodayIds = [];
   $('#checks-tbody').innerHTML = checks.map(ch => {
     const st = statusLabel[ch.status] || ['—', 'gray'];
-    return `<tr>
-      <td>${ch.party_name || '—'}</td><td title="${wordsTitle(ch.amount)}">${fmt(ch.amount)}</td><td>${ch.due_date}</td><td>${dirLabel[ch.direction] || ch.direction}</td>
+    const isDue = ch.status === 'pending' && ch.direction === 'received' && normalizeDigitsForCompare(ch.due_date) <= today;
+    if (isDue) dueTodayIds.push(ch.id);
+    return `<tr${isDue ? ' style="background:var(--warning-100)"' : ''}>
+      <td>${ch.party_name || '—'}</td><td title="${wordsTitle(ch.amount)}">${fmt(ch.amount)}</td><td>${ch.due_date}${isDue ? ' <span class="badge badge-orange">سررسید شده</span>' : ''}</td><td>${dirLabel[ch.direction] || ch.direction}</td>
       <td><span class="badge badge-${st[1]}">${st[0]}</span></td>
       <td>
         ${ch.status === 'pending' ? `<button class="btn btn-sm btn-success" onclick="setCheckStatus(${ch.id},'cashed')">وصول شد</button>
@@ -1439,6 +1537,24 @@ async function loadChecks() {
       </td>
     </tr>`;
   }).join('');
+  const settleBtn = $('#btn-settle-due-checks');
+  if (dueTodayIds.length) {
+    settleBtn.classList.remove('hidden');
+    settleBtn.textContent = `تسویه سریع ${toFaDigits(dueTodayIds.length)} چک سررسید شده`;
+    settleBtn.onclick = () => settleDueChecks(dueTodayIds);
+  } else {
+    settleBtn.classList.add('hidden');
+  }
+}
+async function settleDueChecks(ids) {
+  if (!confirm(`${toFaDigits(ids.length)} چک سررسیدشده به‌عنوان «وصول شد» ثبت شود؟`)) return;
+  let okCount = 0;
+  for (const id of ids) {
+    const res = await api('PUT', `/checks/${id}`, { status: 'cashed' });
+    if (res && res.ok) okCount++;
+  }
+  toast(`${toFaDigits(okCount)} چک با موفقیت وصول ثبت شد`, 'success');
+  loadChecks();
 }
 async function setCheckStatus(id, status) {
   const res = await api('PUT', `/checks/${id}`, { status });
@@ -1535,22 +1651,58 @@ async function loadBankStatement() {
   ).join('') || '<tr><td colspan="4" class="muted">تراکنشی ثبت نشده</td></tr>';
 }
 
+const EXPENSE_CATEGORY_LABELS = {
+  rent: 'اجاره', salary: 'حقوق پرسنل', utilities: 'قبوض', repairs: 'تعمیر و نگهداری',
+  transport: 'حمل و نقل', supplies: 'لوازم مصرفی مغازه', other: 'متفرقه',
+};
 async function loadCash() {
   attachThousandsFormatting($('#cash-amount'));
   attachWordsPreview($('#cash-amount'), 'cash-amount-words');
+  attachThousandsFormatting($('#cash-closing-counted'));
+  attachWordsPreview($('#cash-closing-counted'), 'cash-closing-counted-words');
   const data = await api('GET', '/cash');
   if (!data) return;
   $('#cash-stat').innerHTML = `<div class="stat-card accent" title="${wordsTitle(data.balance)}"><div class="stat-label">موجودی صندوق</div><div class="stat-value">${fmt(data.balance)} تومان</div></div>`;
   $('#cash-tbody').innerHTML = data.transactions.map(tx => `
-    <tr><td>${toJalaliDate(tx.date, true)}</td><td>${tx.tx_type === 'in' ? 'دریافت' : 'پرداخت'}</td><td title="${wordsTitle(tx.amount)}">${fmt(tx.amount)}</td><td>${tx.description || '—'}</td></tr>`).join('');
+    <tr><td>${toJalaliDate(tx.date, true)}</td><td>${tx.tx_type === 'in' ? 'دریافت' : 'پرداخت'}</td><td title="${wordsTitle(tx.amount)}">${fmt(tx.amount)}</td>
+    <td>${tx.expense_category ? (EXPENSE_CATEGORY_LABELS[tx.expense_category] || tx.expense_category) : '—'}</td>
+    <td>${tx.description || '—'}</td></tr>`).join('');
+  loadCashClosings();
 }
+$('#cash-type').addEventListener('change', () => {
+  $('#cash-expense-category').style.display = $('#cash-type').value === 'out' ? '' : 'none';
+});
 $('#btn-add-cash').addEventListener('click', async () => {
   const amount = readAmount($('#cash-amount'));
   if (!amount) { toast('مبلغ را وارد کنید', 'danger'); return; }
+  const txType = $('#cash-type').value;
   const res = await api('POST', '/cash', {
-    tx_type: $('#cash-type').value, amount, description: $('#cash-desc').value, username: state.user.username,
+    tx_type: txType, amount, description: $('#cash-desc').value, username: state.user.username,
+    expense_category: txType === 'out' ? ($('#cash-expense-category').value || null) : null,
   });
-  if (res && res.ok) { toast('ثبت شد', 'success'); $('#cash-amount').value = ''; $('#cash-desc').value = ''; loadCash(); }
+  if (res && res.ok) { toast('ثبت شد', 'success'); $('#cash-amount').value = ''; $('#cash-desc').value = ''; $('#cash-expense-category').value = ''; loadCash(); }
+});
+
+async function loadCashClosings() {
+  const data = await api('GET', '/cash/closings');
+  if (!data) return;
+  $('#cash-closings-tbody').innerHTML = data.map(c => `
+    <tr><td>${toJalaliDate(c.created_at, true)}</td><td>${fmt(c.expected_balance)}</td><td>${fmt(c.counted_balance)}</td>
+    <td style="color:${c.difference === 0 ? 'var(--accent)' : 'var(--danger)'}">${fmt(c.difference)}</td>
+    <td>${escHtml(c.note) || '—'}</td><td>${escHtml(c.username) || '—'}</td></tr>`).join('');
+}
+$('#btn-close-cash').addEventListener('click', async () => {
+  if (!$('#cash-closing-counted').value.trim()) { toast('مبلغ شمارش‌شده را وارد کنید', 'danger'); return; }
+  const counted = readAmount($('#cash-closing-counted'));
+  const res = await api('POST', '/cash/closings', {
+    counted_balance: counted, note: $('#cash-closing-note').value.trim(), username: state.user.username,
+  });
+  if (res && res.ok) {
+    const diffMsg = res.difference === 0 ? 'صندوق مطابقت دارد ✅' : `⚠️ اختلاف: ${fmt(Math.abs(res.difference))} تومان (${res.difference > 0 ? 'اضافه' : 'کسری'})`;
+    toast(`بستن صندوق ثبت شد — ${diffMsg}`, res.difference === 0 ? 'success' : 'danger');
+    $('#cash-closing-counted').value = ''; $('#cash-closing-note').value = '';
+    loadCashClosings();
+  }
 });
 
 // ===================== گزارش ماهانه =====================
@@ -1565,9 +1717,15 @@ async function loadMonthly() {
 
 // ===================== گزارش‌های تکمیلی =====================
 async function loadExtraReports() {
-  const [debtors, creditors, topItems] = await Promise.all([
+  const isAdmin = state.user.role === 'admin';
+  $('#admin-only-reports-grid').classList.toggle('hidden', !isAdmin);
+  const [debtors, creditors, topItems, byEmployee, expenses] = await Promise.all([
     api('GET', '/reports/debtors'), api('GET', '/reports/creditors'), api('GET', '/reports/top-items'),
+    isAdmin ? api('GET', '/reports/by-employee') : Promise.resolve(null),
+    isAdmin ? api('GET', '/reports/expenses') : Promise.resolve(null),
   ]);
+  if (byEmployee) $('#by-employee-tbody').innerHTML = byEmployee.map(e => `<tr><td>${escHtml(e.username)}</td><td>${fmt(e.invoice_count)}</td><td title="${wordsTitle(e.total_amount)}">${fmt(e.total_amount)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">فروشی ثبت نشده</td></tr>';
+  if (expenses) $('#expenses-tbody').innerHTML = expenses.categories.map(c => `<tr><td>${EXPENSE_CATEGORY_LABELS[c.category] || c.category}</td><td>${fmt(c.tx_count)}</td><td title="${wordsTitle(c.total_amount)}">${fmt(c.total_amount)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">هزینه‌ای ثبت نشده</td></tr>';
   if (debtors) $('#debtors-tbody').innerHTML = debtors.map(p => `<tr><td>${p.name}</td><td>${p.phone || '—'}</td><td title="${wordsTitle(p.balance)}">${fmt(p.balance)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">بدهکاری ثبت نشده</td></tr>';
   if (creditors) $('#creditors-tbody').innerHTML = creditors.map(p => `<tr><td>${p.name}</td><td>${p.phone || '—'}</td><td title="${wordsTitle(p.owed_amount)}">${fmt(p.owed_amount)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">بدهی‌ای ثبت نشده</td></tr>';
   if (topItems) $('#top-items-tbody').innerHTML = topItems.map(it => `<tr><td>${it.name}</td><td>${it.brand || '—'}</td><td>${fmt(it.total_qty)}</td><td title="${wordsTitle(it.total_amount)}">${fmt(it.total_amount)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">فروشی ثبت نشده</td></tr>';
