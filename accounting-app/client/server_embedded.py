@@ -1259,13 +1259,36 @@ def update_user(user_id):
     d = request.json
     conn = get_connection()
     if d.get("password"):
-        conn.execute("UPDATE users SET password=?, role=? WHERE id=?",
+        # وقتی مدیر رمز یکی دیگر رو عوض می‌کنه، اون رمز یه رمز موقته — کاربر باید بعد از
+        # اولین ورود خودش یه رمز تازه انتخاب کنه
+        conn.execute("UPDATE users SET password=?, role=?, must_change_password=1 WHERE id=?",
                      (generate_password_hash(d["password"]), d.get("role", "employee"), user_id))
         log_security_event(d.get("username"), "تغییر رمز عبور", f"کاربر شماره {user_id}")
     else:
         conn.execute("UPDATE users SET role=? WHERE id=?", (d.get("role", "employee"), user_id))
     conn.commit()
     conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/users/me/password", methods=["POST"])
+def change_own_password():
+    """
+    تغییر رمز عبور خودِ کاربر لاگین‌شده (نه ادمین‌محدود، چون هر کاربری — حتی کارمند —
+    باید بتونه رمز خودش رو عوض کنه، مثلاً وقتی بعد از ریست شدن رمزش توسط مدیر مجبور
+    به انتخاب رمز جدید می‌شه).
+    """
+    d = request.json or {}
+    new_password = d.get("new_password") or ""
+    if len(new_password) < 4:
+        return jsonify({"ok": False, "message": "رمز عبور جدید باید حداقل ۴ کاراکتر باشد"}), 400
+    username = g.current_user["username"]
+    conn = get_connection()
+    conn.execute("UPDATE users SET password=?, must_change_password=0 WHERE username=?",
+                 (generate_password_hash(new_password), username))
+    conn.commit()
+    conn.close()
+    log_security_event(username, "تغییر رمز عبور توسط خود کاربر", "")
     return jsonify({"ok": True})
 
 

@@ -121,7 +121,7 @@ class App(_BASE_APP):
                 if data.get("ok"):
                     self.user = data["user"]
                     self.token = data.get("token")
-                    self.show_main()
+                    self.maybe_force_password_change(self.show_main)
                 else:
                     messagebox.showerror("خطا", data.get("message", "ورود ناموفق بود"))
                     refresh_captcha()
@@ -141,6 +141,7 @@ class App(_BASE_APP):
         top_bar.pack(fill="x")
         ttk.Label(top_bar, text=f'کاربر: {self.user["username"]} ({"مدیر" if self.user.get("role")=="admin" else "کارمند"})',
                   font=("Tahoma", 10)).pack(side="right", padx=10)
+        ttk.Button(top_bar, text="تغییر رمز عبور من", command=self.open_change_own_password_dialog).pack(side="right", padx=10)
         ttk.Button(top_bar, text="تغییر حالت تاریک/روشن", command=self.toggle_dark_mode).pack(side="left", padx=10)
 
         notebook = ttk.Notebook(self)
@@ -239,6 +240,77 @@ class App(_BASE_APP):
         except requests.exceptions.RequestException:
             messagebox.showerror("خطا", "ارتباط با سرور برقرار نشد. آیا سرور روشن است؟")
             return None
+
+    def maybe_force_password_change(self, on_done):
+        """اگه رمز عبور کاربر موقتی/اولیه باشه، قبل از ادامه یه پنجره‌ی اجباری برای انتخاب
+        رمز جدید نشون می‌ده (قابل بستن نیست)؛ در پایان on_done() صدا زده می‌شه."""
+        if not (self.user and self.user.get("must_change_password")):
+            on_done()
+            return
+
+        win = tk.Toplevel(self)
+        win.title("تغییر رمز عبور لازم است")
+        win.protocol("WM_DELETE_WINDOW", lambda: None)
+        win.grab_set()
+
+        ttk.Label(win, text="برای امنیت بیشتر، قبل از ادامه باید یک رمز عبور جدید برای خودتان انتخاب کنید.",
+                  wraplength=320, justify="center").pack(padx=20, pady=(20, 10))
+        ttk.Label(win, text="رمز عبور جدید:").pack(padx=20, anchor="e")
+        p1_entry = ttk.Entry(win, show="*", width=30)
+        p1_entry.pack(padx=20, pady=5)
+        ttk.Label(win, text="تکرار رمز عبور جدید:").pack(padx=20, anchor="e")
+        p2_entry = ttk.Entry(win, show="*", width=30)
+        p2_entry.pack(padx=20, pady=5)
+
+        def save():
+            p1, p2 = p1_entry.get(), p2_entry.get()
+            if not p1 or len(p1) < 4:
+                messagebox.showerror("خطا", "رمز عبور باید حداقل ۴ کاراکتر باشد")
+                return
+            if p1 != p2:
+                messagebox.showerror("خطا", "رمز عبور و تکرار آن یکسان نیستند")
+                return
+            res = self.api("POST", "/users/me/password", json={"new_password": p1})
+            if res and res.get("ok"):
+                self.user["must_change_password"] = False
+                win.grab_release()
+                win.destroy()
+                on_done()
+            else:
+                messagebox.showerror("خطا", (res or {}).get("message", "تغییر رمز عبور ناموفق بود"))
+
+        ttk.Button(win, text="ذخیره و ادامه", command=save).pack(pady=15)
+        win.bind("<Return>", lambda e: save())
+
+    def open_change_own_password_dialog(self):
+        """تغییر داوطلبانه‌ی رمز عبور خودِ کاربر (برخلاف maybe_force_password_change، این پنجره قابل بستن است)"""
+        win = tk.Toplevel(self)
+        win.title("تغییر رمز عبور من")
+
+        ttk.Label(win, text="رمز عبور جدید:").pack(padx=20, pady=(20, 0), anchor="e")
+        p1_entry = ttk.Entry(win, show="*", width=30)
+        p1_entry.pack(padx=20, pady=5)
+        ttk.Label(win, text="تکرار رمز عبور جدید:").pack(padx=20, anchor="e")
+        p2_entry = ttk.Entry(win, show="*", width=30)
+        p2_entry.pack(padx=20, pady=5)
+
+        def save():
+            p1, p2 = p1_entry.get(), p2_entry.get()
+            if not p1 or len(p1) < 4:
+                messagebox.showerror("خطا", "رمز عبور باید حداقل ۴ کاراکتر باشد")
+                return
+            if p1 != p2:
+                messagebox.showerror("خطا", "رمز عبور و تکرار آن یکسان نیستند")
+                return
+            res = self.api("POST", "/users/me/password", json={"new_password": p1})
+            if res and res.get("ok"):
+                messagebox.showinfo("موفق", "رمز عبور با موفقیت تغییر کرد")
+                win.destroy()
+            else:
+                messagebox.showerror("خطا", (res or {}).get("message", "تغییر رمز عبور ناموفق بود"))
+
+        ttk.Button(win, text="ذخیره", command=save).pack(pady=15)
+        win.bind("<Return>", lambda e: save())
 
     def export_to_excel(self, headers, rows, filename_prefix):
         """ساخت فایل اکسل از یک لیست هدر و ردیف‌ها و باز کردن آن"""

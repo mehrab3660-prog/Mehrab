@@ -175,6 +175,7 @@ def init_db():
     add_column_if_missing("parties", "credit_limit", "REAL NOT NULL DEFAULT 0")
     add_column_if_missing("parties", "is_vip", "INTEGER NOT NULL DEFAULT 0")
     add_column_if_missing("cash_transactions", "invoice_id", "INTEGER")
+    add_column_if_missing("users", "must_change_password", "INTEGER NOT NULL DEFAULT 0")
 
     # مهاجرت امنیتی: هش کردن رمزهایی که هنوز به‌صورت متن ساده ذخیره شده‌اند
     from werkzeug.security import generate_password_hash
@@ -188,7 +189,7 @@ def init_db():
     c.execute("SELECT COUNT(*) FROM users")
     if c.fetchone()[0] == 0:
         admin_password = secrets.token_urlsafe(9)
-        c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+        c.execute("INSERT INTO users (username, password, role, must_change_password) VALUES (?, ?, ?, 1)",
                    ("admin", generate_password_hash(admin_password), "admin"))
         _announce_first_admin_password(admin_password)
 

@@ -44,6 +44,33 @@
   </div>
 </div>
 
+<!-- اجبار به تغییر رمز عبور (برای رمز اولیه/موقت) -->
+<div id="force-password-screen" class="login-screen hidden">
+  <div class="login-panel">
+    <div class="login-panel-brand">
+      <h1>تغییر رمز عبور لازم است</h1>
+      <p>برای امنیت بیشتر، قبل از ادامه باید یک رمز عبور جدید برای خودتان انتخاب کنید.</p>
+    </div>
+  </div>
+  <div class="login-form-side">
+    <div class="login-card">
+      <div class="login-logo">
+        <h1>رمز عبور جدید</h1>
+      </div>
+      <div class="field">
+        <label>رمز عبور جدید</label>
+        <input type="password" id="fp-new-password" autocomplete="new-password">
+      </div>
+      <div class="field">
+        <label>تکرار رمز عبور جدید</label>
+        <input type="password" id="fp-confirm-password" autocomplete="new-password">
+      </div>
+      <button class="btn btn-primary btn-block" id="fp-submit-btn">ذخیره و ادامه</button>
+      <p class="login-error" id="fp-error"></p>
+    </div>
+  </div>
+</div>
+
 <!-- برنامه اصلی -->
 <div id="app" class="app hidden">
 
@@ -97,6 +124,7 @@
         <li class="nav-item admin-only" data-page="bulk-price"><span class="nav-icon">💹</span><span class="nav-label">افزایش قیمت گروهی</span></li>
         <li class="nav-item admin-only" data-page="settings-hub"><span class="nav-icon">⚙️</span><span class="nav-label">تنظیمات کلی</span></li>
       </ul>
+      <button class="btn btn-ghost btn-block" id="btn-change-own-password">تغییر رمز عبور من</button>
       <button class="btn btn-ghost btn-block logout-btn" id="logout-btn">خروج از حساب</button>
     </nav>
 
@@ -474,6 +502,7 @@
           <button class="settings-subnav-btn" data-subtab="backup">🗄️ پشتیبان‌گیری</button>
           <button class="settings-subnav-btn" data-subtab="users">🔐 کاربران</button>
           <button class="settings-subnav-btn" data-subtab="activity">🕒 لاگ فعالیت</button>
+          <button class="settings-subnav-btn" data-subtab="security-log">🛡️ لاگ امنیتی</button>
         </div>
 
         <div class="settings-subpage active" id="subpage-shop-info">
@@ -531,6 +560,16 @@
             <table class="data-table">
               <thead><tr><th>زمان</th><th>کاربر</th><th>فعالیت</th><th>جزئیات</th></tr></thead>
               <tbody id="activity-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="settings-subpage" id="subpage-security-log">
+          <div class="card">
+            <p class="muted">رویدادهای امنیتی: ورود ناموفق، حذف/ویرایش فاکتور، افزودن کاربر و تغییر رمز عبور اینجا ثبت می‌شود.</p>
+            <table class="data-table">
+              <thead><tr><th>زمان</th><th>کاربر</th><th>رویداد</th><th>جزئیات</th></tr></thead>
+              <tbody id="security-log-tbody"></tbody>
             </table>
           </div>
         </div>

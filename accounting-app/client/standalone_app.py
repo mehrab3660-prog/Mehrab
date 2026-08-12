@@ -98,7 +98,7 @@ class StandaloneApp(App):
                 if data.get("ok"):
                     self.user = data["user"]
                     self.token = data.get("token")
-                    self.show_main()
+                    self.maybe_force_password_change(self.show_main)
                 else:
                     messagebox.showerror("خطا", data.get("message", "ورود ناموفق بود"))
                     refresh_captcha()

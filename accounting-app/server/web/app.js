@@ -13,6 +13,11 @@ const state = {
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 function fmt(n) { return Number(n || 0).toLocaleString('en-US'); }
+function escHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s == null ? '' : String(s);
+  return div.innerHTML;
+}
 
 // ===================== تبدیل تاریخ میلادی به شمسی (بدون کتابخانه خارجی) =====================
 const _FA_DIGITS = { '0': '۰', '1': '۱', '2': '۲', '3': '۳', '4': '۴', '5': '۵', '6': '۶', '7': '۷', '8': '۸', '9': '۹' };
@@ -235,6 +240,7 @@ function forceLogout(message) {
   state.user = null;
   state.token = null;
   $('#app').classList.add('hidden');
+  $('#force-password-screen').classList.add('hidden');
   $('#login-screen').classList.remove('hidden');
   $('#login-error').textContent = message || '';
 }
@@ -370,16 +376,68 @@ async function doLogin() {
     state.user = res.user;
     state.token = res.token;
     $('#login-screen').classList.add('hidden');
-    $('#app').classList.remove('hidden');
-    $('#user-name').textContent = state.user.username;
-    $('#user-role').textContent = state.user.role === 'admin' ? 'مدیر' : 'کارمند';
-    if (state.user.role !== 'admin') $$('.admin-only').forEach(el => el.style.display = 'none');
-    initApp();
+    if (state.user.must_change_password) {
+      $('#fp-new-password').value = '';
+      $('#fp-confirm-password').value = '';
+      $('#fp-error').textContent = '';
+      $('#force-password-screen').classList.remove('hidden');
+      return;
+    }
+    enterApp();
   } else {
     $('#login-error').textContent = (res && res.message) || 'ورود ناموفق بود';
     refreshCaptcha(); // هر کد امنیتی فقط یک‌بار مصرفه، پس چه موفق چه ناموفق باید تازه بشه
   }
 }
+
+function enterApp() {
+  $('#app').classList.remove('hidden');
+  $('#user-name').textContent = state.user.username;
+  $('#user-role').textContent = state.user.role === 'admin' ? 'مدیر' : 'کارمند';
+  if (state.user.role !== 'admin') $$('.admin-only').forEach(el => el.style.display = 'none');
+  initApp();
+}
+
+$('#fp-submit-btn').addEventListener('click', async () => {
+  const p1 = $('#fp-new-password').value;
+  const p2 = $('#fp-confirm-password').value;
+  if (!p1 || p1.length < 4) { $('#fp-error').textContent = 'رمز عبور باید حداقل ۴ کاراکتر باشد'; return; }
+  if (p1 !== p2) { $('#fp-error').textContent = 'رمز عبور و تکرار آن یکسان نیستند'; return; }
+  const res = await api('POST', '/users/me/password', { new_password: p1 });
+  if (res && res.ok) {
+    state.user.must_change_password = false;
+    $('#force-password-screen').classList.add('hidden');
+    toast('رمز عبور با موفقیت تغییر کرد', 'success');
+    enterApp();
+  } else if (res) {
+    $('#fp-error').textContent = res.message || 'خطا در تغییر رمز عبور';
+  }
+});
+$('#fp-confirm-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#fp-submit-btn').click(); });
+
+$('#btn-change-own-password').addEventListener('click', () => {
+  openModal(`
+    <h3>تغییر رمز عبور من</h3>
+    <div class="field"><label>رمز عبور جدید</label><input type="password" id="own-pw-new"></div>
+    <div class="field"><label>تکرار رمز عبور جدید</label><input type="password" id="own-pw-confirm"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">انصراف</button>
+      <button class="btn btn-primary" id="own-pw-save-btn">ذخیره</button>
+    </div>`);
+  $('#own-pw-save-btn').addEventListener('click', async () => {
+    const p1 = $('#own-pw-new').value;
+    const p2 = $('#own-pw-confirm').value;
+    if (!p1 || p1.length < 4) { toast('رمز عبور باید حداقل ۴ کاراکتر باشد', 'danger'); return; }
+    if (p1 !== p2) { toast('رمز عبور و تکرار آن یکسان نیستند', 'danger'); return; }
+    const res = await api('POST', '/users/me/password', { new_password: p1 });
+    if (res && res.ok) {
+      toast('رمز عبور با موفقیت تغییر کرد', 'success');
+      closeModal();
+    } else if (res) {
+      toast(res.message || 'خطا در تغییر رمز عبور', 'danger');
+    }
+  });
+});
 
 $('#logout-btn').addEventListener('click', () => {
   api('POST', '/logout');
@@ -844,6 +902,12 @@ function loadInvoiceForm(type) {
         </div></div>
       </div>
       <div class="card">
+        <div class="card-title">اسکن بارکد</div>
+        <input type="text" id="${type}-barcode" placeholder="بارکد را با دستگاه اسکن کن یا کد کالا را تایپ و Enter بزن..."
+               autocomplete="off" style="font-size:16px;padding:10px">
+        <p class="muted" style="margin-top:6px" id="${type}-barcode-status"></p>
+      </div>
+      <div class="card">
         <div class="card-title">افزودن کالا</div>
         <div class="form-row"><div><label>کالا</label><div id="${type}-item"></div></div>
           <div><label>تعداد</label><input type="number" step="any" id="${type}-qty"></div>
@@ -907,6 +971,42 @@ function loadInvoiceForm(type) {
     state[cartKey].push({ item_id: itemId, item_name: itemObj?.name, qty, unit_price: price });
     renderCart(type);
   });
+
+  // ===== اسکن بارکد: دستگاه بارکدخوان مثل کیبورد عمل می‌کند (کد را تایپ و Enter می‌زند) =====
+  const barcodeInput = $(`#${type}-barcode`);
+  const barcodeStatus = $(`#${type}-barcode-status`);
+  barcodeInput.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const code = barcodeInput.value.trim();
+    barcodeInput.value = '';
+    if (!code) return;
+    const itemObj = state.items.find(it => it.code && it.code.toLowerCase() === code.toLowerCase());
+    if (!itemObj) {
+      barcodeStatus.textContent = `❌ کالایی با کد «${code}» پیدا نشد`;
+      barcodeStatus.style.color = 'var(--danger)';
+      return;
+    }
+    if (type === 'sale') {
+      const alreadyInCart = state[cartKey].filter(c => c.item_id === itemObj.id).reduce((s, c) => s + c.qty, 0);
+      if (alreadyInCart + 1 > itemObj.stock_qty) {
+        barcodeStatus.textContent = `❌ موجودی «${itemObj.name}» فقط ${fmt(itemObj.stock_qty)} عدد است`;
+        barcodeStatus.style.color = 'var(--danger)';
+        return;
+      }
+    }
+    const priceField = type === 'sale' ? 'sale_price' : 'purchase_price';
+    const existingRow = state[cartKey].find(c => c.item_id === itemObj.id);
+    if (existingRow) {
+      existingRow.qty += 1;
+    } else {
+      state[cartKey].push({ item_id: itemObj.id, item_name: itemObj.name, qty: 1, unit_price: itemObj[priceField] || 0 });
+    }
+    renderCart(type);
+    barcodeStatus.textContent = `✅ «${itemObj.name}» اضافه شد`;
+    barcodeStatus.style.color = 'var(--accent, green)';
+  });
+  barcodeInput.focus();
 
   $(`#${type}-submit`).addEventListener('click', () => showInvoicePreview(type));
 
@@ -1491,6 +1591,7 @@ async function loadSettingsHub() {
         else if (sub === 'backup') loadBackup();
         else if (sub === 'users') loadUsers();
         else if (sub === 'activity') loadActivity();
+        else if (sub === 'security-log') loadSecurityLog();
       });
     });
   }
@@ -2087,6 +2188,13 @@ async function loadActivity() {
   const logs = await api('GET', '/activity-log');
   $('#activity-tbody').innerHTML = (logs || []).map(lg =>
     `<tr><td>${toJalaliDate(lg.timestamp, true)}</td><td>${lg.username || '—'}</td><td>${lg.action}</td><td>${lg.details || '—'}</td></tr>`).join('');
+}
+
+// ===================== لاگ امنیتی =====================
+async function loadSecurityLog() {
+  const logs = await api('GET', '/security-log');
+  $('#security-log-tbody').innerHTML = (logs || []).map(lg =>
+    `<tr><td>${toJalaliDate(lg.timestamp, true)}</td><td>${escHtml(lg.username) || '—'}</td><td>${escHtml(lg.event)}</td><td>${escHtml(lg.details) || '—'}</td></tr>`).join('');
 }
 
 // ===================== شروع برنامه =====================
