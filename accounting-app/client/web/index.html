@@ -80,6 +80,7 @@
         <li class="nav-item" data-page="purchase"><span class="nav-icon">🛒</span><span class="nav-label">فاکتور خرید</span></li>
         <li class="nav-item" data-page="ai-scan"><span class="nav-icon">📷</span><span class="nav-label">اسکن فاکتور خرید (AI)</span></li>
         <li class="nav-item" data-page="history"><span class="nav-icon">📜</span><span class="nav-label">تاریخچه فاکتورها</span></li>
+        <li class="nav-item" data-page="send-invoice"><span class="nav-icon">📤</span><span class="nav-label">ارسال فاکتور</span></li>
         <li class="nav-item" data-page="parties"><span class="nav-icon">👥</span><span class="nav-label">مشتریان و تامین‌کنندگان</span></li>
         <li class="nav-item" data-page="checks"><span class="nav-icon">💳</span><span class="nav-label">چک‌ها</span></li>
         <li class="nav-item" data-page="bank"><span class="nav-icon">🏦</span><span class="nav-label">بانک</span></li>
@@ -277,6 +278,27 @@
             <thead><tr><th>شماره</th><th>نوع</th><th>تاریخ</th><th>طرف حساب</th><th>یادداشت</th><th>جمع کل</th><th>پرداخت‌شده</th><th>عملیات</th></tr></thead>
             <tbody id="history-tbody"></tbody>
           </table>
+        </div>
+      </section>
+
+      <!-- ارسال فاکتور -->
+      <section class="page" id="page-send-invoice">
+        <div class="page-header"><div><h2>ارسال فاکتور</h2><p class="page-sub">شماره فاکتور را وارد کن، پیش‌نمایشش را ببین، بعد به‌صورت PDF دانلود کن یا مستقیم از گوشی برای مشتری در بله، روبیکا، ایتا، واتس‌اپ یا هر برنامه دیگری اشتراک بذار.</p></div></div>
+        <div class="card">
+          <div class="form-row">
+            <div><label>شماره فاکتور (مثلاً SL-00001) یا شناسه فاکتور</label><input type="text" id="send-inv-search-input" placeholder="شماره فاکتور را وارد کن..."></div>
+          </div>
+          <button class="btn btn-primary" id="send-inv-search-btn">جستجو</button>
+        </div>
+        <div class="card hidden" id="send-inv-result-card">
+          <div class="card-title" id="send-inv-title"></div>
+          <div id="send-inv-summary" class="ai-summary-box"></div>
+          <iframe id="send-inv-preview-frame" style="width:100%;height:480px;border:1px solid var(--border,#ddd);border-radius:8px;background:#fff;margin-top:14px"></iframe>
+          <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+            <button class="btn btn-secondary" id="send-inv-download-btn">⬇️ دانلود PDF فاکتور</button>
+            <button class="btn btn-primary hidden" id="send-inv-share-btn">📤 اشتراک‌گذاری با بله / روبیکا / ایتا / ...</button>
+          </div>
+          <p class="muted" id="send-inv-share-note" style="margin-top:8px"></p>
         </div>
       </section>
 

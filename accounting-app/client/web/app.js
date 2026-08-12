@@ -238,6 +238,46 @@ function forceLogout(message) {
   $('#login-error').textContent = message || '';
 }
 
+// دانلود/باز کردن فایل‌هایی که نیاز به لاگین دارند (PDF، اکسل، صفحه چاپ فاکتور).
+// window.open ساده یا <a href> کار نمی‌کند چون هدر Authorization را همراه ندارند؛
+// اینجا با fetch احراز هویت‌شده، فایل را می‌گیریم و به‌صورت Blob محلی نمایش/دانلود می‌دهیم.
+async function fetchAuthedBlob(path) {
+  const headers = {};
+  if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
+  try {
+    const res = await fetch(path, { headers });
+    if (res.status === 401) { forceLogout('نشست شما منقضی شده، دوباره وارد شوید'); return null; }
+    if (!res.ok) { toast('خطا در دریافت فایل', 'danger'); return null; }
+    return await res.blob();
+  } catch (e) {
+    console.error(e);
+    toast('ارتباط با سرور برقرار نشد', 'danger');
+    return null;
+  }
+}
+
+async function openAuthedInNewTab(path, mimeType) {
+  const blob = await fetchAuthedBlob(path);
+  if (!blob) return;
+  const typedBlob = mimeType ? new Blob([blob], { type: mimeType }) : blob;
+  const url = URL.createObjectURL(typedBlob);
+  window.open(url, '_blank');
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+async function downloadAuthed(path, filename) {
+  const blob = await fetchAuthedBlob(path);
+  if (!blob) return;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
 // ===================== نوتیفیکیشن ساده =====================
 function toast(msg, type = 'primary') {
   let el = document.createElement('div');
@@ -349,6 +389,7 @@ function loadPage(page) {
     checks: loadChecks, cash: loadCash, bank: loadBankPage, monthly: loadMonthly, 'extra-reports': loadExtraReports,
     'settings-hub': loadSettingsHub,
     'ai-scan': loadAiScanPage, 'bulk-price': loadBulkPricePage, 'quick-sale': loadQuickSalePage,
+    'send-invoice': loadSendInvoicePage,
   };
   if (loaders[page]) loaders[page]();
 }
@@ -711,7 +752,7 @@ $('#items-filter').addEventListener('input', (e) => {
   $$('#items-tbody tr').forEach(row => row.style.display = !q || row.textContent.includes(q) ? '' : 'none');
 });
 $('#btn-export-items').addEventListener('click', () => {
-  window.open('/export/items.xlsx', '_blank');
+  downloadAuthed('/export/items.xlsx', 'کالاها.xlsx');
 });
 $('#btn-new-category').addEventListener('click', () => {
   openModal(`
@@ -956,7 +997,7 @@ function askPrintInvoice(invoiceId) {
     <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">فعلاً نه</button></div>`);
 }
 function printInvoice(invoiceId, format) {
-  window.open(`/invoices/${invoiceId}/print?format=${format}`, '_blank');
+  openAuthedInNewTab(`/invoices/${invoiceId}/print?format=${format}`, 'text/html');
   closeModal();
 }
 
@@ -1114,6 +1155,78 @@ async function deleteInvoice(invoiceId) {
     loadItems();
   } else if (res) {
     toast(res.message || 'خطا در حذف', 'danger');
+  }
+}
+
+// ===================== ارسال فاکتور (پیش‌نمایش + دانلود PDF + اشتراک‌گذاری) =====================
+function loadSendInvoicePage() {
+  $('#send-inv-result-card').classList.add('hidden');
+  $('#send-inv-search-input').value = '';
+  $('#send-inv-search-input').focus();
+}
+
+$('#send-inv-search-btn').addEventListener('click', searchInvoiceToSend);
+$('#send-inv-search-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') searchInvoiceToSend(); });
+
+async function searchInvoiceToSend() {
+  const q = $('#send-inv-search-input').value.trim();
+  if (!q) { toast('شماره فاکتور را وارد کن', 'danger'); return; }
+  const all = await api('GET', '/invoices');
+  if (!all) return;
+  const found = all.find(inv => String(inv.number || '').toLowerCase() === q.toLowerCase() || String(inv.id) === q);
+  if (!found) {
+    toast('فاکتوری با این شماره پیدا نشد', 'danger');
+    $('#send-inv-result-card').classList.add('hidden');
+    return;
+  }
+  showSendInvoiceResult(found);
+}
+
+async function showSendInvoiceResult(inv) {
+  const typeLabel = { sale: 'فروش', purchase: 'خرید', sale_return: 'مرجوعی فروش', purchase_return: 'مرجوعی خرید' };
+  $('#send-inv-title').textContent = `فاکتور ${inv.number || inv.id}`;
+  $('#send-inv-summary').innerHTML = `
+    <div class="item"><span class="k">نوع</span><span class="v">${typeLabel[inv.invoice_type] || inv.invoice_type}</span></div>
+    <div class="item"><span class="k">طرف‌حساب</span><span class="v">${inv.party_name || '—'}</span></div>
+    <div class="item"><span class="k">تاریخ</span><span class="v">${toJalaliDate(inv.date, true)}</span></div>
+    <div class="item"><span class="k">جمع کل</span><span class="v">${fmt(inv.total)} تومان</span></div>`;
+  $('#send-inv-result-card').classList.remove('hidden');
+  $('#send-inv-preview-frame').srcdoc = '';
+
+  const headers = {};
+  if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
+  try {
+    const resp = await fetch(`/invoices/${inv.id}/print?format=A5`, { headers });
+    if (resp.ok) $('#send-inv-preview-frame').srcdoc = await resp.text();
+  } catch (e) { console.error(e); }
+
+  const invoiceNumber = inv.number || inv.id;
+  $('#send-inv-download-btn').onclick = () => downloadAuthed(`/invoices/${inv.id}/pdf`, `فاکتور-${invoiceNumber}.pdf`);
+
+  const shareBtn = $('#send-inv-share-btn');
+  const shareNote = $('#send-inv-share-note');
+  if (navigator.share) {
+    shareBtn.classList.remove('hidden');
+    shareBtn.onclick = () => shareInvoicePdf(inv.id, invoiceNumber);
+    shareNote.textContent = 'با زدن این دکمه، منوی اشتراک‌گذاری گوشی باز می‌شود و می‌توانی فاکتور را مستقیم برای مشتری در بله، روبیکا، ایتا، واتس‌اپ یا هر برنامه دیگری بفرستی.';
+  } else {
+    shareBtn.classList.add('hidden');
+    shareNote.textContent = 'مرورگر یا سیستم فعلی از اشتراک‌گذاری مستقیم پشتیبانی نمی‌کند (این ویژگی معمولاً فقط روی گوشی موبایل یا آدرس‌های HTTPS کار می‌کند). فاکتور را دانلود کن و از داخل بله/روبیکا/ایتا/واتس‌اپ برای مشتری ضمیمه و ارسال کن.';
+  }
+}
+
+async function shareInvoicePdf(invoiceId, invoiceNumber) {
+  const blob = await fetchAuthedBlob(`/invoices/${invoiceId}/pdf`);
+  if (!blob) return;
+  const file = new File([blob], `فاکتور-${invoiceNumber}.pdf`, { type: 'application/pdf' });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: `فاکتور ${invoiceNumber}` });
+    } else {
+      toast('مرورگر شما اشتراک‌گذاری مستقیم فایل را پشتیبانی نمی‌کند — از دکمه «دانلود PDF» استفاده کن', 'danger');
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') { console.error(e); toast('خطا در اشتراک‌گذاری', 'danger'); }
   }
 }
 
