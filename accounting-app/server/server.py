@@ -523,8 +523,12 @@ def add_invoice():
                     "message": f'موجودی «{row["name"]}» فقط {row["stock_qty"]:g} عدد است — نمی‌توان {qty_needed:g} تا فروخت'
                 }), 400
 
-    # شماره فاکتور خودکار: بعد از درج، بر اساس id ساخته می‌شود
-    prefix = {"sale": "SL", "purchase": "PU", "sale_return": "SR", "purchase_return": "PR"}.get(invoice_type, "IN")
+    # شماره فاکتور خودکار: بعد از درج، بر اساس id ساخته می‌شود.
+    # فاکتور فروش عمداً بدون پیشوند حرفی است (فقط عدد ساده، بدون صفرهای اضافه جلوش) —
+    # چون این همون شماره‌ایه که مشتری روی فاکتورش می‌بینه. بقیه‌ی انواع فاکتور (خرید/مرجوعی)
+    # برای تشخیص از هم، پیشوند حرفی و padding پنج‌رقمی دارند.
+    prefix_map = {"sale": "", "purchase": "PU", "sale_return": "SR", "purchase_return": "PR"}
+    prefix = prefix_map.get(invoice_type, "IN")
 
     c.execute("""INSERT INTO invoices (invoice_type, number, party_id, date, total, paid, payment_type, description, discount)
                  VALUES (?,?,?,?,?,?,?,?,?)""",
@@ -534,7 +538,8 @@ def add_invoice():
     # اگر از تنظیمات یه «شماره فاکتور بعدی» دلخواه تنظیم شده باشه (مثلاً برای ادامه‌ی شماره‌گذاری
     # فاکتورهای کاغذی قبلی)، همون افستِ ذخیره‌شده روی شماره‌ی داخلی دیتابیس اعمال می‌شه
     offset = load_shop_settings().get("invoice_number_offset", 0) or 0
-    invoice_number = f"{prefix}-{(invoice_id + offset):05d}"
+    number_value = invoice_id + offset
+    invoice_number = str(number_value) if not prefix else f"{prefix}-{number_value:05d}"
     c.execute("UPDATE invoices SET number=? WHERE id=?", (invoice_number, invoice_id))
 
     for it in d["items"]:
