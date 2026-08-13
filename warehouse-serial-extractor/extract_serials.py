@@ -169,21 +169,30 @@ def click_page_number(page, next_number):
 
 
 def save_to_excel(all_rows, out_path):
+    """پذیرش‌های تک‌مخزن و جفت‌مخزن (دو مخزن) را در دو شیت جدا ذخیره می‌کند."""
     from openpyxl import Workbook
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "نتایج"
-    ws.sheet_view.rightToLeft = True
-
     headers = ["شماره پذیرش", "پلاک", "نام سازنده", "سریال مخزن"]
-    ws.append(headers)
-    for row in all_rows:
-        ws.append([row[h] for h in headers])
 
-    for col in ws.columns:
-        max_len = max((len(str(cell.value)) for cell in col if cell.value), default=10)
-        ws.column_dimensions[col[0].column_letter].width = max_len + 4
+    single_tank_rows = [r for r in all_rows if r["_tank_count"] == 1]
+    dual_tank_rows = [r for r in all_rows if r["_tank_count"] >= 2]
+
+    def fill_sheet(ws, rows):
+        ws.sheet_view.rightToLeft = True
+        ws.append(headers)
+        for row in rows:
+            ws.append([row[h] for h in headers])
+        for col in ws.columns:
+            max_len = max((len(str(cell.value)) for cell in col if cell.value), default=10)
+            ws.column_dimensions[col[0].column_letter].width = max_len + 4
+
+    wb = Workbook()
+    ws_single = wb.active
+    ws_single.title = "تک مخزن"
+    fill_sheet(ws_single, single_tank_rows)
+
+    ws_dual = wb.create_sheet("جفت مخزن")
+    fill_sheet(ws_dual, dual_tank_rows)
 
     wb.save(out_path)
 
@@ -242,8 +251,10 @@ def main():
                         "پلاک": plate,
                         "نام سازنده": manufacturer,
                         "سریال مخزن": serial,
+                        "_tank_count": len(tank_lines),
                     })
-                print(f"  - پذیرش {reception_id} (پلاک {plate or '?'}): {len(tank_lines)} مخزن استخراج شد.")
+                kind = "تک مخزن" if len(tank_lines) == 1 else "جفت مخزن"
+                print(f"  - پذیرش {reception_id} (پلاک {plate or '?'}, {kind}): {len(tank_lines)} مخزن استخراج شد.")
 
             print(f"مجموع تا این‌جا: {len(all_rows)} ردیف.")
 
