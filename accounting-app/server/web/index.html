@@ -93,6 +93,15 @@
         <button class="icon-btn" id="zoom-out-btn" title="کوچک‌تر کردن نوشته‌ها">A-</button>
         <button class="icon-btn" id="zoom-in-btn" title="بزرگ‌تر کردن نوشته‌ها">A+</button>
       </div>
+      <div class="notif-wrap">
+        <button class="icon-btn" id="notif-bell-btn" title="اعلان‌ها">
+          🔔<span class="notif-dot hidden" id="notif-dot"></span>
+        </button>
+        <div class="notif-dropdown hidden" id="notif-dropdown">
+          <div class="notif-dropdown-header">اعلان‌ها</div>
+          <div class="notif-dropdown-list" id="notif-dropdown-list"></div>
+        </div>
+      </div>
       <button class="icon-btn" id="theme-toggle" title="تغییر حالت روشن/تیره">
         <span id="theme-icon">🌙</span>
       </button>
@@ -145,6 +154,20 @@
         <div id="low-stock-banner" class="low-stock-banner hidden"></div>
 
         <div class="kpi-grid" id="stat-grid"></div>
+
+        <div class="card health-score-card">
+          <div class="card-title">🩺 سلامت مالی مغازه</div>
+          <div class="health-score-body">
+            <div class="health-rings-wrap">
+              <svg class="health-rings" viewBox="0 0 120 120" id="health-rings-svg"></svg>
+              <div class="health-score-center">
+                <div class="health-score-num" id="health-score-num">--</div>
+                <div class="health-score-label" id="health-score-label">--</div>
+              </div>
+            </div>
+            <div class="health-score-legend" id="health-score-legend"></div>
+          </div>
+        </div>
 
         <div class="dash-row-2">
           <div class="card insight-card">
@@ -642,6 +665,8 @@
             <div class="field"><label>شناسه چت (Chat ID)</label><input type="text" id="shop-telegram-chat-id" placeholder="مثلاً 123456789" dir="ltr"></div>
             <button class="btn btn-primary" id="btn-save-telegram">ذخیره</button>
             <button class="btn btn-secondary" id="btn-test-telegram">ارسال پیام تستی</button>
+            <button class="btn btn-secondary" id="btn-weekly-recap-now">ارسال خلاصه هفتگی همین الان (تست)</button>
+            <p class="muted" style="margin-top:8px;font-size:11.5px">خلاصه‌ی هفتگی به‌صورت خودکار هر یکشنبه ساعت ۹ صبح هم برای شما ارسال می‌شود.</p>
           </div>
         </div>
 
@@ -716,6 +741,14 @@
 <!-- مودال عمومی -->
 <div class="modal-overlay hidden" id="modal-overlay">
   <div class="modal" id="modal-box"></div>
+</div>
+
+<!-- جستجوی سریع / پالت فرمان (Ctrl+K) -->
+<div class="cmdk-overlay hidden" id="cmdk-overlay">
+  <div class="cmdk-panel" id="cmdk-panel">
+    <input type="text" id="cmdk-input" placeholder="جستجوی سریع صفحه‌ها... (Esc برای بستن)" autocomplete="off">
+    <div class="cmdk-list" id="cmdk-list"></div>
+  </div>
 </div>
 
 <script src="/app.js"></script>

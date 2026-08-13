@@ -13,7 +13,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from paths import get_base_dir
 
@@ -74,6 +74,54 @@ def build_daily_summary(get_connection):
         lines.append("⚠ کالاهای رو به اتمام:")
         for it in low_stock:
             lines.append(f'  - {it["name"]} (موجودی: {it["stock_qty"]})')
+
+    return "\n".join(lines)
+
+
+def build_weekly_summary(get_connection):
+    """خلاصه‌ی هفتگی (۷ روز اخیر در مقابل ۷ روز قبل از آن) برای ارسال به تلگرام صاحب مغازه"""
+    conn = get_connection()
+    today = datetime.now()
+    this_week_start = (today - timedelta(days=7)).strftime("%Y-%m-%d")
+    prev_week_start = (today - timedelta(days=14)).strftime("%Y-%m-%d")
+    today_str = today.strftime("%Y-%m-%d")
+
+    this_week = conn.execute(
+        "SELECT COUNT(*) as cnt, COALESCE(SUM(total),0) as total FROM invoices "
+        "WHERE invoice_type='sale' AND voided=0 AND date >= ? AND date < ?",
+        (this_week_start, today_str)).fetchone()
+    prev_week = conn.execute(
+        "SELECT COALESCE(SUM(total),0) as total FROM invoices "
+        "WHERE invoice_type='sale' AND voided=0 AND date >= ? AND date < ?",
+        (prev_week_start, this_week_start)).fetchone()
+
+    top_item = conn.execute("""
+        SELECT items.name as name, SUM(invoice_items.qty) as qty
+        FROM invoice_items
+        JOIN invoices ON invoice_items.invoice_id = invoices.id
+        JOIN items ON invoice_items.item_id = items.id
+        WHERE invoices.invoice_type='sale' AND invoices.voided=0 AND invoices.date >= ? AND invoices.date < ?
+        GROUP BY items.id ORDER BY qty DESC LIMIT 1
+    """, (this_week_start, today_str)).fetchone()
+
+    checks_due_next_week = conn.execute(
+        "SELECT COUNT(*) as cnt FROM checks WHERE status='pending' AND due_date >= ? AND due_date < ?",
+        (today_str, (today + timedelta(days=7)).strftime("%Y-%m-%d"))).fetchone()["cnt"]
+
+    conn.close()
+
+    growth_text = ""
+    if prev_week["total"] > 0:
+        growth = (this_week["total"] - prev_week["total"]) / prev_week["total"] * 100
+        growth_text = f' ({"رشد" if growth >= 0 else "کاهش"} {abs(growth):.0f}٪ نسبت به هفته قبل)'
+
+    lines = [f"📊 خلاصه‌ی هفتگی مغازه", "=" * 30,
+             f'تعداد فاکتور فروش: {this_week["cnt"]}',
+             f'جمع فروش این هفته: {this_week["total"]:,.0f} تومان{growth_text}']
+    if top_item:
+        lines.append(f'پرفروش‌ترین کالا: {top_item["name"]} ({top_item["qty"]} عدد)')
+    if checks_due_next_week:
+        lines.append(f'⚠ {checks_due_next_week} چک در هفته‌ی آینده سررسید دارد')
 
     return "\n".join(lines)
 

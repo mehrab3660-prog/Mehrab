@@ -303,7 +303,7 @@ function toast(msg, type = 'primary') {
 
 // ===================== جشن کوچک لحظه فروش موفق =====================
 function celebrateSuccess() {
-  const colors = ['#1B9C6B', '#14375E', '#F59E0B', '#2FBE83', '#4C8FC9'];
+  const colors = ['#10B981', '#4F46E5', '#F59E0B', '#34D399', '#818CF8'];
   const container = document.createElement('div');
   container.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:998;overflow:hidden;';
   document.body.appendChild(container);
@@ -407,6 +407,137 @@ function enterApp() {
   if (state.user.role !== 'admin') $$('.admin-only').forEach(el => el.style.display = 'none');
   initApp();
   bindAssistant();
+  bindNotifBell();
+  bindCommandPalette();
+  loadNotifications();
+}
+
+// ===================== پالت فرمان (Ctrl+K) =====================
+let cmdkBound = false;
+let cmdkActiveIndex = 0;
+let cmdkItems = [];
+
+function bindCommandPalette() {
+  if (cmdkBound) return;
+  cmdkBound = true;
+
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      if ($('#app').classList.contains('hidden')) return;
+      e.preventDefault();
+      openCommandPalette();
+    } else if (e.key === 'Escape' && !$('#cmdk-overlay').classList.contains('hidden')) {
+      closeCommandPalette();
+    }
+  });
+  $('#cmdk-overlay').addEventListener('click', (e) => {
+    if (e.target.id === 'cmdk-overlay') closeCommandPalette();
+  });
+  $('#cmdk-input').addEventListener('input', () => filterCommandPalette($('#cmdk-input').value));
+  $('#cmdk-input').addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); moveCommandPaletteSelection(1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); moveCommandPaletteSelection(-1); }
+    else if (e.key === 'Enter') { e.preventDefault(); activateCommandPaletteSelection(); }
+  });
+}
+
+function openCommandPalette() {
+  cmdkItems = $$('.nav-item').filter(el => el.style.display !== 'none').map(el => ({
+    page: el.dataset.page,
+    label: el.querySelector('.nav-label').textContent.trim(),
+    icon: el.querySelector('.nav-icon').textContent.trim(),
+  }));
+  $('#cmdk-input').value = '';
+  $('#cmdk-overlay').classList.remove('hidden');
+  $('#cmdk-input').focus();
+  filterCommandPalette('');
+}
+
+function closeCommandPalette() {
+  $('#cmdk-overlay').classList.add('hidden');
+}
+
+function filterCommandPalette(query) {
+  const q = query.trim().toLowerCase();
+  const filtered = q ? cmdkItems.filter(it => it.label.toLowerCase().includes(q)) : cmdkItems;
+  cmdkActiveIndex = 0;
+  const list = $('#cmdk-list');
+  list.innerHTML = filtered.length
+    ? filtered.map((it, i) => `<div class="cmdk-item ${i === 0 ? 'active' : ''}" data-page="${it.page}"><span class="cmdk-icon">${it.icon}</span><span>${it.label}</span></div>`).join('')
+    : '<div class="cmdk-empty">چیزی پیدا نشد</div>';
+  $$('.cmdk-item', list).forEach(el => {
+    el.addEventListener('click', () => { navigateToPage(el.dataset.page); closeCommandPalette(); });
+  });
+}
+
+function moveCommandPaletteSelection(delta) {
+  const items = $$('.cmdk-item', $('#cmdk-list'));
+  if (!items.length) return;
+  items[cmdkActiveIndex] && items[cmdkActiveIndex].classList.remove('active');
+  cmdkActiveIndex = (cmdkActiveIndex + delta + items.length) % items.length;
+  items[cmdkActiveIndex].classList.add('active');
+  items[cmdkActiveIndex].scrollIntoView({ block: 'nearest' });
+}
+
+function activateCommandPaletteSelection() {
+  const items = $$('.cmdk-item', $('#cmdk-list'));
+  const el = items[cmdkActiveIndex];
+  if (!el || !el.dataset.page) return;
+  navigateToPage(el.dataset.page);
+  closeCommandPalette();
+}
+
+// ===================== زنگوله‌ی اعلان‌ها =====================
+let notifBellBound = false;
+function bindNotifBell() {
+  if (notifBellBound) return;
+  notifBellBound = true;
+  $('#notif-bell-btn').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const dd = $('#notif-dropdown');
+    const opening = dd.classList.contains('hidden');
+    dd.classList.toggle('hidden');
+    if (opening) await loadNotifications();
+  });
+  document.addEventListener('click', (e) => {
+    const wrap = $('.notif-wrap');
+    if (wrap && !wrap.contains(e.target)) $('#notif-dropdown').classList.add('hidden');
+  });
+}
+
+async function loadNotifications() {
+  const today = new Date().toISOString().slice(0, 10);
+  const [summary, checks] = await Promise.all([
+    api('GET', `/reports/summary?role=${state.user.role}`),
+    api('GET', '/checks?status=pending'),
+  ]);
+  const items = [];
+  (summary && summary.low_stock_items || []).forEach(it => {
+    items.push({
+      icon: it.stock_qty <= 0 ? '🔴' : '🟠',
+      text: `${it.name} — ${it.stock_qty <= 0 ? 'تمام شده' : 'موجودی کم: ' + fmt(it.stock_qty)}`,
+      page: 'items',
+    });
+  });
+  (checks || []).filter(c => c.due_date && c.due_date <= today).forEach(c => {
+    items.push({
+      icon: '💳',
+      text: `چک ${fmt(c.amount)} تومانی ${c.party_name || ''} — سررسید ${toFaDigits(c.due_date)}`,
+      page: 'checks',
+    });
+  });
+
+  $('#notif-dot').classList.toggle('hidden', items.length === 0);
+  const list = $('#notif-dropdown-list');
+  list.innerHTML = items.length
+    ? items.slice(0, 15).map(n => `<div class="notif-item" data-notif-page="${n.page}"><span class="notif-ic">${n.icon}</span><span class="notif-text">${n.text}</span></div>`).join('')
+    : '<div class="notif-empty">اعلانی برای الان نیست ✅</div>';
+  $$('.notif-item', list).forEach(el => {
+    el.addEventListener('click', () => {
+      navigateToPage(el.dataset.notifPage);
+      $('#notif-dropdown').classList.add('hidden');
+    });
+  });
 }
 
 // ===================== دستیار هوشمند =====================
@@ -798,6 +929,68 @@ function animateKpiCounters() {
   });
 }
 
+function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+
+function drawHealthRings(svg, rings) {
+  const center = 60;
+  const radii = [50, 40, 30, 20];
+  svg.innerHTML = rings.map((r, i) => {
+    const rad = radii[i];
+    const circ = 2 * Math.PI * rad;
+    const dash = clamp(r.value, 0, 100) / 100 * circ;
+    return `
+      <circle cx="${center}" cy="${center}" r="${rad}" fill="none" stroke="var(--surface-3)" stroke-width="7"/>
+      <circle cx="${center}" cy="${center}" r="${rad}" fill="none" stroke="${r.color}" stroke-width="7"
+        stroke-linecap="round" stroke-dasharray="${dash} ${circ}" transform="rotate(-90 ${center} ${center})"
+        style="transition: stroke-dasharray .6s ease"/>`;
+  }).join('');
+}
+
+function renderHealthScore({ cashBalance, totalDebtors, totalItems, lowStockCount, monthly, isAdmin }) {
+  const lastMonth = monthly[monthly.length - 1] || {};
+  const prevMonth = monthly[monthly.length - 2] || {};
+  const avgDailySales = (lastMonth.sales || 0) / 30;
+
+  const liquidityScore = avgDailySales > 0
+    ? clamp((cashBalance / (avgDailySales * 7)) * 100, 0, 100)
+    : (cashBalance > 0 ? 75 : 25);
+
+  const totalSalesRef = Math.max(lastMonth.sales || 0, 1);
+  const debtRatio = totalDebtors / totalSalesRef;
+  const debtScore = clamp(100 - debtRatio * 100, 0, 100);
+
+  let profitScore = 60;
+  if (isAdmin && prevMonth.profit !== undefined) {
+    const growth = prevMonth.profit !== 0 ? (lastMonth.profit - prevMonth.profit) / Math.abs(prevMonth.profit) : (lastMonth.profit > 0 ? 1 : 0);
+    profitScore = clamp(50 + growth * 100, 0, 100);
+  }
+
+  const stockScore = totalItems > 0 ? clamp(100 * (1 - lowStockCount / totalItems), 0, 100) : 100;
+
+  const metrics = [
+    { key: 'liquidity', name: 'نقدینگی', value: Math.round(liquidityScore), color: '#4F46E5', weight: 0.3 },
+    { key: 'debt', name: 'بدهی', value: Math.round(debtScore), color: '#F59E0B', weight: 0.25 },
+    { key: 'profit', name: 'سودآوری', value: Math.round(profitScore), color: '#10B981', weight: 0.25 },
+    { key: 'stock', name: 'موجودی', value: Math.round(stockScore), color: '#06B6D4', weight: 0.2 },
+  ];
+  const overall = Math.round(metrics.reduce((s, m) => s + m.value * m.weight, 0));
+
+  const label = overall >= 80 ? { text: 'عالی', color: 'var(--accent)' }
+    : overall >= 60 ? { text: 'خوب', color: 'var(--primary)' }
+    : overall >= 40 ? { text: 'متوسط', color: 'var(--warning)' }
+    : { text: 'نیاز به توجه', color: 'var(--danger)' };
+
+  drawHealthRings($('#health-rings-svg'), metrics.map(m => ({ value: m.value, color: m.color })));
+  $('#health-score-num').textContent = toFaDigits(overall) + '/۱۰۰';
+  $('#health-score-label').textContent = label.text;
+  $('#health-score-label').style.color = label.color;
+  $('#health-score-legend').innerHTML = metrics.map(m => `
+    <div class="hsl-item">
+      <div class="hsl-value" style="color:${m.color}">${toFaDigits(m.value)}٪</div>
+      <div class="hsl-name"><span class="hsl-dot" style="background:${m.color}"></span>${m.name}</div>
+    </div>`).join('');
+}
+
 const ICONS = {
   sales: '<svg viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>',
   profit: '<svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
@@ -855,17 +1048,20 @@ async function loadDashboard() {
     </div>`).join('');
   animateKpiCounters();
 
+  // ---- امتیاز سلامت مالی ----
+  renderHealthScore({ cashBalance: cash ? cash.balance : 0, totalDebtors: data.total_debtors || 0, totalItems: (items || []).length, lowStockCount: (data.low_stock_items || []).length, monthly: monthly || [], isAdmin });
+
   // ---- نمودار خطی فروش/سود ماهانه ----
   if (monthly) {
-    const series = [{ name: 'فروش', color: '#1B4A79', values: monthly.map(m => m.sales || 0) }];
-    if (isAdmin) series.push({ name: 'سود', color: '#1B9C6B', values: monthly.map(m => m.profit || 0) });
+    const series = [{ name: 'فروش', color: '#4F46E5', values: monthly.map(m => m.sales || 0) }];
+    if (isAdmin) series.push({ name: 'سود', color: '#10B981', values: monthly.map(m => m.profit || 0) });
     drawLineChart($('#dashboard-chart'), monthly.map(m => toJalaliMonthLabel(m.month)), series);
   }
 
   // ---- دونات وضعیت مالی ----
   const financeSlices = [
-    { label: 'ارزش موجودی کالا', value: inventoryValue, color: '#14375E' },
-    { label: 'موجودی صندوق', value: cash ? Math.max(cash.balance, 0) : 0, color: '#1B9C6B' },
+    { label: 'ارزش موجودی کالا', value: inventoryValue, color: '#4F46E5' },
+    { label: 'موجودی صندوق', value: cash ? Math.max(cash.balance, 0) : 0, color: '#10B981' },
     { label: 'طلب از مشتریان', value: data.total_debtors || 0, color: '#F59E0B' },
   ];
   drawDonutChart($('#finance-donut'), financeSlices.map(s => s.value), financeSlices.map(s => s.color));
@@ -2161,6 +2357,11 @@ $('#btn-save-telegram').addEventListener('click', async () => {
 $('#btn-test-telegram').addEventListener('click', async () => {
   const res = await api('POST', '/settings/telegram/test');
   if (res && res.ok) toast('پیام تستی ارسال شد — تلگرام را چک کن', 'success');
+  else if (res) toast(res.message || 'خطا در ارسال', 'danger');
+});
+$('#btn-weekly-recap-now').addEventListener('click', async () => {
+  const res = await api('POST', '/weekly-recap/run-now');
+  if (res && res.ok) toast('خلاصه هفتگی ارسال شد — تلگرام را چک کن', 'success');
   else if (res) toast(res.message || 'خطا در ارسال', 'danger');
 });
 function renderLogoPreview(logoUrl) {

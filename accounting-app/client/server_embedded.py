@@ -1664,6 +1664,37 @@ def nightly_run_now():
     return jsonify(result)
 
 
+def run_weekly_recap():
+    text = notifier.build_weekly_summary(get_connection)
+    notify_telegram_async(text)
+
+
+def weekly_recap_loop():
+    """هر یکشنبه ساعت ۹ صبح یک‌بار خلاصه‌ی هفتگی فروش را به تلگرام صاحب مغازه می‌فرستد
+    (نیاز به تنظیم تلگرام در بخش تنظیمات کلی دارد؛ در غیر این صورت بی‌صدا نادیده گرفته می‌شود)"""
+    last_run_date = None
+    while True:
+        now_dt = datetime.now()
+        today_str = now_dt.strftime("%Y-%m-%d")
+        if now_dt.weekday() == 6 and now_dt.hour == 9 and today_str != last_run_date:
+            try:
+                run_weekly_recap()
+            except Exception as e:
+                print("خطا در ارسال خلاصه هفتگی:", e)
+            last_run_date = today_str
+        time.sleep(300)
+
+
+@app.route("/weekly-recap/run-now", methods=["POST"])
+def weekly_recap_run_now():
+    """برای تست دستی: بلافاصله خلاصه هفتگی را به تلگرام می‌فرستد"""
+    err = require_admin()
+    if err:
+        return err
+    run_weekly_recap()
+    return jsonify({"ok": True})
+
+
 @app.route("/reports/monthly", methods=["GET"])
 def report_monthly():
     """خلاصه فروش، خرید و سود هر ماه برای ۱۲ ماه اخیر (بر اساس ماه‌های میلادی ثبت‌شده در دیتابیس)"""
@@ -2360,7 +2391,10 @@ def run_embedded(port=5050):
     init_db()
     threading.Thread(target=backup_loop, daemon=True).start()
     threading.Thread(target=nightly_loop, daemon=True).start()
+    threading.Thread(target=weekly_recap_loop, daemon=True).start()
     app.run(host="127.0.0.1", port=port, threaded=True, use_reloader=False, debug=False)
+
+
 
 
 
@@ -2369,6 +2403,7 @@ if __name__ == "__main__":
     init_db()
     threading.Thread(target=backup_loop, daemon=True).start()
     threading.Thread(target=nightly_loop, daemon=True).start()
+    threading.Thread(target=weekly_recap_loop, daemon=True).start()
     print("=" * 50)
     print("سرور حسابداری در حال اجراست...")
     print("این پنجره را باز نگه دارید تا کلاینت‌ها بتوانند وصل شوند.")

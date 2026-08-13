@@ -167,7 +167,7 @@ def build_invoice_html(invoice, items, party, page_format="A5",
   .footer {{ text-align: center; margin-top: 16px; font-size: {'10px' if is_thermal else '12px'}; color: #555; border-top: 1px solid #ccc; padding-top: 8px; }}
   .print-btn {{
     display: block; margin: 14px auto; padding: 10px 26px; font-size: 14px; cursor: pointer;
-    background: #14375E; color: #fff; border: none; border-radius: 6px;
+    background: #4F46E5; color: #fff; border: none; border-radius: 6px;
   }}
   @media print {{ .print-btn {{ display: none; }} }}
 </style>
@@ -281,7 +281,7 @@ def build_statement_html(party, invoices, shop_name="حسابداری", shop_pho
   .footer {{ text-align: center; margin-top: 16px; font-size: 12px; color: #555; border-top: 1px solid #ccc; padding-top: 8px; }}
   .print-btn {{
     display: block; margin: 14px auto; padding: 10px 26px; font-size: 14px; cursor: pointer;
-    background: #14375E; color: #fff; border: none; border-radius: 6px;
+    background: #4F46E5; color: #fff; border: none; border-radius: 6px;
   }}
   @media print {{ .print-btn {{ display: none; }} }}
 </style>
@@ -375,7 +375,7 @@ def build_labels_html(items):
   .label-price {{ font-size: 14px; font-weight: bold; margin-top: 4px; }}
   .print-btn {{
     display: block; margin: 14px auto; padding: 10px 26px; font-size: 14px; cursor: pointer;
-    background: #14375E; color: #fff; border: none; border-radius: 6px;
+    background: #4F46E5; color: #fff; border: none; border-radius: 6px;
   }}
   @media print {{ .print-btn {{ display: none; }} }}
 </style>
