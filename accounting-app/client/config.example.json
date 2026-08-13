@@ -2,7 +2,8 @@
   "ai": {
     "enabled": true,
     "api_key": "sk-ant-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-    "model": "claude-haiku-4-5-20251001"
+    "model": "claude-haiku-4-5-20251001",
+    "assistant_model": "claude-haiku-4-5-20251001"
   },
   "shop": {
     "name": "فروشگاه لوازم الکتریکی شما",

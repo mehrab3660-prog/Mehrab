@@ -22,6 +22,7 @@ import pdf_generator
 import invoice_html
 import invoice_ai
 import invoice_ocr_free
+import assistant_ai
 from paths import get_base_dir, get_bundle_dir
 
 SETTINGS_PATH = os.path.join(get_base_dir(), "shop_settings.json")
@@ -2231,6 +2232,26 @@ def analyze_invoice_photo():
     if not ok:
         return jsonify({"ok": False, "message": data}), 400
     return jsonify({"ok": True, "data": data, "method": "ai"})
+
+
+@app.route("/assistant/ask", methods=["POST"])
+def assistant_ask():
+    """دستیار هوشمند برنامه — فقط درباره‌ی نحوه‌ی کار با خود برنامه پاسخ می‌دهد
+    (نیاز به اینترنت و همان کلید API که برای اسکن فاکتور خرید در config.json تنظیم شده دارد)"""
+    d = request.json or {}
+    question = d.get("question", "")
+    history = d.get("history", [])
+
+    cfg = notifier.load_config() or {}
+    ai_cfg = cfg.get("ai", {})
+    if not ai_cfg.get("enabled") or not ai_cfg.get("api_key"):
+        return jsonify({"ok": False, "message": "دستیار هوشمند فعال نیست. مدیر باید فایل config.json را بسازد و بخش \"ai\" را طبق راهنما پر کند."}), 400
+
+    model = ai_cfg.get("assistant_model") or ai_cfg.get("model", "claude-haiku-4-5-20251001")
+    ok, answer = assistant_ai.ask_assistant(question, history, ai_cfg.get("api_key"), model)
+    if not ok:
+        return jsonify({"ok": False, "message": answer}), 400
+    return jsonify({"ok": True, "answer": answer})
 
 
 @app.route("/items/apply-bulk-prices", methods=["POST"])

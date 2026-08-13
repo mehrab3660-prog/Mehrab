@@ -406,6 +406,56 @@ function enterApp() {
   $('#user-role').textContent = state.user.role === 'admin' ? 'مدیر' : 'کارمند';
   if (state.user.role !== 'admin') $$('.admin-only').forEach(el => el.style.display = 'none');
   initApp();
+  bindAssistant();
+}
+
+// ===================== دستیار هوشمند =====================
+let assistantBound = false;
+let assistantHistory = [];
+let assistantBusy = false;
+function bindAssistant() {
+  if (assistantBound) return;
+  assistantBound = true;
+  $('#assistant-fab').addEventListener('click', () => {
+    $('#assistant-panel').classList.toggle('hidden');
+    if (!$('#assistant-panel').classList.contains('hidden')) $('#assistant-input').focus();
+  });
+  $('#assistant-close-btn').addEventListener('click', () => $('#assistant-panel').classList.add('hidden'));
+  $('#assistant-send-btn').addEventListener('click', sendAssistantMessage);
+  $('#assistant-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendAssistantMessage(); });
+}
+
+function addAssistantMsg(text, cls) {
+  const box = $('#assistant-messages');
+  const div = document.createElement('div');
+  div.className = 'assistant-msg ' + cls;
+  div.textContent = text;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  return div;
+}
+
+async function sendAssistantMessage() {
+  if (assistantBusy) return;
+  const input = $('#assistant-input');
+  const question = input.value.trim();
+  if (!question) return;
+  input.value = '';
+  addAssistantMsg(question, 'assistant-msg-user');
+  const thinkingEl = addAssistantMsg('در حال فکر کردن...', 'assistant-msg-bot');
+  assistantBusy = true;
+  const res = await api('POST', '/assistant/ask', { question, history: assistantHistory });
+  assistantBusy = false;
+  if (!res) { thinkingEl.remove(); return; }
+  if (res.ok) {
+    thinkingEl.textContent = res.answer;
+    assistantHistory.push({ role: 'user', content: question });
+    assistantHistory.push({ role: 'assistant', content: res.answer });
+    if (assistantHistory.length > 20) assistantHistory = assistantHistory.slice(-20);
+  } else {
+    thinkingEl.className = 'assistant-msg assistant-msg-error';
+    thinkingEl.textContent = res.message || 'خطایی رخ داد';
+  }
 }
 
 $('#fp-submit-btn').addEventListener('click', async () => {
