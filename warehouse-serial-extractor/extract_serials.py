@@ -25,9 +25,16 @@
 """
 
 import argparse
+import os
 import re
 import sys
 from urllib.parse import urljoin
+
+if getattr(sys, "frozen", False):
+    # وقتی این فایل با PyInstaller به یک exe مستقل تبدیل شده، مرورگر کرومیوم
+    # همراه خودِ برنامه (نه در یک پوشه سراسری روی سیستم) نصب شده است؛ همین
+    # env var به Playwright می‌گوید مرورگر را از همان‌جا بردارد.
+    os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "0")
 
 from bs4 import BeautifulSoup
 from playwright.sync_api import Error as PlaywrightError
@@ -275,4 +282,19 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    exit_code = 0
+    try:
+        main()
+    except SystemExit as e:
+        exit_code = e.code or 0
+    except Exception as e:
+        # وقتی این فایل به exe تبدیل شده و با دابل‌کلیک اجرا می‌شود، به محض
+        # تمام شدن برنامه (حتی با خطا) پنجره سیاه بسته می‌شود. این پیام و
+        # مکث، خطا را قابل خواندن نگه می‌دارد.
+        print(f"\n[خطا] {e}")
+        exit_code = 1
+
+    if getattr(sys, "frozen", False):
+        input("\nEnter را بزنید تا بسته شود... ")
+
+    sys.exit(exit_code)
