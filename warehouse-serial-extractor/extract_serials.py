@@ -35,22 +35,54 @@ import sys
 import time
 from urllib.parse import urljoin
 
-import requests
-from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.common.exceptions import (
-    NoSuchWindowException,
-    StaleElementReferenceException,
-    WebDriverException,
-)
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from webdriver_manager.chrome import ChromeDriverManager
-
 DEFAULT_START_URL = "https://gas.symfa.ir/TestCenters/GasReception"
 
-TRANSIENT_ERRORS = (StaleElementReferenceException, NoSuchWindowException, WebDriverException)
+# این‌ها در import_dependencies() پر می‌شوند، نه همین بالا. اگر این
+# import ها همین‌جا (سطح فایل) بودند و یکی‌شان روی سیستم کاربر خطا می‌داد
+# (مثلاً به‌خاطر یک DLL یا نسخه ناسازگار)، برنامه قبل از رسیدن به try/except
+# داخل __main__ کرش می‌کرد و پنجره کنسول بدون نمایش هیچ پیامی فوراً بسته
+# می‌شد. با آوردنشان داخل یک تابع که از داخل try/except صدا زده می‌شود،
+# حتی خطای import هم دیده و روی صفحه چاپ می‌شود.
+requests = None
+BeautifulSoup = None
+webdriver = None
+NoSuchWindowException = None
+StaleElementReferenceException = None
+WebDriverException = None
+Options = None
+Service = None
+By = None
+ChromeDriverManager = None
+TRANSIENT_ERRORS = ()
+
+
+def import_dependencies():
+    global requests, BeautifulSoup, webdriver
+    global NoSuchWindowException, StaleElementReferenceException, WebDriverException
+    global Options, Service, By, ChromeDriverManager, TRANSIENT_ERRORS
+
+    import requests as _requests
+    from bs4 import BeautifulSoup as _BeautifulSoup
+    from selenium import webdriver as _webdriver
+    from selenium.common.exceptions import NoSuchWindowException as _NoSuchWindowException
+    from selenium.common.exceptions import StaleElementReferenceException as _StaleElementReferenceException
+    from selenium.common.exceptions import WebDriverException as _WebDriverException
+    from selenium.webdriver.chrome.options import Options as _Options
+    from selenium.webdriver.chrome.service import Service as _Service
+    from selenium.webdriver.common.by import By as _By
+    from webdriver_manager.chrome import ChromeDriverManager as _ChromeDriverManager
+
+    requests = _requests
+    BeautifulSoup = _BeautifulSoup
+    webdriver = _webdriver
+    NoSuchWindowException = _NoSuchWindowException
+    StaleElementReferenceException = _StaleElementReferenceException
+    WebDriverException = _WebDriverException
+    Options = _Options
+    Service = _Service
+    By = _By
+    ChromeDriverManager = _ChromeDriverManager
+    TRANSIENT_ERRORS = (StaleElementReferenceException, NoSuchWindowException, WebDriverException)
 
 
 def wait_for_page_to_settle(driver, timeout=15):
@@ -330,14 +362,17 @@ def main():
 if __name__ == "__main__":
     exit_code = 0
     try:
+        import_dependencies()
         main()
     except SystemExit as e:
         exit_code = e.code or 0
-    except Exception as e:
+    except Exception:
         # وقتی این فایل به exe تبدیل شده و با دابل‌کلیک اجرا می‌شود، به محض
         # تمام شدن برنامه (حتی با خطا) پنجره سیاه بسته می‌شود. این پیام و
-        # مکث، خطا را قابل خواندن نگه می‌دارد.
-        print(f"\n[خطا] {e}")
+        # مکث، خطا (با جزئیات کامل) را قابل خواندن نگه می‌دارد.
+        import traceback
+        print("\n[خطا]")
+        traceback.print_exc()
         exit_code = 1
 
     if getattr(sys, "frozen", False):
