@@ -3,7 +3,7 @@
 (gas.symfa.ir) برای مراکز معاینه فنی خودروهای گازسوز.
 
 نحوه کار:
-1. یک مرورگر واقعی (غیر مخفی) باز می‌شود.
+1. یک مرورگر Chrome واقعی (همان Chrome نصب‌شده روی سیستم شما) باز می‌شود.
 2. خودتان به‌صورت دستی وارد سامانه می‌شوید (نام کاربری/رمز عبور شما هرگز داخل
    این اسکریپت ذخیره یا وارد نمی‌شود).
 3. خودتان به صفحه «پذیرش‌های گازسوز» می‌روید، بازه تاریخ موردنظر (از تاریخ /
@@ -20,58 +20,64 @@
 
 اجرا:
     pip install -r requirements.txt
-    playwright install chromium
     python extract_serials.py --out result.xlsx
+
+توجه: این ابزار مرورگر Chrome نصب‌شده روی خودِ سیستم شما را باز می‌کند (نه
+یک نسخه جدا و دانلودی)، پس Google Chrome باید از قبل روی سیستم نصب باشد.
+بار اول که اجرا می‌کنید، به یک درایور کوچک (chromedriver) نیاز دارد که
+خودش به‌صورت خودکار متناسب با نسخه Chrome شما دانلود می‌شود (به اینترنت
+نیاز دارد، فقط همان بار اول).
 """
 
 import argparse
-import os
 import re
 import sys
+import time
 from urllib.parse import urljoin
 
-if getattr(sys, "frozen", False):
-    # وقتی این فایل با PyInstaller به یک exe مستقل تبدیل شده، مرورگر کرومیوم
-    # همراه خودِ برنامه (نه در یک پوشه سراسری روی سیستم) نصب شده است؛ همین
-    # env var به Playwright می‌گوید مرورگر را از همان‌جا بردارد.
-    os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "0")
-
+import requests
 from bs4 import BeautifulSoup
-from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import sync_playwright
+from selenium import webdriver
+from selenium.common.exceptions import (
+    NoSuchWindowException,
+    StaleElementReferenceException,
+    WebDriverException,
+)
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
 
 DEFAULT_START_URL = "https://gas.symfa.ir/TestCenters/GasReception"
 
+TRANSIENT_ERRORS = (StaleElementReferenceException, NoSuchWindowException, WebDriverException)
 
-def wait_for_page_to_settle(page, timeout_ms=15000):
+
+def wait_for_page_to_settle(driver, timeout=15):
     """صبر می‌کند تا صفحه کاملاً بارگذاری و آرام شود (بعضی صفحات این سایت
-    بعد از رسیدن به networkidle یک بار دیگر navigate/redirect می‌کنند)."""
-    try:
-        page.wait_for_load_state("load", timeout=timeout_ms)
-    except PlaywrightError:
-        pass
-    try:
-        page.wait_for_load_state("networkidle", timeout=timeout_ms)
-    except PlaywrightError:
-        pass
-    page.wait_for_timeout(700)
+    بعد از بارگذاری اول یک بار دیگر navigate/redirect می‌کنند)."""
+    end = time.time() + timeout
+    while time.time() < end:
+        try:
+            if driver.execute_script("return document.readyState") == "complete":
+                break
+        except TRANSIENT_ERRORS:
+            pass
+        time.sleep(0.3)
+    time.sleep(0.7)
 
 
-def retry_on_navigation(func, retries=5, delay_ms=800):
+def retry_on_navigation(func, retries=5, delay=0.8):
     """چون گاهی درست همان لحظه‌ای که داریم صفحه را می‌خوانیم، سایت یک
-    navigation/redirect دیگر انجام می‌دهد، این تابع در صورت خطای
-    'Execution context was destroyed' چند بار دوباره تلاش می‌کند."""
+    navigation/redirect دیگر انجام می‌دهد، این تابع در صورت خطاهای گذرا
+    (مثل stale element) چند بار دوباره تلاش می‌کند."""
     last_err = None
     for attempt in range(retries):
         try:
             return func()
-        except PlaywrightError as e:
-            if "context was destroyed" in str(e) or "Target closed" in str(e):
-                last_err = e
-                import time as _time
-                _time.sleep(delay_ms / 1000)
-                continue
-            raise
+        except TRANSIENT_ERRORS as e:
+            last_err = e
+            time.sleep(delay)
     raise last_err
 
 
@@ -87,13 +93,14 @@ def parse_manufacturer_serial(raw_text):
     return text, ""
 
 
-def find_reception_ids(page):
+def find_reception_ids(driver):
     """کد پذیرش (ReceptionId) تمام ردیف‌هایی که دکمه «چاپ نتایج» دارند را از
     صفحه فعلی لیست پذیرش‌ها برمی‌دارد."""
-    hrefs = retry_on_navigation(lambda: page.eval_on_selector_all(
-        "a[href*='PrintResult']",
-        "elements => elements.map(e => e.getAttribute('href'))",
-    ))
+    def _read():
+        links = driver.find_elements(By.CSS_SELECTOR, "a[href*='PrintResult']")
+        return [el.get_attribute("href") for el in links]
+
+    hrefs = retry_on_navigation(_read)
     ids = []
     for href in hrefs:
         match = re.search(r"ReceptionId=(\d+)", href or "")
@@ -153,26 +160,42 @@ def extract_plate_from_soup(soup):
     return ""
 
 
-def click_page_number(page, next_number):
+def click_page_number(driver, next_number):
     """روی لینک/دکمه شماره صفحه بعدی در نوار صفحه‌بندی کلیک می‌کند."""
     candidates = [
-        f"xpath=//a[normalize-space(text())='{next_number}']",
-        f"xpath=//button[normalize-space(text())='{next_number}']",
-        f"xpath=//li[normalize-space(text())='{next_number}']",
+        f"//a[normalize-space(text())='{next_number}']",
+        f"//button[normalize-space(text())='{next_number}']",
+        f"//li[normalize-space(text())='{next_number}']",
     ]
-    for selector in candidates:
-        locator = page.locator(selector)
+    for xpath in candidates:
         try:
-            found = locator.count() > 0 and locator.first.is_visible()
-        except PlaywrightError:
-            found = False
-        if found:
+            elements = driver.find_elements(By.XPATH, xpath)
+        except TRANSIENT_ERRORS:
+            continue
+        for el in elements:
             try:
-                locator.first.click()
-            except PlaywrightError:
-                pass
-            return True
+                if el.is_displayed():
+                    el.click()
+                    return True
+            except TRANSIENT_ERRORS:
+                continue
     return False
+
+
+def build_session_from_driver(driver):
+    """یک requests.Session با همان کوکی‌های نشست فعلی مرورگر می‌سازد، تا
+    بشود صفحه «چاپ نتایج» هر پذیرش را مستقیم (بدون باز کردن تب جدید در
+    مرورگر) و سریع خواند."""
+    session = requests.Session()
+    try:
+        user_agent = driver.execute_script("return navigator.userAgent")
+        if user_agent:
+            session.headers.update({"User-Agent": user_agent})
+    except TRANSIENT_ERRORS:
+        pass
+    for cookie in driver.get_cookies():
+        session.cookies.set(cookie["name"], cookie["value"], domain=cookie.get("domain"))
+    return session
 
 
 def save_to_excel(all_rows, out_path):
@@ -204,6 +227,25 @@ def save_to_excel(all_rows, out_path):
     wb.save(out_path)
 
 
+def launch_chrome():
+    print("در حال آماده‌سازی مرورگر (بار اول ممکن است چند ثانیه طول بکشد)...")
+    try:
+        driver_path = ChromeDriverManager().install()
+    except Exception as e:
+        print(f"[خطا] پیدا کردن/دانلود درایور Chrome ناموفق بود: {e}")
+        print("مطمئن شوید Google Chrome نصب است و به اینترنت متصل هستید.")
+        sys.exit(1)
+
+    options = Options()
+    options.add_argument("--start-maximized")
+    try:
+        return webdriver.Chrome(service=Service(driver_path), options=options)
+    except WebDriverException as e:
+        print(f"[خطا] باز کردن Chrome ناموفق بود: {e}")
+        print("مطمئن شوید Google Chrome روی این سیستم نصب است.")
+        sys.exit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--start-url", default=DEFAULT_START_URL, help="آدرس صفحه پذیرش‌های گازسوز")
@@ -211,24 +253,24 @@ def main():
     parser.add_argument("--max-pages", type=int, default=500, help="سقف تعداد صفحات برای جلوگیری از حلقه بی‌نهایت")
     args = parser.parse_args()
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
-        context = browser.new_context()
-        page = context.new_page()
-        page.goto(args.start_url)
+    driver = launch_chrome()
+    all_rows = []
+
+    try:
+        driver.get(args.start_url)
 
         print("مرورگر باز شد.")
         print("لطفاً به‌صورت دستی وارد سامانه شوید، به بخش «پذیرش‌های گازسوز» بروید،")
         print("بازه تاریخ موردنظر را وارد کنید و روی «جستجو» بزنید.")
         input("وقتی صفحه اول نتایج (لیست پذیرش‌ها) باز شد، اینجا Enter را بزنید... ")
 
-        all_rows = []
         seen_reception_ids = set()
         page_number = 1
 
         while page_number <= args.max_pages:
-            wait_for_page_to_settle(page)
-            reception_ids = find_reception_ids(page)
+            wait_for_page_to_settle(driver)
+            session = build_session_from_driver(driver)
+            reception_ids = find_reception_ids(driver)
             new_ids = [rid for rid in reception_ids if rid not in seen_reception_ids]
 
             if not new_ids and page_number > 1:
@@ -238,13 +280,17 @@ def main():
             print(f"صفحه {page_number}: {len(new_ids)} پذیرش دارای نتیجه پیدا شد.")
             for reception_id in new_ids:
                 seen_reception_ids.add(reception_id)
-                print_url = urljoin(page.url, f"/TestCenters/GasReception/PrintResult?ReceptionId={reception_id}")
-                response = context.request.get(print_url)
+                print_url = urljoin(driver.current_url, f"/TestCenters/GasReception/PrintResult?ReceptionId={reception_id}")
+                try:
+                    response = session.get(print_url, timeout=30)
+                except requests.RequestException as e:
+                    print(f"  - پذیرش {reception_id}: خطا در بارگذاری صفحه نتیجه ({e})")
+                    continue
                 if not response.ok:
-                    print(f"  - پذیرش {reception_id}: خطا در بارگذاری صفحه نتیجه ({response.status})")
+                    print(f"  - پذیرش {reception_id}: خطا در بارگذاری صفحه نتیجه ({response.status_code})")
                     continue
 
-                soup = BeautifulSoup(response.text(), "html.parser")
+                soup = BeautifulSoup(response.text, "html.parser")
                 tank_lines = extract_tanks_from_soup(soup)
                 if not tank_lines:
                     print(f"  - پذیرش {reception_id}: خط «سریال مخزن» پیدا نشد.")
@@ -265,13 +311,13 @@ def main():
 
             print(f"مجموع تا این‌جا: {len(all_rows)} ردیف.")
 
-            if not click_page_number(page, page_number + 1):
+            if not click_page_number(driver, page_number + 1):
                 print("صفحه بعدی پیدا نشد، پایان استخراج.")
                 break
 
             page_number += 1
-
-        browser.close()
+    finally:
+        driver.quit()
 
     if not all_rows:
         print("هیچ داده‌ای استخراج نشد.")

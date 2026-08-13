@@ -1,3 +1,5 @@
-playwright==1.47.0
+selenium==4.27.0
+webdriver-manager==4.1.2
+requests==2.32.3
 openpyxl==3.1.5
 beautifulsoup4==4.12.3

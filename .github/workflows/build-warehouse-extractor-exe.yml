@@ -20,7 +20,10 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          # پایتون ۳.۹ به بعد دیگه از ویندوز ۷ پشتیبانی نمی‌کنه (به DLL هایی مثل
+          # api-ms-win-core-path-l1-1-0.dll نیاز داره که تو ویندوز ۷ نیست).
+          # ۳.۸ آخرین نسخه‌ی کاملاً سازگار با ویندوز ۷ هست.
+          python-version: "3.8"
 
       - name: Install dependencies
         shell: bash
@@ -30,20 +33,11 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install pyinstaller
 
-      - name: Download Chromium (bundled next to the program)
-        shell: bash
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: "0"
-        run: |
-          set -e
-          python -m playwright install chromium
-          python -m playwright install-deps chromium || true
-
       - name: Build exe
         shell: bash
         run: |
           set -e
-          python -m PyInstaller --name WarehouseSerialExtractor --collect-all playwright --noconfirm extract_serials.py
+          python -m PyInstaller --name WarehouseSerialExtractor --collect-all selenium --collect-all webdriver_manager --noconfirm extract_serials.py
 
       - name: Build installer (Inno Setup)
         shell: pwsh

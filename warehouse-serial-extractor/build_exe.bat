@@ -14,7 +14,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo [1/4] Installing/updating requirements...
+echo [1/3] Installing/updating requirements...
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python -m pip install pyinstaller
@@ -25,20 +25,12 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/4] Downloading Chromium (bundled next to the program, so the final
-echo        folder works on other PCs with no separate install step)...
-set PLAYWRIGHT_BROWSERS_PATH=0
-python -m playwright install chromium
-if errorlevel 1 (
-    echo [ERROR] Downloading Chromium failed. Check your internet connection and try again.
-    pause
-    exit /b 1
-)
-
+echo NOTE: this program drives the Google Chrome already installed on the
+echo target PC (it does not download/bundle its own browser), so Google
+echo Chrome must be installed there.
 echo.
-echo [3/4] Building exe (this may take a few minutes; the output folder is
-echo        large because Chromium is bundled inside it)...
-python -m PyInstaller --name WarehouseSerialExtractor --collect-all playwright --noconfirm extract_serials.py
+echo [2/3] Building exe (this may take a minute or two)...
+python -m PyInstaller --name WarehouseSerialExtractor --collect-all selenium --collect-all webdriver_manager --noconfirm extract_serials.py
 
 echo.
 if not exist "dist\WarehouseSerialExtractor\WarehouseSerialExtractor.exe" (
@@ -48,7 +40,7 @@ if not exist "dist\WarehouseSerialExtractor\WarehouseSerialExtractor.exe" (
     exit /b 1
 )
 
-echo [4/4] Building single-file installer with Inno Setup...
+echo [3/3] Building single-file installer with Inno Setup...
 set ISCC="C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 if not exist %ISCC% set ISCC="C:\Program Files\Inno Setup 6\ISCC.exe"
 if exist %ISCC% (
