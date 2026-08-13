@@ -45,8 +45,13 @@ jobs:
           set -e
           python -m PyInstaller --name WarehouseSerialExtractor --collect-all playwright --noconfirm extract_serials.py
 
-      - name: Upload exe folder artifact
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+
+      - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WarehouseSerialExtractor-windows
-          path: warehouse-serial-extractor/dist/WarehouseSerialExtractor
+          name: WarehouseSerialExtractorSetup
+          path: warehouse-serial-extractor/installer_output/WarehouseSerialExtractorSetup.exe

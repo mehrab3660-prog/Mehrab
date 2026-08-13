@@ -41,16 +41,29 @@ echo        large because Chromium is bundled inside it)...
 python -m PyInstaller --name WarehouseSerialExtractor --collect-all playwright --noconfirm extract_serials.py
 
 echo.
-if exist "dist\WarehouseSerialExtractor\WarehouseSerialExtractor.exe" (
-    echo [4/4] Build completed successfully!
-    echo.
-    echo New program folder: %cd%\dist\WarehouseSerialExtractor
-    echo.
-    echo Copy the WHOLE "WarehouseSerialExtractor" folder ^(not just the .exe^)
-    echo to any Windows PC and double-click WarehouseSerialExtractor.exe there.
-    echo No Python, pip, or "playwright install" needed on that PC.
-) else (
+if not exist "dist\WarehouseSerialExtractor\WarehouseSerialExtractor.exe" (
     echo [ERROR] Build failed. Check the messages above.
+    echo.
+    pause
+    exit /b 1
+)
+
+echo [4/4] Building single-file installer with Inno Setup...
+set ISCC="C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+if not exist %ISCC% set ISCC="C:\Program Files\Inno Setup 6\ISCC.exe"
+if exist %ISCC% (
+    %ISCC% installer.iss
+    echo.
+    echo Build completed successfully!
+    echo.
+    echo Installer: %cd%\installer_output\WarehouseSerialExtractorSetup.exe
+    echo Send just this ONE file to any Windows PC and double-click it to install.
+) else (
+    echo [WARNING] Inno Setup not found, so only the plain folder was built ^(no installer^).
+    echo Install Inno Setup 6 from https://jrsoftware.org/isdl.php and run this again to
+    echo get a single Setup.exe, or just copy the whole folder below to another PC:
+    echo.
+    echo Program folder: %cd%\dist\WarehouseSerialExtractor
 )
 
 echo.
