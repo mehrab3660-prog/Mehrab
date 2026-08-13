@@ -10,8 +10,10 @@
    تا تاریخ) را وارد کرده و روی «جستجو» کلیک می‌کنید تا صفحه اول نتایج باز شود.
 4. در ترمینال کلید Enter را می‌زنید تا اسکریپت شروع به کار کند.
 5. اسکریپت برای هر ردیفی که دکمه «چاپ نتایج» دارد، به‌صورت خودکار صفحه
-   نتیجه آزمون همان پذیرش را می‌خواند و «شماره پذیرش»، «نام سازنده» و
-   «سریال مخزن» (برای همه مخزن‌های همان پذیرش) را استخراج می‌کند.
+   نتیجه آزمون همان پذیرش را می‌خواند و «شماره پذیرش»، «پلاک»، «نام سازنده»
+   و «سریال مخزن» را استخراج می‌کند. اگر پذیرشی دو مخزن داشته باشد (خودروی
+   دوگانه‌سوز با دو مخزن)، برای هر مخزن یک ردیف جدا با همان پلاک ساخته
+   می‌شود.
 6. روی شماره صفحه بعدی (۲، ۳، ...) کلیک می‌کند و همین کار را تکرار می‌کند
    تا به آخرین صفحه برسد.
 7. در پایان یک فایل Excel با نتایج ساخته می‌شود.
@@ -99,8 +101,8 @@ def _has_value_after_colon(text):
     return bool(text.split(":", 1)[-1].strip())
 
 
-def extract_tanks_from_print_page(html):
-    """از HTML صفحه «چاپ نتایج» تمام خط‌های «... سریال مخزن: مقدار» را
+def extract_tanks_from_soup(soup):
+    """از soup صفحه «چاپ نتایج» تمام خط‌های «... سریال مخزن: مقدار» را
     پیدا می‌کند (ممکن است یک پذیرش چند مخزن داشته باشد).
 
     برچسب «سریال مخزن» معمولاً داخل یک <span> است و مقدار آن به‌صورت متن
@@ -108,7 +110,6 @@ def extract_tanks_from_print_page(html):
     کوچک‌ترین عنصری را برداریم که هم برچسب و هم مقدار را با هم دارد، نه
     خودِ <span> برچسب (که مقدار را ندارد) و نه یک عنصر خیلی بزرگ‌تر که چند
     فیلد را با هم قاطی می‌کند."""
-    soup = BeautifulSoup(html, "html.parser")
     tank_lines = []
     for el in soup.find_all(True):
         text = el.get_text(" ", strip=True)
@@ -126,6 +127,23 @@ def extract_tanks_from_print_page(html):
 
         tank_lines.append(text)
     return tank_lines
+
+
+def extract_plate_from_soup(soup):
+    """شماره پلاک را از جدول مشخصات صفحه «چاپ نتایج» پیدا می‌کند. در آن جدول
+    هر سلول برچسب («شماره پلاک») بلافاصله قبل از سلول مقدار خودش می‌آید."""
+    for el in soup.find_all(True):
+        if el.find(True):
+            continue  # فقط عناصر برگ (بدون تگ فرزند) می‌توانند برچسب باشند
+        label = el.get_text(strip=True)
+        if label != "شماره پلاک":
+            continue
+        value_el = el.find_next_sibling(True)
+        if value_el is not None:
+            value = value_el.get_text(strip=True)
+            if value:
+                return value
+    return ""
 
 
 def click_page_number(page, next_number):
@@ -158,7 +176,7 @@ def save_to_excel(all_rows, out_path):
     ws.title = "نتایج"
     ws.sheet_view.rightToLeft = True
 
-    headers = ["شماره پذیرش", "نام سازنده", "سریال مخزن"]
+    headers = ["شماره پذیرش", "پلاک", "نام سازنده", "سریال مخزن"]
     ws.append(headers)
     for row in all_rows:
         ws.append([row[h] for h in headers])
@@ -210,19 +228,22 @@ def main():
                     print(f"  - پذیرش {reception_id}: خطا در بارگذاری صفحه نتیجه ({response.status})")
                     continue
 
-                tank_lines = extract_tanks_from_print_page(response.text())
+                soup = BeautifulSoup(response.text(), "html.parser")
+                tank_lines = extract_tanks_from_soup(soup)
                 if not tank_lines:
                     print(f"  - پذیرش {reception_id}: خط «سریال مخزن» پیدا نشد.")
                     continue
 
+                plate = extract_plate_from_soup(soup)
                 for line in tank_lines:
                     manufacturer, serial = parse_manufacturer_serial(line)
                     all_rows.append({
                         "شماره پذیرش": reception_id,
+                        "پلاک": plate,
                         "نام سازنده": manufacturer,
                         "سریال مخزن": serial,
                     })
-                print(f"  - پذیرش {reception_id}: {len(tank_lines)} مخزن استخراج شد.")
+                print(f"  - پذیرش {reception_id} (پلاک {plate or '?'}): {len(tank_lines)} مخزن استخراج شد.")
 
             print(f"مجموع تا این‌جا: {len(all_rows)} ردیف.")
 
