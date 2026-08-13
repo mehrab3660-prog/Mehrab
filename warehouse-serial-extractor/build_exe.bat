@@ -40,6 +40,9 @@ if not exist "dist\WarehouseSerialExtractor\WarehouseSerialExtractor.exe" (
     exit /b 1
 )
 
+echo Bundling Universal CRT DLLs locally (best-effort, for old Windows 7 targets)...
+powershell -NoProfile -Command "$d=Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\Redist\*\ucrt\DLLs\x64' -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1; if ($d) { Copy-Item \"$($d.FullName)\*.dll\" -Destination 'dist\WarehouseSerialExtractor' -Force; Write-Host \"Copied UCRT DLLs from $($d.FullName)\" } else { Write-Host 'UCRT redist DLLs not found locally (Windows SDK not installed) - skipping, this is optional.' }"
+
 echo [3/3] Building single-file installer with Inno Setup...
 set ISCC="C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 if not exist %ISCC% set ISCC="C:\Program Files\Inno Setup 6\ISCC.exe"

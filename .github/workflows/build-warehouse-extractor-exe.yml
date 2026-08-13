@@ -39,6 +39,34 @@ jobs:
           set -e
           python -m PyInstaller --name WarehouseSerialExtractor --collect-all selenium --collect-all webdriver_manager --noconfirm extract_serials.py
 
+      - name: Bundle Universal CRT DLLs locally (for Windows 7 targets missing it)
+        shell: pwsh
+        run: |
+          # ویندوز ۷ به‌صورت پیش‌فرض UCRT (که هر برنامه پایتونی به آن نیاز
+          # دارد) را ندارد و نصب vc_redist روی بعضی سیستم‌های قدیمی/بدون
+          # آپدیت هم کارساز نیست. راه‌حل رسمی مایکروسافت برای همین حالت،
+          # "local/app-relative deployment" است: خودِ DLL های UCRT را کنار
+          # exe می‌گذاریم تا برنامه اصلاً به UCRT نصب‌شده روی سیستم مقصد
+          # وابسته نباشد. (See: https://learn.microsoft.com/cpp/windows/universal-crt-deployment)
+          $dest = "dist\WarehouseSerialExtractor"
+          $candidates = @(
+            "C:\Program Files (x86)\Windows Kits\10\Redist\*\ucrt\DLLs\x64",
+            "C:\Program Files (x86)\Windows Kits\10\Redist\ucrt\DLLs\x64"
+          )
+          $found = $null
+          foreach ($pattern in $candidates) {
+            $dir = Get-ChildItem $pattern -Directory -ErrorAction SilentlyContinue |
+              Sort-Object Name -Descending | Select-Object -First 1
+            if (-not $dir -and (Test-Path $pattern)) { $dir = Get-Item $pattern }
+            if ($dir) { $found = $dir; break }
+          }
+          if ($found) {
+            Copy-Item "$($found.FullName)\*.dll" -Destination $dest -Force
+            Write-Host "Copied UCRT redist DLLs from $($found.FullName) into $dest"
+          } else {
+            Write-Warning "UCRT redist DLLs not found on this runner (Windows SDK missing?). The exe will rely on the target machine already having UCRT installed."
+          }
+
       - name: Build installer (Inno Setup)
         shell: pwsh
         run: |
