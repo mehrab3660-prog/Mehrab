@@ -41,7 +41,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          python -m PyInstaller --onefile --name AccountingApp --icon=assets/icon.ico --add-data "web;web" --add-data "assets;assets" --add-data "fonts;fonts" --noconfirm run_app.py
+          python -m PyInstaller --onefile --windowed --name AccountingApp --icon=assets/icon.ico --add-data "web;web" --add-data "assets;assets" --add-data "fonts;fonts" --noconfirm run_app.py
 
       - name: Upload exe artifact
         uses: actions/upload-artifact@v4

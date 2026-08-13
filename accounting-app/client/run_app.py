@@ -7,6 +7,21 @@
 2. خودش مرورگر پیش‌فرض سیستم را باز می‌کند و صفحه ورود برنامه را نشان می‌دهد.
 هیچ پنجره یا مرحله دستی اضافه‌ای لازم نیست.
 """
+import os
+import sys
+
+# وقتی این فایل به‌صورت exe بدون پنجره‌ی کنسول (windowed) ساخته می‌شود، پایتون
+# sys.stdout/stderr را None می‌گذارد؛ بدون این گارد، همان اولین print() کل برنامه
+# را کرش می‌کند. به‌جای حذف print ها، خروجی را به یک فایل لاگ کنار خود exe هدایت می‌کنیم.
+if sys.stdout is None or sys.stderr is None:
+    try:
+        base_dir = os.path.dirname(sys.executable if getattr(sys, "frozen", False) else os.path.abspath(__file__))
+        log_file = open(os.path.join(base_dir, "app_log.txt"), "a", encoding="utf-8", buffering=1)
+    except OSError:
+        log_file = open(os.devnull, "w")
+    sys.stdout = sys.stdout or log_file
+    sys.stderr = sys.stderr or log_file
+
 import threading
 import time
 import webbrowser
