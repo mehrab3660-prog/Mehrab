@@ -167,12 +167,18 @@ jobs:
             New-Item -ItemType Directory -Force -Path $outDir | Out-Null
             cmd /c "`"$sevenZip`" x `"$($f.FullName)`" `"-o$outDir`" -y >NUL 2>&1"
           }
-          foreach ($msi in ($allLayoutFiles | Where-Object { $_.Extension -eq ".msi" })) {
-            $outDir = Join-Path $layoutDir ("msiextract_" + $msi.BaseName)
+          # Burn هر فایلی که از داخل بسته درمی‌آورد را بدون پسوند اصلی‌اش
+          # می‌گذارد، پس نمی‌شود فقط دنبال ".msi" گشت - هر فایلی که هنوز
+          # dll/exe/bin نشده را هم با msiexec /a امتحان می‌کنیم (روی
+          # فایل‌هایی که واقعاً MSI نیستند، msiexec فقط بی‌سروصدا شکست
+          # می‌خورد).
+          foreach ($f in ($allLayoutFiles | Where-Object { $_.Extension -notin @(".dll", ".exe", ".bin") })) {
+            $outDir = Join-Path $layoutDir ("msiextract_" + $f.BaseName + "_" + $f.Directory.Name)
             New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-            cmd /c "msiexec.exe /a `"$($msi.FullName)`" /qn TARGETDIR=`"$outDir`" >NUL 2>&1"
-            Start-Sleep -Seconds 2
+            cmd /c "msiexec.exe /a `"$($f.FullName)`" /qn TARGETDIR=`"$outDir`" >NUL 2>&1"
           }
+          Write-Host "Waiting for background msiexec admin-installs to finish writing files..."
+          Start-Sleep -Seconds 8
 
           $dllPatterns = @("api-ms-win-*.dll", "ucrtbase.dll", "vcruntime140*.dll", "msvcp140*.dll")
           $dlls = Get-ChildItem -Path $layoutDir -Recurse -ErrorAction SilentlyContinue -File |
