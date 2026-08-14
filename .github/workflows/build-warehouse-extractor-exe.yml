@@ -94,24 +94,32 @@ jobs:
           # leftover tail into its own file and re-running 7-Zip on it
           # until there's nothing meaningful left, so we reach every
           # embedded container instead of just the first (small) one.
+          # نکته مهم: خروجی 7z معمولاً چند خط "Physical Size = " دارد (یکی
+          # برای خودِ فایل PE بیرونی، یکی برای هر آرشیو تودرتو). باید
+          # همیشه آخرین مقدار (مربوط به عمیق‌ترین/جدیدترین آرشیو پیدا شده)
+          # را برداریم، نه اولین - وگرنه offset اشتباه (کل حجم فایل) برداشته
+          # می‌شود و carve یک فایل خالی می‌سازد.
           $currentFile = (Resolve-Path "vc_redist.x64.exe").Path
           for ($i = 0; $i -lt 6; $i++) {
             $outDir = Join-Path $layoutDir "layer_$i"
             New-Item -ItemType Directory -Force -Path $outDir | Out-Null
             Write-Host "--- 7-Zip pass $i on $currentFile ---"
-            $sevenZipOutput = & $sevenZip x $currentFile "-o$outDir" -y 2>&1
-            Write-Host ($sevenZipOutput | Out-String)
+            # از cmd.exe برای اجرا استفاده می‌کنیم تا stderr خروجی 7z به‌صورت
+            # متن ساده بیاید، نه به‌عنوان PowerShell ErrorRecord (که باعث
+            # می‌شد کل step به‌خاطر یک هشدار/خطای بی‌ضرر fail شود).
+            $sevenZipOutput = cmd /c "`"$sevenZip`" x `"$currentFile`" `"-o$outDir`" -y 2>&1"
+            Write-Host ($sevenZipOutput -join "`n")
 
-            $tailMatch = $sevenZipOutput | Select-String -Pattern "Tail Size = (\d+)"
-            $physicalMatch = $sevenZipOutput | Select-String -Pattern "Physical Size = (\d+)"
-            if (-not $tailMatch -or -not $physicalMatch) {
+            $tailMatches = $sevenZipOutput | Select-String -Pattern "Tail Size = (\d+)" -AllMatches
+            $physicalMatches = $sevenZipOutput | Select-String -Pattern "Physical Size = (\d+)" -AllMatches
+            if (-not $tailMatches -or -not $physicalMatches) {
               Write-Host "No more 'data after the end of archive' reported - stopping the carve loop."
               break
             }
 
-            $tailSize = [int64]$tailMatch.Matches[0].Groups[1].Value
-            $physicalSize = [int64]$physicalMatch.Matches[0].Groups[1].Value
-            Write-Host "Physical size: $physicalSize, remaining tail: $tailSize"
+            $tailSize = [int64]($tailMatches.Matches | Select-Object -Last 1).Groups[1].Value
+            $physicalSize = [int64]($physicalMatches.Matches | Select-Object -Last 1).Groups[1].Value
+            Write-Host "Physical size (last/innermost): $physicalSize, remaining tail: $tailSize"
             if ($tailSize -lt 1024) {
               Write-Host "Remaining tail is negligible - stopping the carve loop."
               break
@@ -124,7 +132,12 @@ jobs:
             $srcStream.CopyTo($tailStream)
             $tailStream.Close()
             $srcStream.Close()
-            Write-Host "Carved out tail into $tailFile ($((Get-Item $tailFile).Length) bytes)"
+            $tailFileSize = (Get-Item $tailFile).Length
+            Write-Host "Carved out tail into $tailFile ($tailFileSize bytes)"
+            if ($tailFileSize -lt 1024) {
+              Write-Host "Carved file is negligible - stopping the carve loop."
+              break
+            }
             $currentFile = $tailFile
           }
 
@@ -138,12 +151,12 @@ jobs:
             if ($f.Extension -in @(".dll", ".exe", ".bin")) { continue }
             $outDir = Join-Path $layoutDir ("expanded_" + $f.BaseName + "_" + $f.Directory.Name)
             New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-            & $sevenZip x $f.FullName "-o$outDir" -y *> $null
+            cmd /c "`"$sevenZip`" x `"$($f.FullName)`" `"-o$outDir`" -y >NUL 2>&1"
           }
           foreach ($msi in ($allLayoutFiles | Where-Object { $_.Extension -eq ".msi" })) {
             $outDir = Join-Path $layoutDir ("msiextract_" + $msi.BaseName)
             New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-            & msiexec.exe /a "$($msi.FullName)" /qn TARGETDIR="$outDir" | Out-Null
+            cmd /c "msiexec.exe /a `"$($msi.FullName)`" /qn TARGETDIR=`"$outDir`" >NUL 2>&1"
             Start-Sleep -Seconds 2
           }
 
