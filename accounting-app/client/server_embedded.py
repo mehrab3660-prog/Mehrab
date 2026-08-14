@@ -431,7 +431,7 @@ def logout():
 @app.route("/items", methods=["GET"])
 def get_items():
     conn = get_connection()
-    rows = conn.execute("SELECT * FROM items ORDER BY name").fetchall()
+    rows = conn.execute("SELECT * FROM items WHERE deleted_at IS NULL ORDER BY name").fetchall()
     conn.close()
     result = [dict(r) for r in rows]
     if g.current_user.get("role") != "admin":
@@ -476,11 +476,49 @@ def update_item(item_id):
 
 @app.route("/items/<int:item_id>", methods=["DELETE"])
 def delete_item(item_id):
+    """حذف نرم: کالا از لیست‌های فعال کنار می‌رود ولی تا وقتی از سطل زباله برای همیشه
+    حذف نشود، قابل بازگردانی است — تا اشتباهی برای همیشه از دست نرود"""
     err = require_permission("can_manage_items")
     if err:
         return err
     conn = get_connection()
-    conn.execute("DELETE FROM items WHERE id=?", (item_id,))
+    conn.execute("UPDATE items SET deleted_at=? WHERE id=?", (now(), item_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/items/trash", methods=["GET"])
+def get_items_trash():
+    err = require_permission("can_manage_items")
+    if err:
+        return err
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM items WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/items/<int:item_id>/restore", methods=["POST"])
+def restore_item(item_id):
+    err = require_permission("can_manage_items")
+    if err:
+        return err
+    conn = get_connection()
+    conn.execute("UPDATE items SET deleted_at=NULL WHERE id=?", (item_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/items/<int:item_id>/permanent", methods=["DELETE"])
+def permanently_delete_item(item_id):
+    """حذف همیشگی از سطل زباله — این یکی واقعاً قابل بازگشت نیست"""
+    err = require_admin()
+    if err:
+        return err
+    conn = get_connection()
+    conn.execute("DELETE FROM items WHERE id=? AND deleted_at IS NOT NULL", (item_id,))
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
@@ -1467,7 +1505,7 @@ def report_summary():
         WHERE tx_type='out' AND invoice_id IS NULL AND expense_category IS NOT NULL
     """).fetchone()["t"]
     debtors = conn.execute("SELECT COALESCE(SUM(balance),0) as t FROM parties WHERE balance > 0").fetchone()["t"]
-    low_stock = conn.execute("SELECT * FROM items WHERE stock_qty <= min_stock").fetchall()
+    low_stock = conn.execute("SELECT * FROM items WHERE stock_qty <= min_stock AND deleted_at IS NULL").fetchall()
     conn.close()
     is_admin = g.current_user.get("role") == "admin"
     return jsonify({
@@ -1998,6 +2036,7 @@ def report_reorder_suggestions():
         LEFT JOIN invoice_items ON invoice_items.item_id = items.id
         LEFT JOIN invoices ON invoice_items.invoice_id = invoices.id
             AND invoices.invoice_type='sale' AND invoices.voided=0 AND invoices.date >= ?
+        WHERE items.deleted_at IS NULL
         GROUP BY items.id
     """, (since,)).fetchall()
     conn.close()
@@ -2194,7 +2233,7 @@ def party_statement_pdf(party_id):
 def export_items_excel():
     import openpyxl
     conn = get_connection()
-    rows = conn.execute("SELECT * FROM items ORDER BY name").fetchall()
+    rows = conn.execute("SELECT * FROM items WHERE deleted_at IS NULL ORDER BY name").fetchall()
     conn.close()
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -2371,7 +2410,7 @@ def revert_price_history(history_id):
 def stock_ranking():
     """رتبه‌بندی کالاها بر اساس موجودی فعلی (بیشترین تا کمترین)"""
     conn = get_connection()
-    rows = conn.execute("SELECT name, brand, stock_qty, unit FROM items ORDER BY stock_qty DESC LIMIT 10").fetchall()
+    rows = conn.execute("SELECT name, brand, stock_qty, unit FROM items WHERE deleted_at IS NULL ORDER BY stock_qty DESC LIMIT 10").fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 
@@ -2393,6 +2432,8 @@ def run_embedded(port=5050):
     threading.Thread(target=nightly_loop, daemon=True).start()
     threading.Thread(target=weekly_recap_loop, daemon=True).start()
     app.run(host="127.0.0.1", port=port, threaded=True, use_reloader=False, debug=False)
+
+
 
 
 

@@ -640,6 +640,7 @@
           <button class="settings-subnav-btn" data-subtab="users">🔐 کاربران</button>
           <button class="settings-subnav-btn" data-subtab="activity">🕒 لاگ فعالیت</button>
           <button class="settings-subnav-btn" data-subtab="security-log">🛡️ لاگ امنیتی</button>
+          <button class="settings-subnav-btn" data-subtab="trash">🗑️ سطل زباله</button>
         </div>
 
         <div class="settings-subpage active" id="subpage-shop-info">
@@ -717,6 +718,16 @@
             <table class="data-table">
               <thead><tr><th>زمان</th><th>کاربر</th><th>رویداد</th><th>جزئیات</th></tr></thead>
               <tbody id="security-log-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="settings-subpage" id="subpage-trash">
+          <div class="card">
+            <p class="muted">کالاهایی که حذف کردی تا وقتی از اینجا برای همیشه پاکشون نکنی، اینجا می‌مونن و می‌تونی برشون گردونی.</p>
+            <table class="data-table">
+              <thead><tr><th>نام</th><th>کد/بارکد</th><th>تاریخ حذف</th><th>عملیات</th></tr></thead>
+              <tbody id="trash-tbody"></tbody>
             </table>
           </div>
         </div>

@@ -1228,8 +1228,18 @@ function renderItemsTable() {
       <td title="${it.purchase_price ? 'به حروف: ' + numberToPersianWords(it.purchase_price) + ' تومان' : ''}">${it.purchase_price === null ? '—' : fmt(it.purchase_price)}</td>
       <td title="${it.sale_price ? 'به حروف: ' + numberToPersianWords(it.sale_price) + ' تومان' : ''}">${fmt(it.sale_price)}</td>
       <td>${it.stock_qty <= 0 ? `<span class="badge badge-red">تمام شده${it.stock_qty < 0 ? ' (' + fmt(Math.abs(it.stock_qty)) + ' کسری)' : ''}</span>` : (it.stock_qty <= it.min_stock ? `<span class="badge badge-orange">${fmt(it.stock_qty)}</span>` : fmt(it.stock_qty))}</td>
-      <td><button class="btn btn-sm btn-secondary" onclick="showStockLedger(${it.id})">گردش انبار</button></td>
+      <td>
+        <button class="btn btn-sm btn-secondary" onclick="showStockLedger(${it.id})">گردش انبار</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteItemRow(${it.id})">حذف</button>
+      </td>
     </tr>`).join('');
+}
+async function deleteItemRow(itemId) {
+  const it = state.items.find(x => x.id === itemId);
+  if (!confirm(`«${it ? it.name : 'این کالا'}» حذف بشه؟\nحذف کردن این کالا تاثیری روی فاکتورهای قبلی نداره. اگه اشتباه کردی، تا وقتی از سطل زباله (تنظیمات کلی) برای همیشه پاکش نکنی، می‌تونی برگردونیش.`)) return;
+  const res = await api('DELETE', `/items/${itemId}`);
+  if (res && res.ok) { toast('کالا به سطل زباله منتقل شد', 'success'); loadItems(); }
+  else if (res) toast(res.message || 'خطا در حذف', 'danger');
 }
 function openItemPhotoModal(itemId) {
   const it = state.items.find(x => x.id === itemId);
@@ -2400,6 +2410,7 @@ async function loadSettingsHub() {
         else if (sub === 'users') loadUsers();
         else if (sub === 'activity') loadActivity();
         else if (sub === 'security-log') loadSecurityLog();
+        else if (sub === 'trash') loadTrash();
       });
     });
   }
@@ -3051,6 +3062,37 @@ async function loadSecurityLog() {
   const logs = await api('GET', '/security-log');
   $('#security-log-tbody').innerHTML = (logs || []).map(lg =>
     `<tr><td>${toJalaliDate(lg.timestamp, true)}</td><td>${escHtml(lg.username) || '—'}</td><td>${escHtml(lg.event)}</td><td>${escHtml(lg.details) || '—'}</td></tr>`).join('');
+}
+
+// ===================== سطل زباله (کالاهای حذف‌شده) =====================
+async function loadTrash() {
+  const items = await api('GET', '/items/trash');
+  $('#trash-tbody').innerHTML = (items || []).map(it => `
+    <tr>
+      <td>${escHtml(it.name)}</td>
+      <td>${escHtml(it.code) || '—'}</td>
+      <td>${toJalaliDate(it.deleted_at, true)}</td>
+      <td>
+        <button class="btn btn-secondary btn-sm" data-restore-id="${it.id}">بازگردانی</button>
+        <button class="btn btn-danger btn-sm" data-purge-id="${it.id}" data-purge-name="${escHtml(it.name)}">حذف همیشگی</button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="4" class="muted">سطل زباله خالیه</td></tr>';
+
+  $$('[data-restore-id]', $('#trash-tbody')).forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const res = await api('POST', `/items/${btn.dataset.restoreId}/restore`);
+      if (res && res.ok) { toast('کالا بازگردانده شد', 'success'); loadTrash(); }
+      else if (res) toast(res.message || 'خطا در بازگردانی', 'danger');
+    });
+  });
+  $$('[data-purge-id]', $('#trash-tbody')).forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(`«${btn.dataset.purgeName}» برای همیشه حذف بشه؟ این کار دیگه قابل بازگشت نیست.`)) return;
+      const res = await api('DELETE', `/items/${btn.dataset.purgeId}/permanent`);
+      if (res && res.ok) { toast('برای همیشه حذف شد', 'success'); loadTrash(); }
+      else if (res) toast(res.message || 'خطا در حذف', 'danger');
+    });
+  });
 }
 
 // ===================== شروع برنامه =====================
