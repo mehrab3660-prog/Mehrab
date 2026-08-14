@@ -1203,6 +1203,25 @@ def delete_bank_account(account_id):
     return jsonify({"ok": True})
 
 
+BANK_DEPOSIT_SOURCE_LABELS = {
+    "customer": "دریافت از مشتری",
+    "capital": "آورده/سرمایه‌گذاری صاحب کسب‌وکار",
+    "interest": "سود بانکی",
+    "other": "سایر",
+}
+BANK_WITHDRAWAL_DEST_LABELS = {
+    "rent": "اجاره",
+    "salary": "حقوق پرسنل",
+    "utilities": "قبوض",
+    "repairs": "تعمیر و نگهداری",
+    "transport": "حمل و نقل",
+    "supplies": "لوازم مصرفی مغازه",
+    "bank_fee": "کارمزد بانکی",
+    "personal_draw": "برداشت شخصی/سود مالک",
+    "other": "متفرقه",
+}
+
+
 @app.route("/bank-accounts/<int:account_id>/transaction", methods=["POST"])
 def bank_account_transaction(account_id):
     """واریز یا برداشت مستقیم از یک حساب بانکی (بدون ارتباط با صندوق)"""
@@ -1221,14 +1240,24 @@ def bank_account_transaction(account_id):
         conn.close()
         return jsonify({"ok": False, "message": f'موجودی حساب کافی نیست (موجودی فعلی: {acc["balance"]:,.0f})'}), 400
 
+    category = d.get("category") or None
+    labels = BANK_DEPOSIT_SOURCE_LABELS if tx_type == "deposit" else BANK_WITHDRAWAL_DEST_LABELS
+    category_label = labels.get(category)
+    user_desc = (d.get("description") or "").strip()
+    if category_label:
+        desc = category_label + (f" — {user_desc}" if user_desc else "")
+    else:
+        desc = user_desc
+
     sign = 1 if tx_type == "deposit" else -1
     conn.execute("UPDATE bank_accounts SET balance = balance + ? WHERE id=?", (sign * amount, account_id))
-    conn.execute("INSERT INTO bank_transactions (account_id, date, tx_type, amount, description, username) VALUES (?,?,?,?,?,?)",
-                 (account_id, now(), tx_type, amount, d.get("description", ""), d.get("username")))
+    conn.execute("INSERT INTO bank_transactions (account_id, date, tx_type, amount, description, username, category) VALUES (?,?,?,?,?,?,?)",
+                 (account_id, now(), tx_type, amount, desc, d.get("username"), category))
     conn.commit()
     conn.close()
     log_action(d.get("username"), "تراکنش بانکی",
-               f'{"واریز" if tx_type == "deposit" else "برداشت"} {amount:,.0f} تومان — {acc["name"]}')
+               f'{"واریز" if tx_type == "deposit" else "برداشت"} {amount:,.0f} تومان — {acc["name"]}'
+               + (f' ({category_label})' if category_label else ''))
     return jsonify({"ok": True})
 
 
@@ -2557,16 +2586,6 @@ def run_embedded(port=5050):
     threading.Thread(target=nightly_loop, daemon=True).start()
     threading.Thread(target=weekly_recap_loop, daemon=True).start()
     app.run(host="127.0.0.1", port=port, threaded=True, use_reloader=False, debug=False)
-
-
-
-
-
-
-
-
-
-
 
 
 if __name__ == "__main__":

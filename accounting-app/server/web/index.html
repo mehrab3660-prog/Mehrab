@@ -438,7 +438,10 @@
             <div><label>نوع</label><select id="bank-tx-type"><option value="deposit">واریز</option><option value="withdrawal">برداشت</option></select></div>
             <div><label>مبلغ</label><input type="text" inputmode="decimal" id="bank-tx-amount"></div>
           </div>
-          <div class="form-row"><div><label>توضیحات</label><input type="text" id="bank-tx-desc"></div></div>
+          <div class="form-row">
+            <div><label id="bank-tx-category-label">منبع واریز</label><select id="bank-tx-category"></select></div>
+            <div><label>توضیحات (اختیاری)</label><input type="text" id="bank-tx-desc"></div>
+          </div>
           <button class="btn btn-secondary" id="btn-bank-tx-submit">ثبت تراکنش</button>
         </div>
 

@@ -2386,12 +2386,30 @@ $('#btn-do-transfer').addEventListener('click', async () => {
   } else if (res) toast(res.message || 'خطا در انتقال', 'danger');
 });
 
+const BANK_DEPOSIT_SOURCE_LABELS = {
+  customer: 'دریافت از مشتری', capital: 'آورده/سرمایه‌گذاری صاحب کسب‌وکار', interest: 'سود بانکی', other: 'سایر',
+};
+const BANK_WITHDRAWAL_DEST_LABELS = {
+  rent: 'اجاره', salary: 'حقوق پرسنل', utilities: 'قبوض', repairs: 'تعمیر و نگهداری',
+  transport: 'حمل و نقل', supplies: 'لوازم مصرفی مغازه', bank_fee: 'کارمزد بانکی',
+  personal_draw: 'برداشت شخصی/سود مالک', other: 'متفرقه',
+};
+function refreshBankTxCategoryOptions() {
+  const type = $('#bank-tx-type').value;
+  const labels = type === 'deposit' ? BANK_DEPOSIT_SOURCE_LABELS : BANK_WITHDRAWAL_DEST_LABELS;
+  $('#bank-tx-category-label').textContent = type === 'deposit' ? 'منبع واریز' : 'مقصد برداشت';
+  $('#bank-tx-category').innerHTML = Object.entries(labels).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+}
+$('#bank-tx-type').addEventListener('change', refreshBankTxCategoryOptions);
+refreshBankTxCategoryOptions();
+
 $('#btn-bank-tx-submit').addEventListener('click', async () => {
   const accountId = $('#bank-tx-account').value;
   const amount = readAmount($('#bank-tx-amount'));
   if (!accountId || !amount) { toast('حساب و مبلغ را وارد کن', 'danger'); return; }
   const res = await api('POST', `/bank-accounts/${accountId}/transaction`, {
-    tx_type: $('#bank-tx-type').value, amount, description: $('#bank-tx-desc').value.trim(), username: state.user.username,
+    tx_type: $('#bank-tx-type').value, amount, category: $('#bank-tx-category').value,
+    description: $('#bank-tx-desc').value.trim(), username: state.user.username,
   });
   if (res && res.ok) {
     toast('تراکنش ثبت شد', 'success');
