@@ -1695,6 +1695,8 @@ def get_checks():
 @app.route("/checks", methods=["POST"])
 def add_check():
     d = request.json
+    if not d.get("amount") or not d.get("due_date") or d.get("direction") not in ("received", "issued"):
+        return jsonify({"ok": False, "message": "مبلغ، تاریخ سررسید و نوع چک الزامی است"}), 400
     conn = get_connection()
     conn.execute("""INSERT INTO checks (party_id, invoice_id, amount, due_date, status, direction, description)
                      VALUES (?,?,?,?,?,?,?)""",
@@ -1707,17 +1709,29 @@ def add_check():
 
 @app.route("/checks/<int:check_id>", methods=["PUT"])
 def update_check(check_id):
-    """برای تغییر وضعیت چک: pending -> cashed یا bounced"""
+    """ویرایش چک (طرف حساب/مبلغ/سررسید/نوع/توضیحات) و/یا تغییر وضعیت (pending -> cashed یا bounced).
+    هر فیلدی که در بدنه‌ی درخواست نیاید، مقدار قبلی‌اش حفظ می‌شود — پس همین مسیر هم برای
+    تغییر سریع وضعیت (فقط با فرستادن status) و هم برای ویرایش کامل کاربرد دارد."""
     d = request.json
     conn = get_connection()
     check = conn.execute("SELECT * FROM checks WHERE id=?", (check_id,)).fetchone()
-    conn.execute("UPDATE checks SET status=? WHERE id=?", (d["status"], check_id))
+    if not check:
+        conn.close()
+        return jsonify({"ok": False, "message": "چک پیدا نشد"}), 404
 
-    if check and d["status"] == "cashed" and check["status"] != "cashed":
+    new_status = d.get("status", check["status"])
+    conn.execute(
+        "UPDATE checks SET party_id=?, amount=?, due_date=?, direction=?, description=?, status=? WHERE id=?",
+        (d.get("party_id", check["party_id"]), d.get("amount", check["amount"]),
+         d.get("due_date", check["due_date"]), d.get("direction", check["direction"]),
+         d.get("description", check["description"]), new_status, check_id),
+    )
+
+    if new_status == "cashed" and check["status"] != "cashed":
         tx_type = "in" if check["direction"] == "received" else "out"
         conn.execute("INSERT INTO cash_transactions (date, tx_type, amount, description) VALUES (?,?,?,?)",
                       (now(), tx_type, check["amount"], f"وصول چک شماره {check_id}"))
-    if check and d["status"] == "bounced" and check["status"] != "bounced":
+    if new_status == "bounced" and check["status"] != "bounced":
         party = conn.execute("SELECT name FROM parties WHERE id=?", (check["party_id"],)).fetchone() if check["party_id"] else None
         notify_telegram_async(f"🔴 چک {check['amount']:,.0f} تومانی {party['name'] if party else ''} برگشت خورد")
     conn.commit()

@@ -205,9 +205,10 @@ function attachWordsPreview(input, wordsElId) {
 // فرمت‌بندی سه‌رقم‌سه‌رقم مبالغ داخل فیلدهای ورودی، هنگام تایپ خوانا بمونه
 function attachThousandsFormatting(input) {
   if (!input) return;
-  input.addEventListener('focus', () => {
-    input.value = input.value.replace(/,/g, '');
-  });
+  // نکته: قبلاً روی focus کاماها حذف می‌شد، ولی این باعث می‌شد پر کردن برنامه‌ای مقدار
+  // فیلد (مثلاً توسط افزونه‌ها یا ابزارهای تست خودکار) بین متن قدیمی و جدید تداخل کنه و
+  // به‌جای جایگزینی، مقدار جدید به قدیمی بچسبه. حذف/اضافه‌کردن کاما در readAmount موقع
+  // خوندن مقدار انجام می‌شه، پس نیازی به دست‌کاری روی focus نیست.
   input.addEventListener('blur', () => {
     const num = parseFloat(input.value.replace(/,/g, ''));
     input.value = isNaN(num) ? '' : num.toLocaleString('en-US');
@@ -2171,6 +2172,7 @@ function normalizeDigitsForCompare(s) {
 async function loadChecks() {
   const checks = await api('GET', '/checks');
   if (!checks) return;
+  state.checks = checks;
   const statusLabel = { pending: ['در انتظار', 'orange'], cashed: ['وصول‌شده', 'green'], bounced: ['برگشتی', 'red'] };
   const dirLabel = { received: 'دریافتی', issued: 'صادرشده' };
   const today = todayJalaliStr();
@@ -2180,11 +2182,13 @@ async function loadChecks() {
     const isDue = ch.status === 'pending' && ch.direction === 'received' && normalizeDigitsForCompare(ch.due_date) <= today;
     if (isDue) dueTodayIds.push(ch.id);
     return `<tr${isDue ? ' style="background:var(--warning-100)"' : ''}>
-      <td>${ch.party_name || '—'}</td><td title="${wordsTitle(ch.amount)}">${fmt(ch.amount)}</td><td>${ch.due_date}${isDue ? ' <span class="badge badge-orange">سررسید شده</span>' : ''}</td><td>${dirLabel[ch.direction] || ch.direction}</td>
+      <td>${escHtml(ch.party_name || '—')}</td><td title="${wordsTitle(ch.amount)}">${fmt(ch.amount)}</td><td>${ch.due_date}${isDue ? ' <span class="badge badge-orange">سررسید شده</span>' : ''}</td><td>${dirLabel[ch.direction] || ch.direction}</td>
       <td><span class="badge badge-${st[1]}">${st[0]}</span></td>
       <td>
         ${ch.status === 'pending' ? `<button class="btn btn-sm btn-success" onclick="setCheckStatus(${ch.id},'cashed')">وصول شد</button>
-        <button class="btn btn-sm btn-danger" onclick="setCheckStatus(${ch.id},'bounced')">برگشت خورد</button>` : '—'}
+        <button class="btn btn-sm btn-danger" onclick="setCheckStatus(${ch.id},'bounced')">برگشت خورد</button>` : ''}
+        <button class="btn btn-sm btn-secondary" onclick="openEditCheckModal(${ch.id})">ویرایش</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteCheckRow(${ch.id})">حذف</button>
       </td>
     </tr>`;
   }).join('');
@@ -2197,6 +2201,68 @@ async function loadChecks() {
     settleBtn.classList.add('hidden');
   }
 }
+async function deleteCheckRow(id) {
+  if (!confirm('این چک حذف بشه؟ این کار قابل بازگشت نیست.')) return;
+  const res = await api('DELETE', `/checks/${id}`);
+  if (res && res.ok) { toast('چک حذف شد', 'success'); loadChecks(); }
+  else if (res) toast(res.message || 'خطا در حذف', 'danger');
+}
+function checkFormFields(prefix, ch) {
+  const amountVal = ch ? Number(ch.amount).toLocaleString('en-US') : '';
+  return `
+    <div class="field"><label>نوع</label><select id="${prefix}-direction">
+      <option value="received"${!ch || ch.direction === 'received' ? ' selected' : ''}>دریافتی (از کسی چک گرفتی)</option>
+      <option value="issued"${ch && ch.direction === 'issued' ? ' selected' : ''}>صادرشده (به کسی چک دادی)</option>
+    </select></div>
+    <div class="field"><label>طرف حساب (اختیاری)</label><div id="${prefix}-party"></div></div>
+    <div class="field"><label>مبلغ (تومان)</label><input type="text" inputmode="decimal" id="${prefix}-amount" value="${amountVal}"></div>
+    <div class="field"><label>تاریخ سررسید</label><input type="text" id="${prefix}-due-date" placeholder="1404-07-01" value="${ch ? escHtml(ch.due_date) : ''}"></div>
+    <div class="field"><label>توضیحات (اختیاری)</label><input type="text" id="${prefix}-desc" value="${ch ? escHtml(ch.description || '') : ''}"></div>`;
+}
+async function openNewCheckModal() {
+  if (!state.parties || !state.parties.length) state.parties = await api('GET', '/parties') || [];
+  openModal(`
+    <h3>ثبت چک جدید</h3>
+    ${checkFormFields('nc', null)}
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-new-check-btn">ثبت چک</button></div>`);
+  attachThousandsFormatting($('#nc-amount'));
+  const partySS = createSearchableSelect('nc-party', state.parties.map(p => ({ value: p.id, label: p.name })), { emptyLabel: '— بدون طرف حساب —' });
+  $('#save-new-check-btn').addEventListener('click', async () => {
+    const amount = readAmount($('#nc-amount'));
+    const due_date = $('#nc-due-date').value.trim();
+    if (!amount || !due_date) { toast('مبلغ و تاریخ سررسید الزامی است', 'danger'); return; }
+    const res = await api('POST', '/checks', {
+      party_id: partySS.getValue() || null, amount, due_date,
+      direction: $('#nc-direction').value, description: $('#nc-desc').value.trim(),
+    });
+    if (res && res.ok) { toast('چک ثبت شد', 'success'); closeModal(); loadChecks(); }
+    else if (res) toast(res.message || 'خطا در ثبت چک', 'danger');
+  });
+}
+async function openEditCheckModal(id) {
+  const ch = (state.checks || []).find(c => c.id === id);
+  if (!ch) return;
+  if (!state.parties || !state.parties.length) state.parties = await api('GET', '/parties') || [];
+  openModal(`
+    <h3>ویرایش چک</h3>
+    ${checkFormFields('ec', ch)}
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-edit-check-btn">ذخیره</button></div>`);
+  attachThousandsFormatting($('#ec-amount'));
+  const partySS = createSearchableSelect('ec-party', state.parties.map(p => ({ value: p.id, label: p.name })), { emptyLabel: '— بدون طرف حساب —' });
+  if (ch.party_id) partySS.setValue(ch.party_id);
+  $('#save-edit-check-btn').addEventListener('click', async () => {
+    const amount = readAmount($('#ec-amount'));
+    const due_date = $('#ec-due-date').value.trim();
+    if (!amount || !due_date) { toast('مبلغ و تاریخ سررسید الزامی است', 'danger'); return; }
+    const res = await api('PUT', `/checks/${id}`, {
+      party_id: partySS.getValue() || null, amount, due_date,
+      direction: $('#ec-direction').value, description: $('#ec-desc').value.trim(),
+    });
+    if (res && res.ok) { toast('ذخیره شد', 'success'); closeModal(); loadChecks(); }
+    else if (res) toast(res.message || 'خطا در ذخیره', 'danger');
+  });
+}
+$('#btn-new-check').addEventListener('click', openNewCheckModal);
 async function settleDueChecks(ids) {
   if (!confirm(`${toFaDigits(ids.length)} چک سررسیدشده به‌عنوان «وصول شد» ثبت شود؟`)) return;
   let okCount = 0;
