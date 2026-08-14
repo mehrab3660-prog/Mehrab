@@ -1410,6 +1410,7 @@ function loadInvoiceForm(type) {
         <div class="form-row"><div><label>کالا</label><div id="${type}-item"></div></div>
           <div><label>تعداد</label><input type="number" step="any" id="${type}-qty"></div>
           <div><label>قیمت واحد</label><input type="text" inputmode="decimal" id="${type}-price"><div class="words-hint" id="${type}-price-words"></div></div></div>
+        <div class="ai-summary-box hidden" id="${type}-item-info"></div>
         ${type === 'sale' ? `
         <div class="form-row"><div><label>شماره سریال (اختیاری)</label><input type="text" id="${type}-serial" placeholder="مثلاً SN-12345"></div>
           <div><label>گارانتی (ماه، اختیاری)</label><input type="number" step="1" min="0" id="${type}-warranty" placeholder="مثلاً 12"></div></div>` : ''}
@@ -1449,6 +1450,16 @@ function loadInvoiceForm(type) {
         placeholder: 'جستجوی کالا (نام یا کد)...', allowEmpty: false,
         onSelect: (val, found) => {
           $(`#${type}-price`).value = found && found.price ? Number(found.price).toLocaleString('en-US') : '';
+          const itemObj = state.items.find(it => it.id === parseInt(val));
+          const infoBox = $(`#${type}-item-info`);
+          if (!itemObj) { infoBox.classList.add('hidden'); return; }
+          const isAdmin = state.user.role === 'admin';
+          const parts = [];
+          if (isAdmin && itemObj.purchase_price != null) parts.push({ k: 'آخرین قیمت خرید', v: fmt(itemObj.purchase_price) + ' تومان' });
+          if (isAdmin && itemObj.avg_cost != null) parts.push({ k: 'میانگین بهای تمام‌شده', v: fmt(itemObj.avg_cost) + ' تومان' });
+          parts.push({ k: 'موجودی فعلی', v: fmt(itemObj.stock_qty) + ' ' + (itemObj.unit || '') });
+          infoBox.innerHTML = parts.map(p => `<div class="item"><div class="k">${p.k}</div><div class="v">${p.v}</div></div>`).join('');
+          infoBox.classList.remove('hidden');
         },
       });
     state.invoiceUI[type] = { partySS, itemSS };
@@ -2292,9 +2303,12 @@ async function loadBankPage() {
   state.bankAccounts = accounts || [];
 
   $('#bank-accounts-grid').innerHTML = state.bankAccounts.map(a => `
-    <div class="stat-card primary" title="${wordsTitle(a.balance)}">
+    <div class="stat-card primary" title="${wordsTitle(a.balance)}" style="position:relative">
+      <button class="btn btn-ghost btn-sm" style="position:absolute;top:8px;left:8px;padding:2px 8px" onclick="openEditBankAccountModal(${a.id})">✏️</button>
       <div class="stat-label">${a.name}${a.bank_name ? ' — ' + a.bank_name : ''}</div>
       <div class="stat-value">${fmt(a.balance)} تومان</div>
+      ${a.account_number ? `<div class="muted" style="font-size:11px;margin-top:4px">شماره حساب/کارت: <bdi dir="ltr">${escHtml(a.account_number)}</bdi></div>` : ''}
+      ${a.iban ? `<div class="muted" style="font-size:11px">شبا: <bdi dir="ltr">${escHtml(a.iban)}</bdi></div>` : ''}
     </div>`).join('') || '<p class="muted">هنوز حساب بانکی تعریف نشده.</p>';
 
   const bankOptions = state.bankAccounts.map(a => `<option value="bank:${a.id}">${a.name}</option>`).join('');
@@ -2314,7 +2328,8 @@ $('#btn-new-bank-account').addEventListener('click', () => {
     <h3>حساب بانکی جدید</h3>
     <div class="field"><label>نام حساب (مثلاً: حساب اصلی مغازه)</label><input id="nba-name"></div>
     <div class="field"><label>نام بانک</label><input id="nba-bank"></div>
-    <div class="field"><label>شماره حساب/کارت</label><input id="nba-number"></div>
+    <div class="field"><label>شماره حساب/کارت</label><input id="nba-number" dir="ltr"></div>
+    <div class="field"><label>شماره شبا (اختیاری)</label><input id="nba-iban" dir="ltr" placeholder="IR..."></div>
     <div class="field"><label>موجودی اولیه</label><input type="text" inputmode="decimal" id="nba-balance" value="0"></div>
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-bank-account-btn">ذخیره</button></div>`);
   attachThousandsFormatting($('#nba-balance'));
@@ -2323,12 +2338,35 @@ $('#btn-new-bank-account').addEventListener('click', () => {
     if (!name) { toast('نام حساب الزامی است', 'danger'); return; }
     const res = await api('POST', '/bank-accounts', {
       name, bank_name: $('#nba-bank').value.trim(), account_number: $('#nba-number').value.trim(),
-      balance: readAmount($('#nba-balance')), username: state.user.username,
+      iban: $('#nba-iban').value.trim(), balance: readAmount($('#nba-balance')), username: state.user.username,
     });
     if (res && res.ok) { toast('حساب اضافه شد', 'success'); closeModal(); loadBankPage(); }
     else toast((res && res.message) || 'خطا', 'danger');
   });
 });
+
+function openEditBankAccountModal(accountId) {
+  const acc = state.bankAccounts.find(a => a.id === accountId);
+  if (!acc) return;
+  openModal(`
+    <h3>ویرایش حساب بانکی</h3>
+    <div class="field"><label>نام حساب</label><input id="eba-name" value="${escHtml(acc.name)}"></div>
+    <div class="field"><label>نام بانک</label><input id="eba-bank" value="${escHtml(acc.bank_name || '')}"></div>
+    <div class="field"><label>شماره حساب/کارت</label><input id="eba-number" dir="ltr" value="${escHtml(acc.account_number || '')}"></div>
+    <div class="field"><label>شماره شبا (اختیاری)</label><input id="eba-iban" dir="ltr" placeholder="IR..." value="${escHtml(acc.iban || '')}"></div>
+    <p class="muted" style="font-size:11.5px">موجودی از اینجا قابل تغییر نیست — از «واریز/برداشت مستقیم» یا «انتقال وجه» استفاده کن.</p>
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-edit-bank-account-btn">ذخیره</button></div>`);
+  $('#save-edit-bank-account-btn').addEventListener('click', async () => {
+    const name = $('#eba-name').value.trim();
+    if (!name) { toast('نام حساب الزامی است', 'danger'); return; }
+    const res = await api('PUT', `/bank-accounts/${accountId}`, {
+      name, bank_name: $('#eba-bank').value.trim(), account_number: $('#eba-number').value.trim(),
+      iban: $('#eba-iban').value.trim(),
+    });
+    if (res && res.ok) { toast('ذخیره شد', 'success'); closeModal(); loadBankPage(); }
+    else toast((res && res.message) || 'خطا', 'danger');
+  });
+}
 
 $('#btn-do-transfer').addEventListener('click', async () => {
   const [fromType, fromId] = $('#transfer-from').value.split(':');
@@ -2535,6 +2573,9 @@ async function loadShopSettings() {
   $('#shop-telegram-chat-id').value = s.telegram_chat_id || '';
   $('#shop-default-margin').value = s.default_margin_percent || '';
   $('#shop-invoice-footer').value = s.invoice_footer_message || '';
+  $('#shop-national-id').value = s.national_id || '';
+  $('#shop-economic-code').value = s.economic_code || '';
+  $('#shop-postal-code').value = s.postal_code || '';
   state.defaultMarginPercent = parseFloat(s.default_margin_percent) || 0;
   renderLogoPreview(s.logo_url);
 }
@@ -2542,6 +2583,9 @@ $('#btn-save-pricing-footer').addEventListener('click', async () => {
   const res = await api('POST', '/settings/shop', {
     default_margin_percent: $('#shop-default-margin').value || 0,
     invoice_footer_message: $('#shop-invoice-footer').value.trim(),
+    national_id: $('#shop-national-id').value.trim(),
+    economic_code: $('#shop-economic-code').value.trim(),
+    postal_code: $('#shop-postal-code').value.trim(),
   });
   if (res && res.ok) {
     toast('ذخیره شد', 'success');

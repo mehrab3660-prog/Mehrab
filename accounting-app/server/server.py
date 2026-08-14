@@ -45,7 +45,8 @@ def load_shop_settings():
         except Exception:
             pass
     return {"name": "حسابداری", "phones": "", "address": "", "logo_filename": None, "invoice_number_offset": 0,
-            "default_margin_percent": 0, "invoice_footer_message": ""}
+            "default_margin_percent": 0, "invoice_footer_message": "",
+            "national_id": "", "economic_code": "", "postal_code": ""}
 
 
 def get_next_invoice_id(conn):
@@ -256,6 +257,12 @@ def update_shop_settings():
         s["telegram_chat_id"] = d.get("telegram_chat_id") or ""
     if "invoice_footer_message" in d:
         s["invoice_footer_message"] = d.get("invoice_footer_message") or ""
+    if "national_id" in d:
+        s["national_id"] = d.get("national_id") or ""
+    if "economic_code" in d:
+        s["economic_code"] = d.get("economic_code") or ""
+    if "postal_code" in d:
+        s["postal_code"] = d.get("postal_code") or ""
     if "default_margin_percent" in d:
         try:
             s["default_margin_percent"] = float(d.get("default_margin_percent") or 0)
@@ -1162,11 +1169,24 @@ def add_bank_account():
     if not d.get("name"):
         return jsonify({"ok": False, "message": "نام حساب الزامی است"}), 400
     conn = get_connection()
-    conn.execute("INSERT INTO bank_accounts (name, bank_name, account_number, balance, created_at) VALUES (?,?,?,?,?)",
-                 (d["name"], d.get("bank_name", ""), d.get("account_number", ""), d.get("balance", 0) or 0, now()))
+    conn.execute("INSERT INTO bank_accounts (name, bank_name, account_number, iban, balance, created_at) VALUES (?,?,?,?,?,?)",
+                 (d["name"], d.get("bank_name", ""), d.get("account_number", ""), d.get("iban", ""), d.get("balance", 0) or 0, now()))
     conn.commit()
     conn.close()
     log_action(d.get("username"), "افزودن حساب بانکی", d["name"])
+    return jsonify({"ok": True})
+
+
+@app.route("/bank-accounts/<int:account_id>", methods=["PUT"])
+def update_bank_account(account_id):
+    d = request.json
+    if not d.get("name"):
+        return jsonify({"ok": False, "message": "نام حساب الزامی است"}), 400
+    conn = get_connection()
+    conn.execute("UPDATE bank_accounts SET name=?, bank_name=?, account_number=?, iban=? WHERE id=?",
+                 (d["name"], d.get("bank_name", ""), d.get("account_number", ""), d.get("iban", ""), account_id))
+    conn.commit()
+    conn.close()
     return jsonify({"ok": True})
 
 
@@ -2194,6 +2214,9 @@ def invoice_print(invoice_id):
         words_text=words_text,
         logo_url=(f"/assets/{cfg['logo_filename']}" if cfg.get("logo_filename") else None),
         footer_message=cfg.get("invoice_footer_message", ""),
+        shop_national_id=cfg.get("national_id", ""),
+        shop_economic_code=cfg.get("economic_code", ""),
+        shop_postal_code=cfg.get("postal_code", ""),
     )
     return html
 

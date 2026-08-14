@@ -231,6 +231,7 @@ def init_db():
     add_column_if_missing("items", "avg_cost", "REAL")
     add_column_if_missing("items", "photo_filename", "TEXT")
     add_column_if_missing("items", "deleted_at", "TEXT")
+    add_column_if_missing("bank_accounts", "iban", "TEXT")
 
     # مهاجرت امنیتی: هش کردن رمزهایی که هنوز به‌صورت متن ساده ذخیره شده‌اند
     from werkzeug.security import generate_password_hash

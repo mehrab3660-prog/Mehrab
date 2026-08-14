@@ -53,7 +53,8 @@ PAGE_SIZE_CSS = {
 
 def build_invoice_html(invoice, items, party, page_format="A5",
                         shop_name="حسابداری", shop_phones="", shop_address="",
-                        words_text="", logo_url=None, footer_message=""):
+                        words_text="", logo_url=None, footer_message="",
+                        shop_national_id="", shop_economic_code="", shop_postal_code=""):
     """
     invoice: دیکشنری شامل number/id, invoice_type, date, total, paid, discount
     items: لیستی شامل item_name, category_name (اختیاری), qty, unit_price, total
@@ -111,13 +112,47 @@ def build_invoice_html(invoice, items, party, page_format="A5",
         <tr><td class="label">مانده قبلی:</td><td class="value">{fmt_amount(balance_before)} تومان</td></tr>
         <tr><td class="label">مانده کل:</td><td class="value">{fmt_amount(balance_after)} تومان</td></tr>"""
 
-    party_block = ""
-    if party:
-        party_block = f"""
-        <div class="party-row">
-          <span><strong>{party_role}:</strong> {esc(party['name'])}</span>
-          <span><strong>تلفن:</strong> {esc(to_fa_digits(party.get('phone') or '—'))}</span>
+    payment_type = invoice.get("payment_type", "cash")
+    paid_amount = invoice.get("paid", 0) or 0
+    remaining_amount = total - paid_amount
+    payment_label = {"cash": "نقد", "credit": "نسیه", "check": "چک"}.get(payment_type, payment_type)
+    payment_rows = f'<tr><td class="label">نوع پرداخت:</td><td class="value">{esc(payment_label)}</td></tr>'
+    if payment_type != "cash":
+        payment_rows += f"""
+        <tr><td class="label">پرداخت‌شده:</td><td class="value">{fmt_amount(paid_amount)} تومان</td></tr>
+        <tr><td class="label">مانده این فاکتور:</td><td class="value">{fmt_amount(remaining_amount)} تومان</td></tr>"""
+
+    seller_extra = ""
+    if shop_national_id:
+        seller_extra += f'<div>شناسه ملی: {esc(to_fa_digits(shop_national_id))}</div>'
+    if shop_economic_code:
+        seller_extra += f'<div>شماره اقتصادی: {esc(to_fa_digits(shop_economic_code))}</div>'
+    if shop_postal_code:
+        seller_extra += f'<div>کدپستی: {esc(to_fa_digits(shop_postal_code))}</div>'
+
+    buyer_box = f"""
+        <div class="party-col">
+          <div class="party-col-title">{esc(party_role)}</div>
+          <div><strong>{esc(party['name'])}</strong></div>
+          <div>تلفن: {esc(to_fa_digits(party.get('phone') or '—'))}</div>
+          {f"<div>آدرس: {esc(party.get('address'))}</div>" if party.get('address') else ''}
+        </div>""" if party else """
+        <div class="party-col">
+          <div class="party-col-title">مشتری</div>
+          <div>—</div>
         </div>"""
+
+    parties_box = f"""
+      <div class="parties-box">
+        <div class="party-col">
+          <div class="party-col-title">فروشنده</div>
+          <div><strong>{esc(shop_name)}</strong></div>
+          {f'<div>تلفن: {esc(to_fa_digits(shop_phones))}</div>' if shop_phones else ''}
+          {f'<div>آدرس: {esc(shop_address)}</div>' if shop_address else ''}
+          {seller_extra}
+        </div>
+        {buyer_box}
+      </div>"""
 
     description_block = ""
     if invoice.get("description"):
@@ -149,7 +184,14 @@ def build_invoice_html(invoice, items, party, page_format="A5",
   }}
   .clearfix::after {{ content: ""; display: table; clear: both; }}
   .meta-row {{ display: flex; justify-content: space-between; margin: 10px 0 4px 0; font-size: {'10px' if is_thermal else '13px'}; flex-wrap: wrap; }}
-  .party-row {{ display: flex; justify-content: space-between; margin-bottom: 8px; font-size: {'10px' if is_thermal else '13px'}; border-top: 1px dashed #999; padding-top: 6px; flex-wrap: wrap; }}
+  .parties-box {{ display: flex; border: 1px solid #333; margin-bottom: 8px; border-radius: 4px; overflow: hidden; }}
+  .party-col {{ flex: 1; padding: {'6px' if is_thermal else '10px 12px'}; font-size: {'10px' if is_thermal else '12.5px'}; line-height: 1.9; }}
+  .party-col:first-child {{ border-left: 1px solid #333; }}
+  .party-col-title {{
+    font-weight: bold; text-align: center; background: #f0f0f0; border-bottom: 1px solid #333;
+    margin: {'-6px -6px 6px -6px' if is_thermal else '-10px -12px 8px -12px'};
+    padding: {'3px' if is_thermal else '5px'}; font-size: {'10px' if is_thermal else '12.5px'};
+  }}
   .description-row {{ margin-bottom: 8px; font-size: {'10px' if is_thermal else '13px'}; color: #333; word-break: break-word; }}
   table.items {{ width: 100%; border-collapse: collapse; margin-top: 8px; }}
   table.items th, table.items td {{
@@ -182,15 +224,13 @@ def build_invoice_html(invoice, items, party, page_format="A5",
 <div class="shop-header">
   {f'<img src="{esc(logo_url)}" alt="لوگو">' if logo_url else ''}
   <h1>{esc(shop_name)}</h1>
-  {f'<div class="sub">{esc(shop_phones)}</div>' if shop_phones else ''}
-  {f'<div class="sub">{esc(shop_address)}</div>' if shop_address else ''}
 </div>
 
 <div class="meta-row">
-  <span><strong>شماره فاکتور:</strong> {esc(invoice.get('number') or invoice.get('id'))}</span>
+  <span><strong>شماره فاکتور:</strong> {to_fa_digits(esc(invoice.get('number') or invoice.get('id')))}</span>
   <span><strong>تاریخ:</strong> {date_fa}</span>
 </div>
-{party_block}
+{parties_box}
 {description_block}
 
 <table class="items">
@@ -208,6 +248,7 @@ def build_invoice_html(invoice, items, party, page_format="A5",
   <tr><td class="label">جمع کل:</td><td class="value">{fmt_amount(subtotal)} تومان</td></tr>
   <tr><td class="label">تخفیف:</td><td class="value">{fmt_amount(discount)} تومان</td></tr>
   <tr class="grand"><td class="label">جمع کل با تخفیف:</td><td class="value">{fmt_amount(total)} تومان</td></tr>
+  {payment_rows}
   {balance_rows}
 </table>
 
