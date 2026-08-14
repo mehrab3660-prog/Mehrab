@@ -79,44 +79,76 @@ jobs:
           # دارد. به‌جایش با 7-Zip (که روی runnerهای گیت‌هاب از قبل نصب
           # است) مستقیماً به‌عنوان یک آرشیو بازش می‌کنیم.
           $layoutDir = "$PWD\vcredist_layout"
+          New-Item -ItemType Directory -Force -Path $layoutDir | Out-Null
           Write-Host "Downloading vc_redist.x64.exe..."
           Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile "vc_redist.x64.exe" -UseBasicParsing
           $downloaded = Get-Item "vc_redist.x64.exe" -ErrorAction SilentlyContinue
           Write-Host "Downloaded file size: $($downloaded.Length) bytes"
 
           $sevenZip = "C:\Program Files\7-Zip\7z.exe"
-          Write-Host "Extracting vc_redist.x64.exe with 7-Zip (it's a WiX Burn bundle, not a normal installer)..."
-          New-Item -ItemType Directory -Force -Path $layoutDir | Out-Null
-          $sevenZipOutput = & $sevenZip x "vc_redist.x64.exe" "-o$layoutDir" -y 2>&1
-          Write-Host ($sevenZipOutput | Select-Object -Last 20 | Out-String)
 
-          $allLayoutFiles = Get-ChildItem -Path $layoutDir -Recurse -ErrorAction SilentlyContinue
-          Write-Host "Files found under $layoutDir : $($allLayoutFiles.Count)"
-          $allLayoutFiles | Select-Object -First 40 -ExpandProperty FullName | ForEach-Object { Write-Host "  $_" }
-
-          # داخل این آرشیو ممکن است باز هم چند لایه cab/msi باشد؛ همه را
-          # پیدا و باز می‌کنیم تا به فایل‌های dll خام برسیم.
-          $cabs = $allLayoutFiles | Where-Object { $_.Extension -eq ".cab" }
-          Write-Host "Cab files found: $($cabs.Count)"
-          foreach ($cab in $cabs) {
-            $outDir = Join-Path $layoutDir ("expanded_" + $cab.BaseName)
+          # WiX Burn bundles (which vc_redist.x64.exe is) chain several
+          # archives back-to-back inside one exe: 7-Zip only unpacks the
+          # FIRST one it finds and reports how many bytes of "data after
+          # the end of archive" are left over. We keep carving out that
+          # leftover tail into its own file and re-running 7-Zip on it
+          # until there's nothing meaningful left, so we reach every
+          # embedded container instead of just the first (small) one.
+          $currentFile = (Resolve-Path "vc_redist.x64.exe").Path
+          for ($i = 0; $i -lt 6; $i++) {
+            $outDir = Join-Path $layoutDir "layer_$i"
             New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-            $expandOutput = & expand.exe -F:* $cab.FullName $outDir 2>&1
-            Write-Host "expand.exe on $($cab.Name): $expandOutput"
+            Write-Host "--- 7-Zip pass $i on $currentFile ---"
+            $sevenZipOutput = & $sevenZip x $currentFile "-o$outDir" -y 2>&1
+            Write-Host ($sevenZipOutput | Out-String)
+
+            $tailMatch = $sevenZipOutput | Select-String -Pattern "Tail Size = (\d+)"
+            $physicalMatch = $sevenZipOutput | Select-String -Pattern "Physical Size = (\d+)"
+            if (-not $tailMatch -or -not $physicalMatch) {
+              Write-Host "No more 'data after the end of archive' reported - stopping the carve loop."
+              break
+            }
+
+            $tailSize = [int64]$tailMatch.Matches[0].Groups[1].Value
+            $physicalSize = [int64]$physicalMatch.Matches[0].Groups[1].Value
+            Write-Host "Physical size: $physicalSize, remaining tail: $tailSize"
+            if ($tailSize -lt 1024) {
+              Write-Host "Remaining tail is negligible - stopping the carve loop."
+              break
+            }
+
+            $tailFile = Join-Path $layoutDir "tail_$i.bin"
+            $srcStream = [System.IO.File]::OpenRead($currentFile)
+            $srcStream.Seek($physicalSize, [System.IO.SeekOrigin]::Begin) | Out-Null
+            $tailStream = [System.IO.File]::Create($tailFile)
+            $srcStream.CopyTo($tailStream)
+            $tailStream.Close()
+            $srcStream.Close()
+            Write-Host "Carved out tail into $tailFile ($((Get-Item $tailFile).Length) bytes)"
+            $currentFile = $tailFile
           }
 
-          $msis = $allLayoutFiles | Where-Object { $_.Extension -eq ".msi" }
-          Write-Host "Msi files found: $($msis.Count)"
-          foreach ($msi in $msis) {
+          $allLayoutFiles = Get-ChildItem -Path $layoutDir -Recurse -ErrorAction SilentlyContinue -File
+          Write-Host "Total files found across all extraction layers: $($allLayoutFiles.Count)"
+
+          # هرچه پیدا شد ممکن است هنوز داخلش cab/msi باشد (بدون پسوند
+          # درست)؛ روی همه امتحان می‌کنیم، خطا روی فایل‌هایی که آرشیو
+          # نیستند بی‌ضرر است.
+          foreach ($f in $allLayoutFiles) {
+            if ($f.Extension -in @(".dll", ".exe", ".bin")) { continue }
+            $outDir = Join-Path $layoutDir ("expanded_" + $f.BaseName + "_" + $f.Directory.Name)
+            New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+            & $sevenZip x $f.FullName "-o$outDir" -y *> $null
+          }
+          foreach ($msi in ($allLayoutFiles | Where-Object { $_.Extension -eq ".msi" })) {
             $outDir = Join-Path $layoutDir ("msiextract_" + $msi.BaseName)
             New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-            $msiOutput = & msiexec.exe /a "$($msi.FullName)" /qn TARGETDIR="$outDir" 2>&1
+            & msiexec.exe /a "$($msi.FullName)" /qn TARGETDIR="$outDir" | Out-Null
             Start-Sleep -Seconds 2
-            Write-Host "msiexec /a on $($msi.Name): exit handled, output: $msiOutput"
           }
 
           $dllPatterns = @("api-ms-win-*.dll", "ucrtbase.dll", "vcruntime140*.dll", "msvcp140*.dll")
-          $dlls = Get-ChildItem -Path $layoutDir -Recurse -ErrorAction SilentlyContinue |
+          $dlls = Get-ChildItem -Path $layoutDir -Recurse -ErrorAction SilentlyContinue -File |
             Where-Object { $name = $_.Name; ($dllPatterns | Where-Object { $name -like $_ }).Count -gt 0 }
           Write-Host "Total matching DLL files found anywhere under the extracted payload: $($dlls.Count)"
           if ($dlls) {
