@@ -372,7 +372,31 @@ async function refreshCaptcha() {
 }
 refreshCaptcha();
 
+let loginLockoutTimer = null;
+function startLoginLockoutCountdown(seconds) {
+  if (loginLockoutTimer) clearInterval(loginLockoutTimer);
+  let remaining = seconds;
+  const btn = $('#login-btn');
+  const renderLockMessage = () => {
+    $('#login-error').textContent = `به‌خاطر تلاش‌های ناموفق زیاد، این حساب موقتاً قفل شده. ${remaining} ثانیه دیگر دوباره امتحان کنید.`;
+  };
+  btn.disabled = true;
+  renderLockMessage();
+  loginLockoutTimer = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) {
+      clearInterval(loginLockoutTimer);
+      loginLockoutTimer = null;
+      btn.disabled = false;
+      $('#login-error').textContent = 'می‌توانید دوباره امتحان کنید.';
+      return;
+    }
+    renderLockMessage();
+  }, 1000);
+}
+
 async function doLogin() {
+  if (loginLockoutTimer) return; // تا وقتی قفل موقت فعاله، اجازه‌ی تلاش دوباره نده
   const username = $('#login-username').value.trim();
   const password = $('#login-password').value;
   const captcha_answer = $('#login-captcha-answer').value.trim();
@@ -395,7 +419,11 @@ async function doLogin() {
       $('#login-totp-field').classList.remove('hidden');
       $('#login-totp-code').focus();
     }
-    $('#login-error').textContent = (res && res.message) || 'ورود ناموفق بود';
+    if (res && res.retry_after_seconds) {
+      startLoginLockoutCountdown(res.retry_after_seconds);
+    } else {
+      $('#login-error').textContent = (res && res.message) || 'ورود ناموفق بود';
+    }
     refreshCaptcha(); // هر کد امنیتی فقط یک‌بار مصرفه، پس چه موفق چه ناموفق باید تازه بشه
   }
 }

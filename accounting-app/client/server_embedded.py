@@ -396,7 +396,8 @@ def login():
             remaining = int(rec["locked_until"] - time.time()) + 1
             return jsonify({
                 "ok": False,
-                "message": f"به‌خاطر تلاش‌های ناموفق زیاد، این حساب موقتاً قفل شده. {remaining} ثانیه دیگر دوباره امتحان کنید."
+                "message": f"به‌خاطر تلاش‌های ناموفق زیاد، این حساب موقتاً قفل شده. {remaining} ثانیه دیگر دوباره امتحان کنید.",
+                "retry_after_seconds": remaining,
             }), 429
 
     if not verify_and_consume_captcha(data.get("captcha_id"), data.get("captcha_answer")):
