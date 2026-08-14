@@ -73,20 +73,29 @@ jobs:
           #    مایکروسافت هستند، پس خودِ همان نصب‌کننده را دانلود و باز
           #    می‌کنیم (بدون این‌که واقعاً نصبش کنیم) و هر DLL مرتبطی که
           #    پیدا شود را هم اضافه می‌کنیم.
+          # vc_redist.x64.exe از نوع WiX Burn bundle است: با /layout فقط
+          # خودش را دوباره کپی می‌کند (نه محتوای واقعی‌اش) چون /layout به
+          # یک manifest/channel آنلاین که در دسترس این runner نیست نیاز
+          # دارد. به‌جایش با 7-Zip (که روی runnerهای گیت‌هاب از قبل نصب
+          # است) مستقیماً به‌عنوان یک آرشیو بازش می‌کنیم.
           $layoutDir = "$PWD\vcredist_layout"
           Write-Host "Downloading vc_redist.x64.exe..."
           Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile "vc_redist.x64.exe" -UseBasicParsing
           $downloaded = Get-Item "vc_redist.x64.exe" -ErrorAction SilentlyContinue
           Write-Host "Downloaded file size: $($downloaded.Length) bytes"
 
-          Write-Host "Running vc_redist.x64.exe /layout (extract only, no install)..."
-          $proc = Start-Process -FilePath ".\vc_redist.x64.exe" -ArgumentList "/layout `"$layoutDir`" /quiet" -Wait -NoNewWindow -PassThru
-          Write-Host "Layout process exit code: $($proc.ExitCode)"
+          $sevenZip = "C:\Program Files\7-Zip\7z.exe"
+          Write-Host "Extracting vc_redist.x64.exe with 7-Zip (it's a WiX Burn bundle, not a normal installer)..."
+          New-Item -ItemType Directory -Force -Path $layoutDir | Out-Null
+          $sevenZipOutput = & $sevenZip x "vc_redist.x64.exe" "-o$layoutDir" -y 2>&1
+          Write-Host ($sevenZipOutput | Select-Object -Last 20 | Out-String)
 
           $allLayoutFiles = Get-ChildItem -Path $layoutDir -Recurse -ErrorAction SilentlyContinue
           Write-Host "Files found under $layoutDir : $($allLayoutFiles.Count)"
           $allLayoutFiles | Select-Object -First 40 -ExpandProperty FullName | ForEach-Object { Write-Host "  $_" }
 
+          # داخل این آرشیو ممکن است باز هم چند لایه cab/msi باشد؛ همه را
+          # پیدا و باز می‌کنیم تا به فایل‌های dll خام برسیم.
           $cabs = $allLayoutFiles | Where-Object { $_.Extension -eq ".cab" }
           Write-Host "Cab files found: $($cabs.Count)"
           foreach ($cab in $cabs) {
@@ -96,9 +105,20 @@ jobs:
             Write-Host "expand.exe on $($cab.Name): $expandOutput"
           }
 
+          $msis = $allLayoutFiles | Where-Object { $_.Extension -eq ".msi" }
+          Write-Host "Msi files found: $($msis.Count)"
+          foreach ($msi in $msis) {
+            $outDir = Join-Path $layoutDir ("msiextract_" + $msi.BaseName)
+            New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+            $msiOutput = & msiexec.exe /a "$($msi.FullName)" /qn TARGETDIR="$outDir" 2>&1
+            Start-Sleep -Seconds 2
+            Write-Host "msiexec /a on $($msi.Name): exit handled, output: $msiOutput"
+          }
+
           $dllPatterns = @("api-ms-win-*.dll", "ucrtbase.dll", "vcruntime140*.dll", "msvcp140*.dll")
           $dlls = Get-ChildItem -Path $layoutDir -Recurse -ErrorAction SilentlyContinue |
             Where-Object { $name = $_.Name; ($dllPatterns | Where-Object { $name -like $_ }).Count -gt 0 }
+          Write-Host "Total matching DLL files found anywhere under the extracted payload: $($dlls.Count)"
           if ($dlls) {
             $dlls | Group-Object Name | ForEach-Object { $_.Group[0] } | Copy-Item -Destination $dest -Force
             Write-Host "Bundled $($dlls.Count) CRT/UCRT/apiset DLL files extracted from the VC++ redistributable payload."
