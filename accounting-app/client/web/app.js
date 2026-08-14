@@ -2387,9 +2387,11 @@ $('#btn-do-transfer').addEventListener('click', async () => {
 });
 
 const BANK_DEPOSIT_SOURCE_LABELS = {
-  customer: 'دریافت از مشتری', capital: 'آورده/سرمایه‌گذاری صاحب کسب‌وکار', interest: 'سود بانکی', other: 'سایر',
+  customer: 'دریافت از مشتری', person_transfer: 'واریزی/انتقال از شخص یا حساب دیگر',
+  capital: 'آورده/سرمایه‌گذاری صاحب کسب‌وکار', interest: 'سود بانکی', other: 'سایر',
 };
 const BANK_WITHDRAWAL_DEST_LABELS = {
+  person_transfer: 'انتقال به حساب شخص یا شرکت دیگر',
   rent: 'اجاره', salary: 'حقوق پرسنل', utilities: 'قبوض', repairs: 'تعمیر و نگهداری',
   transport: 'حمل و نقل', supplies: 'لوازم مصرفی مغازه', bank_fee: 'کارمزد بانکی',
   personal_draw: 'برداشت شخصی/سود مالک', other: 'متفرقه',
@@ -2399,8 +2401,14 @@ function refreshBankTxCategoryOptions() {
   const labels = type === 'deposit' ? BANK_DEPOSIT_SOURCE_LABELS : BANK_WITHDRAWAL_DEST_LABELS;
   $('#bank-tx-category-label').textContent = type === 'deposit' ? 'منبع واریز' : 'مقصد برداشت';
   $('#bank-tx-category').innerHTML = Object.entries(labels).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+  refreshBankTxDescPlaceholder();
+}
+function refreshBankTxDescPlaceholder() {
+  const category = $('#bank-tx-category').value;
+  $('#bank-tx-desc').placeholder = category === 'person_transfer' ? 'نام طرف و شماره حساب/کارت مقصد یا مبدأ' : '';
 }
 $('#bank-tx-type').addEventListener('change', refreshBankTxCategoryOptions);
+$('#bank-tx-category').addEventListener('change', refreshBankTxDescPlaceholder);
 refreshBankTxCategoryOptions();
 
 $('#btn-bank-tx-submit').addEventListener('click', async () => {

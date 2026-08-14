@@ -1205,11 +1205,13 @@ def delete_bank_account(account_id):
 
 BANK_DEPOSIT_SOURCE_LABELS = {
     "customer": "دریافت از مشتری",
+    "person_transfer": "واریزی/انتقال از شخص یا حساب دیگر",
     "capital": "آورده/سرمایه‌گذاری صاحب کسب‌وکار",
     "interest": "سود بانکی",
     "other": "سایر",
 }
 BANK_WITHDRAWAL_DEST_LABELS = {
+    "person_transfer": "انتقال به حساب شخص یا شرکت دیگر",
     "rent": "اجاره",
     "salary": "حقوق پرسنل",
     "utilities": "قبوض",
