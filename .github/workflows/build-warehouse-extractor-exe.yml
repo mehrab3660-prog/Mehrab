@@ -48,23 +48,66 @@ jobs:
           # "local/app-relative deployment" است: خودِ DLL های UCRT را کنار
           # exe می‌گذاریم تا برنامه اصلاً به UCRT نصب‌شده روی سیستم مقصد
           # وابسته نباشد. (See: https://learn.microsoft.com/cpp/windows/universal-crt-deployment)
+          #
+          # ۱) اول از Windows SDK (اگر روی runner باشد) فقط DLL های خود UCRT
+          #    (api-ms-win-crt-*.dll + ucrtbase.dll) را برمی‌داریم.
           $dest = "dist\WarehouseSerialExtractor"
           $candidates = @(
             "C:\Program Files (x86)\Windows Kits\10\Redist\*\ucrt\DLLs\x64",
             "C:\Program Files (x86)\Windows Kits\10\Redist\ucrt\DLLs\x64"
           )
-          $found = $null
           foreach ($pattern in $candidates) {
             $dir = Get-ChildItem $pattern -Directory -ErrorAction SilentlyContinue |
               Sort-Object Name -Descending | Select-Object -First 1
             if (-not $dir -and (Test-Path $pattern)) { $dir = Get-Item $pattern }
-            if ($dir) { $found = $dir; break }
+            if ($dir) {
+              Copy-Item "$($dir.FullName)\*.dll" -Destination $dest -Force
+              Write-Host "Copied UCRT redist DLLs from $($dir.FullName) into $dest"
+              break
+            }
           }
-          if ($found) {
-            Copy-Item "$($found.FullName)\*.dll" -Destination $dest -Force
-            Write-Host "Copied UCRT redist DLLs from $($found.FullName) into $dest"
+
+          # ۲) این تنها نصفِ ماجراست: ucrtbase.dll خودش به یک سری فایل دیگر
+          #    به نام api-ms-win-core-*.dll نیاز دارد (که جای دیگری روی
+          #    Windows SDK نیستند). این‌ها فقط داخل بسته رسمی vc_redist
+          #    مایکروسافت هستند، پس خودِ همان نصب‌کننده را دانلود و باز
+          #    می‌کنیم (بدون این‌که واقعاً نصبش کنیم) و هر DLL مرتبطی که
+          #    پیدا شود را هم اضافه می‌کنیم.
+          $layoutDir = "$PWD\vcredist_layout"
+          try {
+            Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile "vc_redist.x64.exe" -UseBasicParsing
+            Start-Process -FilePath ".\vc_redist.x64.exe" -ArgumentList "/layout `"$layoutDir`" /quiet" -Wait -NoNewWindow
+
+            Get-ChildItem -Path $layoutDir -Recurse -Filter *.cab -ErrorAction SilentlyContinue | ForEach-Object {
+              $outDir = Join-Path $layoutDir ("expanded_" + $_.BaseName)
+              New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+              & expand.exe -F:* $_.FullName $outDir | Out-Null
+            }
+
+            $dlls = Get-ChildItem -Path $layoutDir -Recurse -ErrorAction SilentlyContinue -Include `
+              "api-ms-win-*.dll", "ucrtbase.dll", "vcruntime140*.dll", "msvcp140*.dll"
+            if ($dlls) {
+              $dlls | Group-Object Name | ForEach-Object { $_.Group[0] } | Copy-Item -Destination $dest -Force
+              Write-Host "Bundled $($dlls.Count) CRT/UCRT/apiset DLL files extracted from the VC++ redistributable payload."
+            } else {
+              Write-Warning "Extracted the VC++ redistributable but found no matching DLL files inside it."
+            }
+          } catch {
+            Write-Warning "Could not download/extract vc_redist.x64.exe: $_"
+          }
+
+      - name: Verify bundled DLLs
+        shell: pwsh
+        run: |
+          $dest = "dist\WarehouseSerialExtractor"
+          $bundled = Get-ChildItem $dest -Filter "api-ms-win-*.dll","ucrtbase.dll" -ErrorAction SilentlyContinue
+          $count = ($bundled | Measure-Object).Count
+          Write-Host "Total api-ms-win-*/ucrtbase DLLs bundled next to the exe: $count"
+          $needle = Get-ChildItem $dest -Filter "api-ms-win-core-path-l1-1-0.dll" -ErrorAction SilentlyContinue
+          if ($needle) {
+            Write-Host "OK: api-ms-win-core-path-l1-1-0.dll (the exact DLL the user's machine reported missing) IS bundled."
           } else {
-            Write-Warning "UCRT redist DLLs not found on this runner (Windows SDK missing?). The exe will rely on the target machine already having UCRT installed."
+            Write-Warning "MISSING: api-ms-win-core-path-l1-1-0.dll was NOT found in the bundle. The fix is incomplete."
           }
 
       - name: Build installer (Inno Setup)
