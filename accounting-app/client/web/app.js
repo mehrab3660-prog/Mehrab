@@ -792,6 +792,12 @@ $('#btn-manage-2fa').addEventListener('click', async () => {
 });
 
 // ===================== ناوبری =====================
+function expandNavGroupIfNeeded(page) {
+  if (page === 'warranty') {
+    $('#nav-warranty-sub').classList.remove('hidden');
+    $('#nav-ai-group-caret').classList.add('open');
+  }
+}
 $$('.nav-item').forEach(item => {
   item.addEventListener('click', () => {
     $$('.nav-item').forEach(i => i.classList.remove('active'));
@@ -799,8 +805,14 @@ $$('.nav-item').forEach(item => {
     $$('.page').forEach(p => p.classList.remove('active'));
     $('#page-' + item.dataset.page).classList.add('active');
     $('#sidebar').classList.remove('open');
+    expandNavGroupIfNeeded(item.dataset.page);
     loadPage(item.dataset.page);
   });
+});
+$('#nav-ai-group-caret').addEventListener('click', (e) => {
+  e.stopPropagation();
+  $('#nav-ai-group-caret').classList.toggle('open');
+  $('#nav-warranty-sub').classList.toggle('hidden');
 });
 
 function navigateToPage(page) {
@@ -810,6 +822,7 @@ function navigateToPage(page) {
   $$('.page').forEach(p => p.classList.remove('active'));
   $('#page-' + page).classList.add('active');
   $('#sidebar').classList.remove('open');
+  expandNavGroupIfNeeded(page);
   loadPage(page);
 }
 
