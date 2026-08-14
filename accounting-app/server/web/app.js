@@ -409,7 +409,24 @@ function enterApp() {
   bindAssistant();
   bindNotifBell();
   bindCommandPalette();
+  bindUserBadgeMenu();
+  bindGlobalSearch();
   loadNotifications();
+}
+
+// ===================== منوی کاربر (بالای سایدبار سابق، حالا زیر نام کاربری) =====================
+let userBadgeMenuBound = false;
+function bindUserBadgeMenu() {
+  if (userBadgeMenuBound) return;
+  userBadgeMenuBound = true;
+  $('#user-badge-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    $('#user-badge-dropdown').classList.toggle('hidden');
+  });
+  document.addEventListener('click', (e) => {
+    const wrap = $('.user-badge-wrap');
+    if (wrap && !wrap.contains(e.target)) $('#user-badge-dropdown').classList.add('hidden');
+  });
 }
 
 // ===================== پالت فرمان (Ctrl+K) =====================
@@ -753,16 +770,74 @@ const _PERSIAN_MONTH_NAMES_FULL = ['فروردین', 'اردیبهشت', 'خرد
 setInterval(updateLiveClock, 1000);
 updateLiveClock();
 
-// ===================== جستجوی سریع =====================
-$('#global-search').addEventListener('input', (e) => {
-  const q = e.target.value.trim();
-  const activePage = $('.page.active');
-  if (!activePage) return;
-  const rows = $$('tbody tr', activePage);
-  rows.forEach(row => {
-    row.style.display = !q || row.textContent.includes(q) ? '' : 'none';
+// ===================== جستجوی سریع سراسری =====================
+let globalSearchTimer = null;
+let globalSearchBound = false;
+function bindGlobalSearch() {
+  if (globalSearchBound) return;
+  globalSearchBound = true;
+  $('#global-search').addEventListener('input', (e) => {
+    clearTimeout(globalSearchTimer);
+    const q = e.target.value.trim();
+    if (q.length < 2) { $('#global-search-results').classList.add('hidden'); return; }
+    globalSearchTimer = setTimeout(() => runGlobalSearch(q), 250);
   });
-});
+  $('#global-search').addEventListener('focus', () => {
+    if ($('#global-search').value.trim().length >= 2 && $('#global-search-results').innerHTML) {
+      $('#global-search-results').classList.remove('hidden');
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (!$('.topbar-search').contains(e.target)) $('#global-search-results').classList.add('hidden');
+  });
+}
+
+async function runGlobalSearch(q) {
+  const ql = q.toLowerCase();
+  const [items, parties, invoices] = await Promise.all([
+    api('GET', `/items?role=${state.user.role}`),
+    api('GET', '/parties'),
+    api('GET', '/invoices'),
+  ]);
+  const itemMatches = (items || []).filter(it =>
+    (it.name || '').toLowerCase().includes(ql) || (it.barcode || '').toLowerCase().includes(ql)
+  ).slice(0, 5);
+  const partyMatches = (parties || []).filter(p =>
+    (p.name || '').toLowerCase().includes(ql) || (p.phone || '').includes(q)
+  ).slice(0, 5);
+  const invoiceMatches = (invoices || []).filter(inv =>
+    String(inv.number || inv.id).includes(q) || (inv.party_name || '').toLowerCase().includes(ql)
+  ).slice(0, 5);
+
+  const typeLabel = { sale: 'فروش', purchase: 'خرید', sale_return: 'مرجوعی فروش', purchase_return: 'مرجوعی خرید' };
+  let html = '';
+  if (itemMatches.length) {
+    html += '<div class="gsr-group-title">📦 کالاها</div>' + itemMatches.map(it =>
+      `<div class="gsr-item" data-page="items"><span>${escHtml(it.name)}</span><span class="gsr-sub">موجودی: ${fmt(it.stock_qty)} ${it.unit || ''}</span></div>`
+    ).join('');
+  }
+  if (partyMatches.length) {
+    html += '<div class="gsr-group-title">👥 مشتریان و تامین‌کنندگان</div>' + partyMatches.map(p =>
+      `<div class="gsr-item" data-page="parties"><span>${escHtml(p.name)}</span><span class="gsr-sub">${p.type === 'customer' ? 'مشتری' : 'تامین‌کننده'}</span></div>`
+    ).join('');
+  }
+  if (invoiceMatches.length) {
+    html += '<div class="gsr-group-title">🧾 فاکتورها</div>' + invoiceMatches.map(inv =>
+      `<div class="gsr-item" data-page="history"><span>فاکتور ${toFaDigits(inv.number || inv.id)}</span><span class="gsr-sub">${escHtml(inv.party_name || '')} — ${typeLabel[inv.invoice_type] || ''}</span></div>`
+    ).join('');
+  }
+
+  const box = $('#global-search-results');
+  box.innerHTML = html || '<div class="gsr-empty">چیزی پیدا نشد</div>';
+  box.classList.remove('hidden');
+  $$('.gsr-item', box).forEach(el => {
+    el.addEventListener('click', () => {
+      navigateToPage(el.dataset.page);
+      box.classList.add('hidden');
+      $('#global-search').value = '';
+    });
+  });
+}
 
 // ===================== نمودار میله‌ای ساده (بدون کتابخانه خارجی) =====================
 function drawBarChart(canvas, labels, values, opts = {}) {

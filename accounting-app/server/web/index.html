@@ -87,6 +87,7 @@
     <div class="topbar-search">
       <i class="icon">search</i>
       <input type="text" id="global-search" placeholder="جستجوی سریع در کالاها، مشتریان و فاکتورها...">
+      <div class="global-search-results hidden" id="global-search-results"></div>
     </div>
     <div class="topbar-actions">
       <div class="zoom-controls">
@@ -105,9 +106,16 @@
       <button class="icon-btn" id="theme-toggle" title="تغییر حالت روشن/تیره">
         <span id="theme-icon">🌙</span>
       </button>
-      <div class="user-badge">
-        <span class="user-name" id="user-name">—</span>
-        <span class="user-role" id="user-role">—</span>
+      <div class="user-badge-wrap">
+        <button class="user-badge" id="user-badge-btn">
+          <span class="user-name" id="user-name">—</span>
+          <span class="user-role" id="user-role">—</span>
+        </button>
+        <div class="user-badge-dropdown hidden" id="user-badge-dropdown">
+          <button class="btn btn-ghost btn-block" id="btn-change-own-password">تغییر رمز عبور من</button>
+          <button class="btn btn-ghost btn-block" id="btn-manage-2fa">ورود دو مرحله‌ای</button>
+          <button class="btn btn-ghost btn-block logout-btn" id="logout-btn">خروج از حساب</button>
+        </div>
       </div>
     </div>
   </header>
@@ -139,9 +147,6 @@
         <li class="nav-item admin-only" data-page="bulk-price"><span class="nav-icon">💹</span><span class="nav-label">افزایش قیمت گروهی</span></li>
         <li class="nav-item admin-only" data-page="settings-hub"><span class="nav-icon">⚙️</span><span class="nav-label">تنظیمات کلی</span></li>
       </ul>
-      <button class="btn btn-ghost btn-block" id="btn-change-own-password">تغییر رمز عبور من</button>
-      <button class="btn btn-ghost btn-block" id="btn-manage-2fa">ورود دو مرحله‌ای</button>
-      <button class="btn btn-ghost btn-block logout-btn" id="logout-btn">خروج از حساب</button>
     </nav>
 
     <!-- محتوای اصلی -->
