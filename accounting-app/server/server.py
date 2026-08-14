@@ -46,7 +46,8 @@ def load_shop_settings():
             pass
     return {"name": "حسابداری", "phones": "", "address": "", "logo_filename": None, "invoice_number_offset": 0,
             "default_margin_percent": 0, "invoice_footer_message": "",
-            "national_id": "", "economic_code": "", "postal_code": ""}
+            "national_id": "", "economic_code": "", "postal_code": "",
+            "ai_enabled": False, "ai_api_key": ""}
 
 
 def get_next_invoice_id(conn):
@@ -238,6 +239,10 @@ def get_shop_settings():
     next_id = get_next_invoice_id(conn)
     conn.close()
     s["next_invoice_number"] = next_id + (s.get("invoice_number_offset", 0) or 0)
+    # این مسیر حتی قبل از ورود هم صدا زده می‌شود (برای نمایش نام/لوگوی مغازه در صفحه ورود)،
+    # پس کلیدهای حساس هرگز نباید در پاسخش برگردند — فقط این‌که «تنظیم شده یا نه»
+    s["telegram_bot_token_set"] = bool(s.pop("telegram_bot_token", None))
+    s["ai_api_key_set"] = bool(s.pop("ai_api_key", None))
     return jsonify(s)
 
 
@@ -251,10 +256,14 @@ def update_shop_settings():
     s["name"] = d.get("name", s.get("name"))
     s["phones"] = d.get("phones", s.get("phones"))
     s["address"] = d.get("address", s.get("address"))
-    if "telegram_bot_token" in d:
-        s["telegram_bot_token"] = d.get("telegram_bot_token") or ""
+    if d.get("telegram_bot_token"):
+        s["telegram_bot_token"] = d.get("telegram_bot_token").strip()
     if "telegram_chat_id" in d:
         s["telegram_chat_id"] = d.get("telegram_chat_id") or ""
+    if "ai_enabled" in d:
+        s["ai_enabled"] = bool(d.get("ai_enabled"))
+    if d.get("ai_api_key"):
+        s["ai_api_key"] = d.get("ai_api_key").strip()
     if "invoice_footer_message" in d:
         s["invoice_footer_message"] = d.get("invoice_footer_message") or ""
     if "national_id" in d:
@@ -2448,13 +2457,12 @@ def analyze_invoice_photo():
             return jsonify({"ok": False, "message": data}), 400
         return jsonify({"ok": True, "data": data, "method": "offline"})
 
-    cfg = notifier.load_config() or {}
-    ai_cfg = cfg.get("ai", {})
-    if not ai_cfg.get("enabled"):
-        return jsonify({"ok": False, "message": "روش هوش مصنوعی فعال نشده. فایل config.json را بساز و بخش \"ai\" را طبق راهنما پر کن، یا روش «رایگان آفلاین» را انتخاب کن"}), 400
+    s = load_shop_settings()
+    if not s.get("ai_enabled") or not s.get("ai_api_key"):
+        return jsonify({"ok": False, "message": "روش هوش مصنوعی فعال نشده. از «تنظیمات کلی › دستیار هوش مصنوعی» کلید API را وارد کن، یا روش «رایگان آفلاین» را انتخاب کن"}), 400
 
     ok, data = invoice_ai.analyze_invoice_image(
-        image_bytes, media_type, ai_cfg.get("api_key"), ai_cfg.get("model", "claude-haiku-4-5-20251001")
+        image_bytes, media_type, s.get("ai_api_key"), "claude-haiku-4-5-20251001"
     )
     if not ok:
         return jsonify({"ok": False, "message": data}), 400
@@ -2469,13 +2477,11 @@ def assistant_ask():
     question = d.get("question", "")
     history = d.get("history", [])
 
-    cfg = notifier.load_config() or {}
-    ai_cfg = cfg.get("ai", {})
-    if not ai_cfg.get("enabled") or not ai_cfg.get("api_key"):
-        return jsonify({"ok": False, "message": "دستیار هوشمند فعال نیست. مدیر باید فایل config.json را بسازد و بخش \"ai\" را طبق راهنما پر کند."}), 400
+    s = load_shop_settings()
+    if not s.get("ai_enabled") or not s.get("ai_api_key"):
+        return jsonify({"ok": False, "message": "دستیار هوشمند فعال نیست. مدیر باید از «تنظیمات کلی › دستیار هوش مصنوعی» کلید API را وارد کند."}), 400
 
-    model = ai_cfg.get("assistant_model") or ai_cfg.get("model", "claude-haiku-4-5-20251001")
-    ok, answer = assistant_ai.ask_assistant(question, history, ai_cfg.get("api_key"), model)
+    ok, answer = assistant_ai.ask_assistant(question, history, s.get("ai_api_key"), "claude-haiku-4-5-20251001")
     if not ok:
         return jsonify({"ok": False, "message": answer}), 400
     return jsonify({"ok": True, "answer": answer})

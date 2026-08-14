@@ -2623,7 +2623,8 @@ async function loadShopSettings() {
   $('#shop-phones').value = s.phones || '';
   $('#shop-address').value = s.address || '';
   $('#shop-next-invoice-number').value = s.next_invoice_number || '';
-  $('#shop-telegram-token').value = s.telegram_bot_token || '';
+  $('#shop-telegram-token').value = '';
+  $('#shop-telegram-token').placeholder = s.telegram_bot_token_set ? 'قبلاً تنظیم شده — فقط برای تغییر وارد کن' : '123456:ABC-...';
   $('#shop-telegram-chat-id').value = s.telegram_chat_id || '';
   $('#shop-default-margin').value = s.default_margin_percent || '';
   $('#shop-invoice-footer').value = s.invoice_footer_message || '';
@@ -2632,6 +2633,12 @@ async function loadShopSettings() {
   $('#shop-postal-code').value = s.postal_code || '';
   state.defaultMarginPercent = parseFloat(s.default_margin_percent) || 0;
   renderLogoPreview(s.logo_url);
+
+  $('#shop-ai-enabled').checked = !!s.ai_enabled;
+  $('#shop-ai-api-key').value = '';
+  $('#shop-ai-status').textContent = s.ai_api_key_set
+    ? (s.ai_enabled ? 'کلید API تنظیم شده و دستیار فعال است ✅' : 'کلید API تنظیم شده ولی دستیار غیرفعاله')
+    : 'هنوز کلید API وارد نشده';
 }
 $('#btn-save-pricing-footer').addEventListener('click', async () => {
   const res = await api('POST', '/settings/shop', {
@@ -2651,7 +2658,15 @@ $('#btn-save-telegram').addEventListener('click', async () => {
     telegram_bot_token: $('#shop-telegram-token').value.trim(),
     telegram_chat_id: $('#shop-telegram-chat-id').value.trim(),
   });
-  if (res && res.ok) toast('تنظیمات تلگرام ذخیره شد', 'success');
+  if (res && res.ok) { toast('تنظیمات تلگرام ذخیره شد', 'success'); loadShopSettings(); }
+});
+$('#btn-save-ai-settings').addEventListener('click', async () => {
+  const res = await api('POST', '/settings/shop', {
+    ai_enabled: $('#shop-ai-enabled').checked,
+    ai_api_key: $('#shop-ai-api-key').value.trim(),
+  });
+  if (res && res.ok) { toast('تنظیمات دستیار هوش مصنوعی ذخیره شد', 'success'); loadShopSettings(); }
+  else if (res) toast(res.message || 'خطا در ذخیره', 'danger');
 });
 $('#btn-test-telegram').addEventListener('click', async () => {
   const res = await api('POST', '/settings/telegram/test');
