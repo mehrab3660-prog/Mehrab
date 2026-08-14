@@ -158,6 +158,22 @@ jobs:
           $allLayoutFiles = Get-ChildItem -Path $layoutDir -Recurse -ErrorAction SilentlyContinue -File
           Write-Host "Total files found across all extraction layers: $($allLayoutFiles.Count)"
 
+          # قبل از هر کاری، ببینیم این ۱۴ فایل باقیمانده واقعاً چه نوعی
+          # هستند (msi/cab/چیز دیگر) تا اگر باز هم کار نکرد، حداقل بدانیم
+          # دقیقاً با چه فرمتی طرفیم به‌جای حدس زدن کور.
+          $leftover = $allLayoutFiles | Where-Object { $_.Extension -notin @(".dll", ".exe", ".bin") }
+          Write-Host "Leftover files to identify: $($leftover.Count)"
+          foreach ($f in ($leftover | Select-Object -First 20)) {
+            $listOutput = cmd /c "`"$sevenZip`" l `"$($f.FullName)`" 2>&1"
+            $typeLine = $listOutput | Select-String -Pattern "^Type = " | Select-Object -Last 1
+            $sig = ""
+            try {
+              $bytes = Get-Content -Path $f.FullName -Encoding Byte -TotalCount 8 -ErrorAction Stop
+              $sig = ($bytes | ForEach-Object { $_.ToString("X2") }) -join " "
+            } catch {}
+            Write-Host "  $($f.FullName) | size=$($f.Length) | 7z-type=[$typeLine] | first8bytes=[$sig]"
+          }
+
           # هرچه پیدا شد ممکن است هنوز داخلش cab/msi باشد (بدون پسوند
           # درست)؛ روی همه امتحان می‌کنیم، خطا روی فایل‌هایی که آرشیو
           # نیستند بی‌ضرر است.
@@ -172,7 +188,7 @@ jobs:
           # dll/exe/bin نشده را هم با msiexec /a امتحان می‌کنیم (روی
           # فایل‌هایی که واقعاً MSI نیستند، msiexec فقط بی‌سروصدا شکست
           # می‌خورد).
-          foreach ($f in ($allLayoutFiles | Where-Object { $_.Extension -notin @(".dll", ".exe", ".bin") })) {
+          foreach ($f in $leftover) {
             $outDir = Join-Path $layoutDir ("msiextract_" + $f.BaseName + "_" + $f.Directory.Name)
             New-Item -ItemType Directory -Force -Path $outDir | Out-Null
             cmd /c "msiexec.exe /a `"$($f.FullName)`" /qn TARGETDIR=`"$outDir`" >NUL 2>&1"
@@ -190,6 +206,13 @@ jobs:
           } else {
             Write-Warning "Extracted the VC++ redistributable but found no matching DLL files inside it."
           }
+
+          # چند تا فراخوانی بیرونی (msiexec روی فایل‌هایی که واقعاً MSI
+          # نبودند) کد خروجی غیرصفر می‌گذارند که PowerShell/Actions آن را
+          # به اشتباه به‌عنوان شکستِ کل این step تفسیر می‌کند، در حالی که
+          # منطق خودِ اسکریپت آن‌ها را درست مدیریت کرده. صفرش می‌کنیم.
+          $global:LASTEXITCODE = 0
+          exit 0
 
       - name: Verify bundled DLLs
         shell: pwsh
