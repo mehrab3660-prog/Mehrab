@@ -411,6 +411,7 @@ function enterApp() {
   bindCommandPalette();
   bindUserBadgeMenu();
   bindGlobalSearch();
+  api('GET', '/settings/shop').then(s => { if (s) state.defaultMarginPercent = parseFloat(s.default_margin_percent) || 0; });
   loadNotifications();
 }
 
@@ -1279,6 +1280,40 @@ $('#items-filter').addEventListener('input', (e) => {
 $('#btn-export-items').addEventListener('click', () => {
   downloadAuthed('/export/items.xlsx', 'کالاها.xlsx');
 });
+$('#btn-bulk-delete-items').addEventListener('click', async () => {
+  const ids = $$('.item-select-checkbox:checked').map(cb => cb.value);
+  if (!ids.length) { toast('حداقل یک کالا را انتخاب کن', 'danger'); return; }
+  if (!confirm(`${toFaDigits(ids.length)} کالای انتخاب‌شده به سطل زباله منتقل بشه؟`)) return;
+  const results = await Promise.all(ids.map(id => api('DELETE', `/items/${id}`)));
+  const failCount = results.filter(r => !r || !r.ok).length;
+  toast(failCount ? `${toFaDigits(ids.length - failCount)} کالا حذف شد، ${toFaDigits(failCount)} مورد با خطا مواجه شد` : `${toFaDigits(ids.length)} کالا به سطل زباله منتقل شد`, failCount ? 'danger' : 'success');
+  loadItems();
+});
+$('#btn-import-items').addEventListener('click', () => $('#import-items-file').click());
+$('#import-items-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append('file', file);
+  const headers = {};
+  if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
+  try {
+    const resp = await fetch('/import/items.xlsx', { method: 'POST', headers, body: formData });
+    const res = await resp.json();
+    if (res && res.ok) {
+      toast(`${toFaDigits(res.imported_count)} کالا وارد شد${res.skipped_count ? ` — ${toFaDigits(res.skipped_count)} ردیف رد شد` : ''}`, 'success');
+      if (res.errors && res.errors.length) {
+        openModal(`<h3>جزئیات ردیف‌های رد‌شده</h3><ul class="simple-list">${res.errors.map(e => `<li>${escHtml(e)}</li>`).join('')}</ul><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">بستن</button></div>`);
+      }
+      loadItems();
+    } else {
+      toast((res && res.message) || 'خطا در ورودی اکسل', 'danger');
+    }
+  } catch (err) {
+    toast('ارتباط با سرور برقرار نشد', 'danger');
+  }
+  e.target.value = '';
+});
 $('#btn-new-category').addEventListener('click', () => {
   openModal(`
     <h3>دسته‌بندی جدید</h3>
@@ -1309,6 +1344,17 @@ $('#btn-new-item').addEventListener('click', () => {
   attachThousandsFormatting($('#ni-sale'));
   attachWordsPreview($('#ni-purchase'), 'ni-purchase-words');
   attachWordsPreview($('#ni-sale'), 'ni-sale-words');
+  let saleTouchedByUser = false;
+  $('#ni-sale').addEventListener('input', () => { saleTouchedByUser = true; });
+  $('#ni-purchase').addEventListener('input', () => {
+    if (saleTouchedByUser || !state.defaultMarginPercent) return;
+    const purchasePrice = readAmount($('#ni-purchase'));
+    if (!purchasePrice) return;
+    const suggestedSale = Math.round(purchasePrice * (1 + state.defaultMarginPercent / 100));
+    $('#ni-sale').value = suggestedSale.toLocaleString('en-US');
+    $('#ni-sale').dispatchEvent(new Event('input', { bubbles: false }));
+    saleTouchedByUser = false;
+  });
   $('#save-item-btn').addEventListener('click', async () => {
     const name = $('#ni-name').value.trim();
     if (!name) { toast('نام کالا الزامی است', 'danger'); return; }
@@ -1320,6 +1366,7 @@ $('#btn-new-item').addEventListener('click', () => {
     };
     const res = await api('POST', '/items', payload);
     if (res && res.ok) { toast('کالا اضافه شد', 'success'); closeModal(); loadItems(); }
+    else if (res) toast(res.message || 'خطا در ثبت کالا', 'danger');
   });
 });
 async function showStockLedger(itemId) {
@@ -1341,7 +1388,7 @@ function loadInvoiceForm(type) {
     <div class="invoice-form">
       <div class="card">
         <div class="card-title">مشخصات فاکتور</div>
-        <div class="form-row"><div><label>${partyLabel}</label><div id="${type}-party"></div></div>
+        <div class="form-row"><div><label>${partyLabel}</label><div id="${type}-party"></div>${type === 'purchase' ? `<button class="btn btn-secondary btn-sm" id="${type}-repeat-last-btn" style="margin-top:6px">تکرار آخرین فاکتور این تامین‌کننده</button>` : ''}</div>
           <div><label>نوع پرداخت</label><select id="${type}-pay"><option value="cash">نقدی</option><option value="credit">نسیه</option><option value="check">چک</option></select></div></div>
         <div class="form-row"><div><label>تخفیف کل فاکتور (تومان)</label><input type="text" inputmode="decimal" id="${type}-discount" value="0"><div class="words-hint" id="${type}-discount-words"></div></div></div>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:6px">
@@ -1413,6 +1460,48 @@ function loadInvoiceForm(type) {
     attachThousandsFormatting($(`#${type}-discount`));
     attachWordsPreview($(`#${type}-price`), `${type}-price-words`);
     attachWordsPreview($(`#${type}-discount`), `${type}-discount-words`);
+
+    if (type === 'purchase' && state.pendingPurchaseDraft && state.pendingPurchaseDraft.length) {
+      let addedCount = 0;
+      state.pendingPurchaseDraft.forEach(line => {
+        const itemObj = state.items.find(x => x.id === line.item_id);
+        if (!itemObj) return;
+        state[cartKey].push({
+          item_id: line.item_id, item_name: itemObj.name, qty: line.qty,
+          unit_price: line.unit_price != null ? line.unit_price : (itemObj.purchase_price || 0),
+        });
+        addedCount++;
+      });
+      state.pendingPurchaseDraft = null;
+      if (addedCount) {
+        renderCart(type);
+        applyAutoDiscount(type);
+        toast(`${toFaDigits(addedCount)} قلم کالا به سبد اضافه شد — تامین‌کننده و قیمت‌ها رو بررسی کن`, 'success');
+      }
+    }
+
+    if (type === 'purchase') {
+      $(`#${type}-repeat-last-btn`).addEventListener('click', async () => {
+        const partyId = state.invoiceUI[type].partySS.getValue();
+        if (!partyId) { toast('اول تامین‌کننده رو انتخاب کن', 'danger'); return; }
+        const res = await api('GET', `/invoices/last-purchase/${partyId}`);
+        if (!res || !res.ok) { toast((res && res.message) || 'فاکتوری از این تامین‌کننده پیدا نشد', 'danger'); return; }
+        let addedCount = 0;
+        res.items.forEach(it => {
+          const itemObj = state.items.find(x => x.id === it.item_id);
+          if (!itemObj) return;
+          state[cartKey].push({ item_id: it.item_id, item_name: itemObj.name, qty: it.qty, unit_price: it.unit_price });
+          addedCount++;
+        });
+        if (addedCount) {
+          renderCart(type);
+          applyAutoDiscount(type);
+          toast(`فاکتور شماره ${toFaDigits(res.invoice_number)} کپی شد — قیمت‌ها رو بررسی کن`, 'success');
+        } else {
+          toast('کالاهای اون فاکتور دیگه در دسترس نیستن (احتمالاً حذف شده‌اند)', 'danger');
+        }
+      });
+    }
   });
 
   const cartKey = type + 'Cart';
@@ -2364,8 +2453,20 @@ function bindExtraReportsSubnav() {
     });
   });
 }
+let lastReorderSuggestions = [];
+function bindDraftPurchaseFromReorder() {
+  const btn = $('#btn-draft-purchase-from-reorder');
+  if (!btn || btn.dataset.bound) return;
+  btn.dataset.bound = '1';
+  btn.addEventListener('click', () => {
+    if (!lastReorderSuggestions.length) { toast('فعلاً کالایی برای سفارش پیشنهاد نشده', 'danger'); return; }
+    state.pendingPurchaseDraft = lastReorderSuggestions.map(it => ({ item_id: it.item_id, qty: it.suggested_reorder_qty }));
+    navigateToPage('purchase');
+  });
+}
 async function loadExtraReports() {
   bindExtraReportsSubnav();
+  bindDraftPurchaseFromReorder();
   const isAdmin = state.user.role === 'admin';
   const [debtors, creditors, topItems, byEmployee, expenses, profitByItem, reorder, yoy] = await Promise.all([
     api('GET', '/reports/debtors'), api('GET', '/reports/creditors'), api('GET', '/reports/top-items'),
@@ -2378,6 +2479,7 @@ async function loadExtraReports() {
   if (byEmployee) $('#by-employee-tbody').innerHTML = byEmployee.map(e => `<tr><td>${escHtml(e.username)}</td><td>${fmt(e.invoice_count)}</td><td title="${wordsTitle(e.total_amount)}">${fmt(e.total_amount)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">فروشی ثبت نشده</td></tr>';
   if (expenses) $('#expenses-tbody').innerHTML = expenses.categories.map(c => `<tr><td>${EXPENSE_CATEGORY_LABELS[c.category] || c.category}</td><td>${fmt(c.tx_count)}</td><td title="${wordsTitle(c.total_amount)}">${fmt(c.total_amount)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">هزینه‌ای ثبت نشده</td></tr>';
   if (profitByItem) $('#profit-by-item-tbody').innerHTML = profitByItem.map(it => `<tr><td>${it.name}</td><td>${fmt(it.total_qty)}</td><td title="${wordsTitle(it.total_sales)}">${fmt(it.total_sales)}</td><td title="${wordsTitle(it.estimated_cost)}">${fmt(it.estimated_cost)}</td><td style="color:${it.estimated_profit >= 0 ? 'var(--accent)' : 'var(--danger)'}" title="${wordsTitle(Math.abs(it.estimated_profit))}">${fmt(it.estimated_profit)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">فروشی ثبت نشده</td></tr>';
+  lastReorderSuggestions = reorder || [];
   $('#reorder-tbody').innerHTML = (reorder || []).map(it => `<tr><td>${it.name}</td><td>${fmt(it.stock_qty)} ${it.unit}</td><td>${it.daily_rate}</td><td style="color:var(--danger)">${it.days_left} روز</td><td>${fmt(it.suggested_reorder_qty)} ${it.unit}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">فعلاً کالایی نیاز به سفارش فوری ندارد</td></tr>';
   if (yoy) {
     $('#yoy-stat-grid').innerHTML = `
@@ -2431,8 +2533,21 @@ async function loadShopSettings() {
   $('#shop-next-invoice-number').value = s.next_invoice_number || '';
   $('#shop-telegram-token').value = s.telegram_bot_token || '';
   $('#shop-telegram-chat-id').value = s.telegram_chat_id || '';
+  $('#shop-default-margin').value = s.default_margin_percent || '';
+  $('#shop-invoice-footer').value = s.invoice_footer_message || '';
+  state.defaultMarginPercent = parseFloat(s.default_margin_percent) || 0;
   renderLogoPreview(s.logo_url);
 }
+$('#btn-save-pricing-footer').addEventListener('click', async () => {
+  const res = await api('POST', '/settings/shop', {
+    default_margin_percent: $('#shop-default-margin').value || 0,
+    invoice_footer_message: $('#shop-invoice-footer').value.trim(),
+  });
+  if (res && res.ok) {
+    toast('ذخیره شد', 'success');
+    state.defaultMarginPercent = parseFloat($('#shop-default-margin').value) || 0;
+  } else if (res) toast(res.message || 'خطا در ذخیره', 'danger');
+});
 $('#btn-save-telegram').addEventListener('click', async () => {
   const res = await api('POST', '/settings/shop', {
     telegram_bot_token: $('#shop-telegram-token').value.trim(),
@@ -2861,13 +2976,36 @@ let qsPartySS = null;
 async function loadQuickSalePage() {
   qsCart = [];
   renderQsCart();
-  const [items, parties] = await Promise.all([api('GET', `/items?role=${state.user.role}`), api('GET', '/parties?type=customer')]);
+  const [items, parties, topItems] = await Promise.all([
+    api('GET', `/items?role=${state.user.role}`), api('GET', '/parties?type=customer'), api('GET', '/reports/top-items'),
+  ]);
   state.items = items || [];
   qsPartySS = createSearchableSelect('qs-party', (parties || []).map(p => ({ value: p.id, label: p.name })),
     { placeholder: 'جستجوی مشتری...', emptyLabel: '— بدون مشتری (نقدی ساده) —' });
   $('#qs-search').value = '';
   $('#qs-suggestions').classList.add('hidden');
   $('#qs-search').focus();
+
+  const favorites = (topItems || [])
+    .map(ti => state.items.find(it => it.id === ti.item_id))
+    .filter(Boolean)
+    .slice(0, 12);
+  if (favorites.length) {
+    $('#qs-favorites-card').style.display = '';
+    $('#qs-favorites-grid').innerHTML = favorites.map(it => `
+      <div class="qs-fav-tile" data-fav-item-id="${it.id}">
+        <span>${escHtml(it.name)}</span>
+        <span class="qs-fav-price">${fmt(it.sale_price)} تومان</span>
+      </div>`).join('');
+    $$('.qs-fav-tile', $('#qs-favorites-grid')).forEach(el => {
+      el.addEventListener('click', () => {
+        const item = state.items.find(it => it.id === parseInt(el.dataset.favItemId));
+        if (item) qsAddItem(item);
+      });
+    });
+  } else {
+    $('#qs-favorites-card').style.display = 'none';
+  }
 }
 
 function qsAddItem(item) {

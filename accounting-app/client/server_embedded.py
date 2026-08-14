@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 import os
 import random
 import secrets
+import sqlite3
 import shutil
 import threading
 import time
@@ -43,7 +44,8 @@ def load_shop_settings():
                 return json.load(f)
         except Exception:
             pass
-    return {"name": "حسابداری", "phones": "", "address": "", "logo_filename": None, "invoice_number_offset": 0}
+    return {"name": "حسابداری", "phones": "", "address": "", "logo_filename": None, "invoice_number_offset": 0,
+            "default_margin_percent": 0, "invoice_footer_message": ""}
 
 
 def get_next_invoice_id(conn):
@@ -252,6 +254,13 @@ def update_shop_settings():
         s["telegram_bot_token"] = d.get("telegram_bot_token") or ""
     if "telegram_chat_id" in d:
         s["telegram_chat_id"] = d.get("telegram_chat_id") or ""
+    if "invoice_footer_message" in d:
+        s["invoice_footer_message"] = d.get("invoice_footer_message") or ""
+    if "default_margin_percent" in d:
+        try:
+            s["default_margin_percent"] = float(d.get("default_margin_percent") or 0)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "message": "درصد سود باید عدد باشد"}), 400
     if d.get("next_invoice_number") not in (None, ""):
         try:
             next_number = int(d["next_invoice_number"])
@@ -447,11 +456,15 @@ def add_item():
         return err
     d = request.json
     conn = get_connection()
-    conn.execute("""INSERT INTO items (code, name, category_id, unit, purchase_price, sale_price, stock_qty, min_stock, brand)
-                     VALUES (?,?,?,?,?,?,?,?,?)""",
-                 (d.get("code"), d["name"], d.get("category_id"), d.get("unit", "عدد"),
-                  d.get("purchase_price", 0), d.get("sale_price", 0),
-                  d.get("stock_qty", 0), d.get("min_stock", 0), d.get("brand")))
+    try:
+        conn.execute("""INSERT INTO items (code, name, category_id, unit, purchase_price, sale_price, stock_qty, min_stock, brand)
+                         VALUES (?,?,?,?,?,?,?,?,?)""",
+                     (d.get("code") or None, d["name"], d.get("category_id"), d.get("unit", "عدد"),
+                      d.get("purchase_price", 0), d.get("sale_price", 0),
+                      d.get("stock_qty", 0), d.get("min_stock", 0), d.get("brand")))
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({"ok": False, "message": "کالای دیگری با همین کد/بارکد قبلاً ثبت شده"}), 400
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
@@ -464,11 +477,15 @@ def update_item(item_id):
         return err
     d = request.json
     conn = get_connection()
-    conn.execute("""UPDATE items SET code=?, name=?, category_id=?, unit=?, purchase_price=?,
-                     sale_price=?, stock_qty=?, min_stock=?, brand=? WHERE id=?""",
-                 (d.get("code"), d["name"], d.get("category_id"), d.get("unit", "عدد"),
-                  d.get("purchase_price", 0), d.get("sale_price", 0),
-                  d.get("stock_qty", 0), d.get("min_stock", 0), d.get("brand"), item_id))
+    try:
+        conn.execute("""UPDATE items SET code=?, name=?, category_id=?, unit=?, purchase_price=?,
+                         sale_price=?, stock_qty=?, min_stock=?, brand=? WHERE id=?""",
+                     (d.get("code") or None, d["name"], d.get("category_id"), d.get("unit", "عدد"),
+                      d.get("purchase_price", 0), d.get("sale_price", 0),
+                      d.get("stock_qty", 0), d.get("min_stock", 0), d.get("brand"), item_id))
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({"ok": False, "message": "کالای دیگری با همین کد/بارکد قبلاً ثبت شده"}), 400
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
@@ -711,6 +728,24 @@ def get_invoices():
     rows = conn.execute(q, params).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
+
+
+@app.route("/invoices/last-purchase/<int:party_id>", methods=["GET"])
+def get_last_purchase_invoice(party_id):
+    """آخرین فاکتور خرید ثبت‌شده از یک تامین‌کننده، برای دکمه‌ی «تکرار آخرین فاکتور»"""
+    conn = get_connection()
+    inv = conn.execute(
+        "SELECT * FROM invoices WHERE party_id=? AND invoice_type='purchase' AND voided=0 ORDER BY date DESC, id DESC LIMIT 1",
+        (party_id,)
+    ).fetchone()
+    if not inv:
+        conn.close()
+        return jsonify({"ok": False, "message": "فاکتور خریدی از این تامین‌کننده ثبت نشده"}), 404
+    items = conn.execute(
+        "SELECT item_id, qty, unit_price FROM invoice_items WHERE invoice_id=?", (inv["id"],)
+    ).fetchall()
+    conn.close()
+    return jsonify({"ok": True, "invoice_number": inv["number"], "items": [dict(r) for r in items]})
 
 
 @app.route("/invoices/<int:inv_id>/items", methods=["GET"])
@@ -1977,7 +2012,7 @@ def report_top_items():
     conn = get_connection()
     since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     rows = conn.execute("""
-        SELECT items.name as name, items.brand as brand,
+        SELECT items.id as item_id, items.name as name, items.brand as brand,
                SUM(invoice_items.qty) as total_qty, SUM(invoice_items.total) as total_amount
         FROM invoice_items
         JOIN invoices ON invoice_items.invoice_id = invoices.id
@@ -2158,6 +2193,7 @@ def invoice_print(invoice_id):
         shop_address=cfg.get("address", ""),
         words_text=words_text,
         logo_url=(f"/assets/{cfg['logo_filename']}" if cfg.get("logo_filename") else None),
+        footer_message=cfg.get("invoice_footer_message", ""),
     )
     return html
 
@@ -2245,6 +2281,62 @@ def export_items_excel():
     tmp_path = os.path.join(tempfile.gettempdir(), "items_export.xlsx")
     wb.save(tmp_path)
     return send_file(tmp_path, as_attachment=True, download_name="کالاها.xlsx")
+
+
+@app.route("/import/items.xlsx", methods=["POST"])
+def import_items_excel():
+    """ورودی گروهی کالا از فایل اکسل — همون فرمت خروجی اکسل (کد/بارکد، نام، برند، واحد،
+    قیمت خرید، قیمت فروش، موجودی، حداقل موجودی). ردیف‌های خراب رد می‌شوند، بقیه ثبت می‌شوند."""
+    err = require_permission("can_manage_items")
+    if err:
+        return err
+    if "file" not in request.files:
+        return jsonify({"ok": False, "message": "فایلی ارسال نشده"}), 400
+    file = request.files["file"]
+    if not file or file.filename == "":
+        return jsonify({"ok": False, "message": "فایلی انتخاب نشده"}), 400
+    if not file.filename.lower().endswith(".xlsx"):
+        return jsonify({"ok": False, "message": "فایل باید با فرمت xlsx باشد"}), 400
+
+    import openpyxl
+    try:
+        wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
+        ws = wb.active
+    except Exception:
+        return jsonify({"ok": False, "message": "فایل اکسل قابل خواندن نبود"}), 400
+
+    conn = get_connection()
+    imported_count = 0
+    errors = []
+    for row_num, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        if row is None or all(c is None or str(c).strip() == "" for c in row):
+            continue
+        code, name, brand, unit, purchase_price, sale_price, stock_qty, min_stock = (list(row) + [None] * 8)[:8]
+        name = str(name).strip() if name is not None else ""
+        if not name:
+            errors.append(f"ردیف {row_num}: نام کالا خالی است")
+            continue
+        try:
+            purchase_price = float(purchase_price) if purchase_price not in (None, "") else 0
+            sale_price = float(sale_price) if sale_price not in (None, "") else 0
+            stock_qty = float(stock_qty) if stock_qty not in (None, "") else 0
+            min_stock = float(min_stock) if min_stock not in (None, "") else 0
+        except (TypeError, ValueError):
+            errors.append(f"ردیف {row_num} ({name}): قیمت یا موجودی عدد معتبر نیست")
+            continue
+        try:
+            conn.execute(
+                """INSERT INTO items (code, name, category_id, unit, purchase_price, sale_price, stock_qty, min_stock, brand)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                (str(code).strip() if code else None, name, None, str(unit).strip() if unit else "عدد",
+                 purchase_price, sale_price, stock_qty, min_stock, str(brand).strip() if brand else None)
+            )
+            imported_count += 1
+        except sqlite3.IntegrityError:
+            errors.append(f"ردیف {row_num} ({name}): کد/بارکد تکراری است")
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "imported_count": imported_count, "skipped_count": len(errors), "errors": errors[:30]})
 
 
 @app.route("/items/labels/print", methods=["GET"])
@@ -2432,6 +2524,8 @@ def run_embedded(port=5050):
     threading.Thread(target=nightly_loop, daemon=True).start()
     threading.Thread(target=weekly_recap_loop, daemon=True).start()
     app.run(host="127.0.0.1", port=port, threaded=True, use_reloader=False, debug=False)
+
+
 
 
 

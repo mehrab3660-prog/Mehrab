@@ -244,6 +244,10 @@
           <input type="text" id="qs-search" placeholder="بارکد را اسکن کن یا نام کالا را تایپ کن و Enter بزن..." style="font-size:16px;padding:14px">
           <div id="qs-suggestions" class="hidden" style="margin-top:8px"></div>
         </div>
+        <div class="card" id="qs-favorites-card" style="display:none">
+          <div class="card-title">🔥 کالاهای پرتکرار</div>
+          <div id="qs-favorites-grid" class="qs-favorites-grid"></div>
+        </div>
         <div class="card">
           <table class="data-table">
             <thead><tr><th>کالا</th><th>تعداد</th><th>قیمت واحد</th><th>جمع</th><th></th></tr></thead>
@@ -274,7 +278,10 @@
             <input type="text" id="items-filter" placeholder="فیلتر بر اساس نام یا کد...">
             <button class="btn btn-secondary" id="btn-new-category">+ دسته‌بندی جدید</button>
             <button class="btn btn-secondary" id="btn-export-items">خروجی اکسل</button>
+            <button class="btn btn-secondary" id="btn-import-items">ورودی از اکسل</button>
+            <input type="file" id="import-items-file" accept=".xlsx" class="hidden">
             <button class="btn btn-secondary" id="btn-print-labels">چاپ برچسب کالاهای انتخاب‌شده</button>
+            <button class="btn btn-danger" id="btn-bulk-delete-items">حذف کالاهای انتخاب‌شده</button>
           </div>
           <table class="data-table">
             <thead><tr>
@@ -542,6 +549,7 @@
             <div class="card-title">پیشنهاد سفارش مجدد</div>
             <p class="muted" style="margin-bottom:10px">کالاهایی که با روند فروش فعلی، تا حداکثر ۱۴ روز دیگر موجودیشان تمام می‌شود.</p>
             <table class="data-table"><thead><tr><th>کالا</th><th>موجودی فعلی</th><th>میانگین فروش روزانه</th><th>تا چند روز دیگر تمام می‌شود</th><th>پیشنهاد سفارش</th></tr></thead><tbody id="reorder-tbody"></tbody></table>
+            <button class="btn btn-primary" id="btn-draft-purchase-from-reorder" style="margin-top:12px">📝 ساخت پیش‌نویس فاکتور خرید از این لیست</button>
           </div>
           <div class="card">
             <div class="card-title">مقایسه فروش با سال قبل</div>
@@ -649,6 +657,19 @@
             <div class="field"><label>تلفن‌ها</label><input type="text" id="shop-phones" placeholder="021-XXXXXXX - 0912XXXXXXX"></div>
             <div class="field"><label>آدرس</label><input type="text" id="shop-address"></div>
             <button class="btn btn-primary" id="btn-save-shop-info">ذخیره اطلاعات</button>
+          </div>
+          <div class="card">
+            <div class="card-title">قیمت‌گذاری و پیام فاکتور</div>
+            <div class="field">
+              <label>درصد سود پیش‌فرض کالای جدید</label>
+              <input type="number" min="0" step="0.1" id="shop-default-margin" placeholder="مثلاً 30">
+              <p class="muted" style="margin-top:4px">وقتی کالای جدید اضافه می‌کنی و قیمت خرید رو می‌زنی، قیمت فروش پیشنهادی خودکار با همین درصد حساب می‌شه (خودت می‌تونی دستی عوضش کنی).</p>
+            </div>
+            <div class="field">
+              <label>پیام پایین فاکتور (اختیاری)</label>
+              <input type="text" id="shop-invoice-footer" placeholder="مثلاً: با تشکر از خرید شما 🙏 اینستاگرام: @yourshop">
+            </div>
+            <button class="btn btn-primary" id="btn-save-pricing-footer">ذخیره</button>
           </div>
           <div class="card">
             <div class="card-title">شماره‌گذاری فاکتور</div>

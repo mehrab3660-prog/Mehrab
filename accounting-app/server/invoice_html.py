@@ -53,7 +53,7 @@ PAGE_SIZE_CSS = {
 
 def build_invoice_html(invoice, items, party, page_format="A5",
                         shop_name="حسابداری", shop_phones="", shop_address="",
-                        words_text="", logo_url=None):
+                        words_text="", logo_url=None, footer_message=""):
     """
     invoice: دیکشنری شامل number/id, invoice_type, date, total, paid, discount
     items: لیستی شامل item_name, category_name (اختیاری), qty, unit_price, total
@@ -218,7 +218,7 @@ def build_invoice_html(invoice, items, party, page_format="A5",
   <span>امضای فروشنده</span>
 </div>
 
-<div class="footer">اعتماد شما سرمایه ماست</div>
+<div class="footer">{esc(footer_message) if footer_message else 'اعتماد شما سرمایه ماست'}</div>
 
 </body>
 </html>"""
