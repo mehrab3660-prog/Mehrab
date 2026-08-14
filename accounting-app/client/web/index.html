@@ -134,6 +134,7 @@
         <li class="nav-item" data-page="sale"><span class="nav-icon">🧾</span><span class="nav-label">فاکتور فروش</span></li>
         <li class="nav-item" data-page="purchase"><span class="nav-icon">🛒</span><span class="nav-label">فاکتور خرید</span></li>
         <li class="nav-item" data-page="ai-scan"><span class="nav-icon">📷</span><span class="nav-label">اسکن فاکتور خرید (AI)</span></li>
+        <li class="nav-item" data-page="warranty"><span class="nav-icon">🔧</span><span class="nav-label">گارانتی و تعمیرات</span></li>
         <li class="nav-item" data-page="history"><span class="nav-icon">📜</span><span class="nav-label">تاریخچه فاکتورها</span></li>
         <li class="nav-item" data-page="send-invoice"><span class="nav-icon">📤</span><span class="nav-label">ارسال فاکتور</span></li>
         <li class="nav-item" data-page="parties"><span class="nav-icon">👥</span><span class="nav-label">مشتریان و تامین‌کنندگان</span></li>
@@ -142,7 +143,6 @@
         <li class="nav-item" data-page="cash"><span class="nav-icon">💰</span><span class="nav-label">صندوق</span></li>
         <li class="nav-item" data-page="monthly"><span class="nav-icon">📈</span><span class="nav-label">گزارش ماهانه</span></li>
         <li class="nav-item" data-page="extra-reports"><span class="nav-icon">📋</span><span class="nav-label">بدهکاران و پرفروش‌ها</span></li>
-        <li class="nav-item" data-page="warranty"><span class="nav-icon">🔧</span><span class="nav-label">گارانتی و تعمیرات</span></li>
         <li class="nav-item" data-page="stocktake"><span class="nav-icon">📊</span><span class="nav-label">انبارگردانی</span></li>
         <li class="nav-item admin-only" data-page="bulk-price"><span class="nav-icon">💹</span><span class="nav-label">افزایش قیمت گروهی</span></li>
         <li class="nav-item admin-only" data-page="settings-hub"><span class="nav-icon">⚙️</span><span class="nav-label">تنظیمات کلی</span></li>
@@ -271,10 +271,10 @@
       <section class="page" id="page-items">
         <div class="page-header">
           <div><h2>کالاها</h2><p class="page-sub">هر جنسی که توی مغازه می‌فروشی یا نگه می‌داری اینجا تعریف می‌کنی — مثلاً «لامپ ال‌ای‌دی ۱۲ وات، برند فیلیپس». بعد از تعریف، همین کالا توی فرم فروش و خرید هم قابل انتخابه.</p></div>
-          <button class="btn btn-primary" id="btn-new-item">+ کالای جدید</button>
         </div>
         <div class="card">
           <div class="table-toolbar">
+            <button class="btn btn-primary" id="btn-new-item">+ کالای جدید</button>
             <input type="text" id="items-filter" placeholder="فیلتر بر اساس نام یا کد...">
             <button class="btn btn-secondary" id="btn-new-category">+ دسته‌بندی جدید</button>
             <button class="btn btn-secondary" id="btn-export-items">خروجی اکسل</button>
@@ -778,6 +778,37 @@
       </section>
 
     </main>
+  </div>
+
+  <!-- ماشین حساب -->
+  <button class="calc-fab" id="calc-fab" title="ماشین حساب">🧮</button>
+  <div class="calc-panel hidden" id="calc-panel">
+    <div class="calc-panel-header">
+      <span>🧮 ماشین حساب</span>
+      <button class="icon-btn" id="calc-close-btn" title="بستن">✕</button>
+    </div>
+    <div class="calc-display" id="calc-display">۰</div>
+    <div class="calc-grid">
+      <button class="calc-btn calc-btn-op" data-calc="clear">C</button>
+      <button class="calc-btn calc-btn-op" data-calc="backspace">⌫</button>
+      <button class="calc-btn calc-btn-op" data-calc="percent">%</button>
+      <button class="calc-btn calc-btn-op" data-calc="divide">÷</button>
+      <button class="calc-btn" data-calc="7">۷</button>
+      <button class="calc-btn" data-calc="8">۸</button>
+      <button class="calc-btn" data-calc="9">۹</button>
+      <button class="calc-btn calc-btn-op" data-calc="multiply">×</button>
+      <button class="calc-btn" data-calc="4">۴</button>
+      <button class="calc-btn" data-calc="5">۵</button>
+      <button class="calc-btn" data-calc="6">۶</button>
+      <button class="calc-btn calc-btn-op" data-calc="subtract">−</button>
+      <button class="calc-btn" data-calc="1">۱</button>
+      <button class="calc-btn" data-calc="2">۲</button>
+      <button class="calc-btn" data-calc="3">۳</button>
+      <button class="calc-btn calc-btn-op" data-calc="add">+</button>
+      <button class="calc-btn" data-calc="0" style="grid-column: span 2">۰</button>
+      <button class="calc-btn" data-calc="decimal">٫</button>
+      <button class="calc-btn calc-btn-eq" data-calc="equals">=</button>
+    </div>
   </div>
 
   <!-- دستیار هوشمند -->

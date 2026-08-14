@@ -436,6 +436,7 @@ function enterApp() {
   if (state.user.role !== 'admin') $$('.admin-only').forEach(el => el.style.display = 'none');
   initApp();
   bindAssistant();
+  bindCalculator();
   bindNotifBell();
   bindCommandPalette();
   bindUserBadgeMenu();
@@ -591,6 +592,78 @@ async function loadNotifications() {
 let assistantBound = false;
 let assistantHistory = [];
 let assistantBusy = false;
+let calcBound = false;
+const calcState = { display: '0', prev: null, op: null, resetNext: false };
+function calcRender() {
+  $('#calc-display').textContent = toFaDigits(calcState.display);
+}
+function calcCompute(a, b, op) {
+  switch (op) {
+    case 'add': return a + b;
+    case 'subtract': return a - b;
+    case 'multiply': return a * b;
+    case 'divide': return b === 0 ? NaN : a / b;
+    default: return b;
+  }
+}
+function calcPress(key) {
+  if (/^[0-9]$/.test(key)) {
+    if (calcState.display === '0' || calcState.resetNext) { calcState.display = key; calcState.resetNext = false; }
+    else if (calcState.display.replace('-', '').replace('.', '').length < 15) { calcState.display += key; }
+    calcRender();
+    return;
+  }
+  if (key === 'decimal') {
+    if (calcState.resetNext) { calcState.display = '0.'; calcState.resetNext = false; }
+    else if (!calcState.display.includes('.')) calcState.display += '.';
+    calcRender();
+    return;
+  }
+  if (key === 'clear') {
+    calcState.display = '0'; calcState.prev = null; calcState.op = null; calcState.resetNext = false;
+    calcRender();
+    return;
+  }
+  if (key === 'backspace') {
+    calcState.display = calcState.display.length > 1 ? calcState.display.slice(0, -1) : '0';
+    calcRender();
+    return;
+  }
+  if (key === 'percent') {
+    calcState.display = String(parseFloat(calcState.display) / 100);
+    calcRender();
+    return;
+  }
+  if (['add', 'subtract', 'multiply', 'divide'].includes(key)) {
+    const current = parseFloat(calcState.display);
+    if (calcState.op && !calcState.resetNext) {
+      calcState.prev = calcCompute(calcState.prev, current, calcState.op);
+      calcState.display = String(calcState.prev);
+    } else {
+      calcState.prev = current;
+    }
+    calcState.op = key;
+    calcState.resetNext = true;
+    calcRender();
+    return;
+  }
+  if (key === 'equals') {
+    if (calcState.op == null) return;
+    const current = parseFloat(calcState.display);
+    const result = calcCompute(calcState.prev, current, calcState.op);
+    calcState.display = String(isFinite(result) ? Math.round(result * 1e10) / 1e10 : 'خطا');
+    calcState.prev = null; calcState.op = null; calcState.resetNext = true;
+    calcRender();
+  }
+}
+function bindCalculator() {
+  if (calcBound) return;
+  calcBound = true;
+  $('#calc-fab').addEventListener('click', () => $('#calc-panel').classList.toggle('hidden'));
+  $('#calc-close-btn').addEventListener('click', () => $('#calc-panel').classList.add('hidden'));
+  $$('.calc-btn').forEach(btn => btn.addEventListener('click', () => calcPress(btn.dataset.calc)));
+}
+
 function bindAssistant() {
   if (assistantBound) return;
   assistantBound = true;
@@ -1419,14 +1492,9 @@ function loadInvoiceForm(type) {
         <div class="card-title">مشخصات فاکتور</div>
         <div class="form-row"><div><label>${partyLabel}</label><div id="${type}-party"></div>${type === 'purchase' ? `<button class="btn btn-secondary btn-sm" id="${type}-repeat-last-btn" style="margin-top:6px">تکرار آخرین فاکتور این تامین‌کننده</button>` : ''}</div>
           <div><label>نوع پرداخت</label><select id="${type}-pay"><option value="cash">نقدی</option><option value="credit">نسیه</option><option value="check">چک</option></select></div></div>
-        <div class="form-row"><div><label>تخفیف کل فاکتور (تومان)</label><input type="text" inputmode="decimal" id="${type}-discount" value="0"><div class="words-hint" id="${type}-discount-words"></div></div></div>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:6px">
           <input type="checkbox" id="${type}-return" style="width:auto"> این فاکتور مرجوعی ${label} است
         </label>
-        <div class="form-row" style="margin-top:10px"><div>
-          <label>یادداشت سفارش (اختیاری)</label>
-          <input type="text" id="${type}-note" placeholder="مثلاً: تحویل جمعه، رنگ خاص سفارش داده شده و...">
-        </div></div>
       </div>
       <div class="card">
         <div class="card-title">اسکن بارکد</div>
@@ -1434,7 +1502,7 @@ function loadInvoiceForm(type) {
                autocomplete="off" style="font-size:16px;padding:10px">
         <p class="muted" style="margin-top:6px" id="${type}-barcode-status"></p>
       </div>
-      <div class="card">
+      <div class="card" style="grid-column: span 2">
         <div class="card-title">افزودن کالا</div>
         <div class="form-row"><div><label>کالا</label><div id="${type}-item"></div></div>
           <div><label>تعداد</label><input type="number" step="any" id="${type}-qty"></div>
@@ -1447,6 +1515,10 @@ function loadInvoiceForm(type) {
         <table class="data-table" style="margin-top:14px"><thead><tr><th>کالا</th><th>تعداد</th><th>قیمت</th><th>جمع</th>${type === 'sale' ? '<th>سریال/گارانتی</th>' : ''}</tr></thead><tbody id="${type}-cart-tbody"></tbody></table>
         <div class="cart-total" id="${type}-cart-total">جمع کل: ۰ تومان</div>
         <div class="words-hint" id="${type}-cart-total-words"></div>
+        <div class="form-row" style="margin-top:14px">
+          <div><label>تخفیف کل فاکتور (تومان)</label><input type="text" inputmode="decimal" id="${type}-discount" value="0"><div class="words-hint" id="${type}-discount-words"></div></div>
+          <div><label>یادداشت سفارش (اختیاری)</label><input type="text" id="${type}-note" placeholder="مثلاً: تحویل جمعه، رنگ خاص سفارش داده شده و..."></div>
+        </div>
         <button class="btn btn-primary btn-block" id="${type}-submit" style="margin-top:14px">ثبت فاکتور</button>
       </div>
     </div>`;
