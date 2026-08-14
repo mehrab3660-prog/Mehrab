@@ -1271,29 +1271,39 @@ def bank_transfer():
             conn.close()
             return jsonify({"ok": False, "message": "موجودی حساب بانکی مبدأ کافی نیست"}), 400
 
-    desc = d.get("description") or "انتقال بین صندوق و بانک"
+    def account_label(acc_type, acc_id):
+        if acc_type == "cash":
+            return "صندوق"
+        row = conn.execute("SELECT name FROM bank_accounts WHERE id=?", (acc_id,)).fetchone()
+        return row["name"] if row else "حساب بانکی"
+
+    from_label = account_label(from_type, d.get("from_id"))
+    to_label = account_label(to_type, d.get("to_id"))
+    user_desc = d.get("description")
+    desc_out = f"انتقال به «{to_label}»" + (f" — {user_desc}" if user_desc else "")
+    desc_in = f"انتقال از «{from_label}»" + (f" — {user_desc}" if user_desc else "")
 
     # کسر از مبدأ
     if from_type == "cash":
         conn.execute("INSERT INTO cash_transactions (date, tx_type, amount, description) VALUES (?,?,?,?)",
-                     (now(), "out", amount, desc))
+                     (now(), "out", amount, desc_out))
     else:
         conn.execute("UPDATE bank_accounts SET balance = balance - ? WHERE id=?", (amount, d.get("from_id")))
         conn.execute("INSERT INTO bank_transactions (account_id, date, tx_type, amount, description, username) VALUES (?,?,?,?,?,?)",
-                     (d.get("from_id"), now(), "transfer_out", amount, desc, d.get("username")))
+                     (d.get("from_id"), now(), "transfer_out", amount, desc_out, d.get("username")))
 
     # افزودن به مقصد
     if to_type == "cash":
         conn.execute("INSERT INTO cash_transactions (date, tx_type, amount, description) VALUES (?,?,?,?)",
-                     (now(), "in", amount, desc))
+                     (now(), "in", amount, desc_in))
     else:
         conn.execute("UPDATE bank_accounts SET balance = balance + ? WHERE id=?", (amount, d.get("to_id")))
         conn.execute("INSERT INTO bank_transactions (account_id, date, tx_type, amount, description, username) VALUES (?,?,?,?,?,?)",
-                     (d.get("to_id"), now(), "transfer_in", amount, desc, d.get("username")))
+                     (d.get("to_id"), now(), "transfer_in", amount, desc_in, d.get("username")))
 
     conn.commit()
     conn.close()
-    log_action(d.get("username"), "انتقال وجه", f'{amount:,.0f} تومان — {desc}')
+    log_action(d.get("username"), "انتقال وجه", f'{amount:,.0f} تومان — از «{from_label}» به «{to_label}»')
     return jsonify({"ok": True})
 
 
