@@ -1366,7 +1366,7 @@ function openEditItemModal(itemId) {
     <h3>ویرایش کالا</h3>
     <div class="form-row"><div><label>کد/بارکد</label><input id="ei-code" value="${escHtml(it.code || '')}"></div><div><label>نام کالا</label><input id="ei-name" value="${escHtml(it.name || '')}"></div></div>
     <div class="form-row"><div><label>برند</label><input id="ei-brand" value="${escHtml(it.brand || '')}"></div><div><label>واحد</label><input id="ei-unit" value="${escHtml(it.unit || 'عدد')}"></div></div>
-    <div class="form-row"><div><label>دسته‌بندی</label><select id="ei-cat"><option value="">—</option>${catOptions}</select></div></div>
+    <div class="form-row"><div><label>دسته‌بندی *</label><select id="ei-cat"><option value="">— انتخاب کن —</option>${catOptions}</select></div></div>
     <div class="form-row"><div${state.user.role !== 'admin' ? ' style="display:none"' : ''}><label>قیمت خرید</label><input type="text" inputmode="decimal" id="ei-purchase" value="${it.purchase_price ? Number(it.purchase_price).toLocaleString('en-US') : ''}"><div class="words-hint" id="ei-purchase-words"></div></div><div><label>قیمت فروش</label><input type="text" inputmode="decimal" id="ei-sale" value="${it.sale_price ? Number(it.sale_price).toLocaleString('en-US') : ''}"><div class="words-hint" id="ei-sale-words"></div></div></div>
     <div class="form-row"><div><label>موجودی</label><input type="number" id="ei-stock" value="${it.stock_qty}"></div><div><label>حداقل موجودی</label><input type="number" id="ei-min" value="${it.min_stock}"></div></div>
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-edit-item-btn">ذخیره</button></div>`);
@@ -1377,9 +1377,11 @@ function openEditItemModal(itemId) {
   $('#save-edit-item-btn').addEventListener('click', async () => {
     const name = $('#ei-name').value.trim();
     if (!name) { toast('نام کالا الزامی است', 'danger'); return; }
+    const categoryId = $('#ei-cat').value;
+    if (!categoryId) { toast('انتخاب دسته‌بندی الزامی است', 'danger'); return; }
     const payload = {
       code: $('#ei-code').value, name, brand: $('#ei-brand').value, unit: $('#ei-unit').value || 'عدد',
-      category_id: $('#ei-cat').value || null,
+      category_id: categoryId,
       purchase_price: readAmount($('#ei-purchase')), sale_price: readAmount($('#ei-sale')),
       stock_qty: parseFloat($('#ei-stock').value || 0), min_stock: parseFloat($('#ei-min').value || 0),
     };
@@ -1490,15 +1492,13 @@ $('#btn-new-category').addEventListener('click', () => {
     else toast((res && res.message) || 'خطا', 'danger');
   });
 });
-let lastNewItemCategoryId = '';
 $('#btn-new-item').addEventListener('click', () => {
-  const defaultCatId = $('#items-category-filter').value || lastNewItemCategoryId;
-  const catOptions = state.categories.map(c => `<option value="${c.id}"${String(c.id) === String(defaultCatId) ? ' selected' : ''}>${c.name}</option>`).join('');
+  const catOptions = state.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
   openModal(`
     <h3>کالای جدید</h3>
     <div class="form-row"><div><label>کد/بارکد</label><input id="ni-code"></div><div><label>نام کالا</label><input id="ni-name"></div></div>
     <div class="form-row"><div><label>برند</label><input id="ni-brand"></div><div><label>واحد</label><input id="ni-unit" value="عدد"></div></div>
-    <div class="form-row"><div><label>دسته‌بندی</label><select id="ni-cat"><option value="">—</option>${catOptions}</select></div></div>
+    <div class="form-row"><div><label>دسته‌بندی *</label><select id="ni-cat"><option value="">— انتخاب کن —</option>${catOptions}</select></div></div>
     <div class="form-row"><div${state.user.role !== 'admin' ? ' style="display:none"' : ''}><label>قیمت خرید</label><input type="text" inputmode="decimal" id="ni-purchase"><div class="words-hint" id="ni-purchase-words"></div></div><div><label>قیمت فروش</label><input type="text" inputmode="decimal" id="ni-sale"><div class="words-hint" id="ni-sale-words"></div></div></div>
     <div class="form-row"><div><label>موجودی</label><input type="number" id="ni-stock" value="0"></div><div><label>حداقل موجودی</label><input type="number" id="ni-min" value="0"></div></div>
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-item-btn">ذخیره</button></div>`);
@@ -1520,17 +1520,16 @@ $('#btn-new-item').addEventListener('click', () => {
   $('#save-item-btn').addEventListener('click', async () => {
     const name = $('#ni-name').value.trim();
     if (!name) { toast('نام کالا الزامی است', 'danger'); return; }
+    const categoryId = $('#ni-cat').value;
+    if (!categoryId) { toast('انتخاب دسته‌بندی الزامی است', 'danger'); return; }
     const payload = {
       code: $('#ni-code').value, name, brand: $('#ni-brand').value, unit: $('#ni-unit').value || 'عدد',
-      category_id: $('#ni-cat').value || null,
+      category_id: categoryId,
       purchase_price: readAmount($('#ni-purchase')), sale_price: readAmount($('#ni-sale')),
       stock_qty: parseFloat($('#ni-stock').value || 0), min_stock: parseFloat($('#ni-min').value || 0),
     };
     const res = await api('POST', '/items', payload);
-    if (res && res.ok) {
-      lastNewItemCategoryId = $('#ni-cat').value || '';
-      toast('کالا اضافه شد', 'success'); closeModal(); loadItems();
-    }
+    if (res && res.ok) { toast('کالا اضافه شد', 'success'); closeModal(); loadItems(); }
     else if (res) toast(res.message || 'خطا در ثبت کالا', 'danger');
   });
 });
