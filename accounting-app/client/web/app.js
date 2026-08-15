@@ -396,13 +396,29 @@ function startLoginLockoutCountdown(seconds) {
   }, 1000);
 }
 
+async function loginRequest(body) {
+  // مسیر /login عمداً از تابع مشترک api() استفاده نمی‌کند: چون آنجا هر پاسخ 401 به‌عنوان
+  // «نشست منقضی‌شده» تفسیر می‌شود و کاربر را به صفحه‌ی ورود برمی‌گرداند — ولی خودِ تلاش ناموفق
+  // برای ورود هم دقیقاً همون کد وضعیت (401) رو برمی‌گردونه، و پیام واقعی خطا (رمز اشتباه،
+  // قفل موقت و...) گم می‌شد و فقط یه پیام مبهم نشون داده می‌شد.
+  try {
+    const res = await fetch('/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    return await res.json();
+  } catch (e) {
+    console.error(e);
+    toast('ارتباط با سرور برقرار نشد', 'danger');
+    return null;
+  }
+}
 async function doLogin() {
   if (loginLockoutTimer) return; // تا وقتی قفل موقت فعاله، اجازه‌ی تلاش دوباره نده
   const username = $('#login-username').value.trim();
   const password = $('#login-password').value;
   const captcha_answer = $('#login-captcha-answer').value.trim();
   const totp_code = $('#login-totp-code').value.trim();
-  const res = await api('POST', '/login', { username, password, captcha_id: state.captchaId, captcha_answer, totp_code });
+  const res = await loginRequest({ username, password, captcha_id: state.captchaId, captcha_answer, totp_code });
   if (res && res.ok) {
     state.user = res.user;
     state.token = res.token;
