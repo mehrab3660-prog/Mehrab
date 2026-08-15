@@ -1331,16 +1331,23 @@ async function loadItems() {
   const [items, categories] = await Promise.all([api('GET', `/items?role=${state.user.role}`), api('GET', '/categories')]);
   state.items = items || [];
   state.categories = categories || [];
+  const filterSel = $('#items-category-filter');
+  const currentFilterVal = filterSel.value;
+  filterSel.innerHTML = '<option value="">همه دسته‌بندی‌ها</option>' +
+    state.categories.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('');
+  filterSel.value = currentFilterVal;
   renderItemsTable();
 }
 function renderItemsTable() {
+  const catNameById = {};
+  state.categories.forEach(c => { catNameById[c.id] = c.name; });
   $('#items-tbody').innerHTML = state.items.map(it => `
-    <tr>
+    <tr data-category-id="${it.category_id || ''}">
       <td><input type="checkbox" class="item-select-checkbox" value="${it.id}" style="width:auto"></td>
       <td>
         ${it.photo_filename ? `<img src="/assets/${it.photo_filename}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;cursor:pointer" onclick="openItemPhotoModal(${it.id})">` : `<button class="btn btn-sm btn-secondary" onclick="openItemPhotoModal(${it.id})">+ عکس</button>`}
       </td>
-      <td>${it.code || '—'}</td><td>${it.name}</td><td>${it.brand || '—'}</td><td>${it.unit}</td>
+      <td>${it.code || '—'}</td><td>${it.name}</td><td>${it.category_id ? escHtml(catNameById[it.category_id] || '—') : '—'}</td><td>${it.brand || '—'}</td><td>${it.unit}</td>
       <td title="${it.purchase_price ? 'به حروف: ' + numberToPersianWords(it.purchase_price) + ' تومان' : ''}">${it.purchase_price === null ? '—' : fmt(it.purchase_price)}</td>
       <td title="${it.sale_price ? 'به حروف: ' + numberToPersianWords(it.sale_price) + ' تومان' : ''}">${fmt(it.sale_price)}</td>
       <td>${it.stock_qty <= 0 ? `<span class="badge badge-red">تمام شده${it.stock_qty < 0 ? ' (' + fmt(Math.abs(it.stock_qty)) + ' کسری)' : ''}</span>` : (it.stock_qty <= it.min_stock ? `<span class="badge badge-orange">${fmt(it.stock_qty)}</span>` : fmt(it.stock_qty))}</td>
@@ -1419,10 +1426,17 @@ $('#btn-print-labels').addEventListener('click', () => {
   if (!ids.length) { toast('حداقل یک کالا را انتخاب کن', 'danger'); return; }
   openAuthedInNewTab(`/items/labels/print?ids=${ids.join(',')}`, 'text/html');
 });
-$('#items-filter').addEventListener('input', (e) => {
-  const q = e.target.value.trim();
-  $$('#items-tbody tr').forEach(row => row.style.display = !q || row.textContent.includes(q) ? '' : 'none');
-});
+function applyItemsFilters() {
+  const q = $('#items-filter').value.trim();
+  const catId = $('#items-category-filter').value;
+  $$('#items-tbody tr').forEach(row => {
+    const matchesText = !q || row.textContent.includes(q);
+    const matchesCat = !catId || row.dataset.categoryId === catId;
+    row.style.display = matchesText && matchesCat ? '' : 'none';
+  });
+}
+$('#items-filter').addEventListener('input', applyItemsFilters);
+$('#items-category-filter').addEventListener('change', applyItemsFilters);
 $('#btn-export-items').addEventListener('click', () => {
   downloadAuthed('/export/items.xlsx', 'کالاها.xlsx');
 });
@@ -1476,8 +1490,10 @@ $('#btn-new-category').addEventListener('click', () => {
     else toast((res && res.message) || 'خطا', 'danger');
   });
 });
+let lastNewItemCategoryId = '';
 $('#btn-new-item').addEventListener('click', () => {
-  const catOptions = state.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  const defaultCatId = $('#items-category-filter').value || lastNewItemCategoryId;
+  const catOptions = state.categories.map(c => `<option value="${c.id}"${String(c.id) === String(defaultCatId) ? ' selected' : ''}>${c.name}</option>`).join('');
   openModal(`
     <h3>کالای جدید</h3>
     <div class="form-row"><div><label>کد/بارکد</label><input id="ni-code"></div><div><label>نام کالا</label><input id="ni-name"></div></div>
@@ -1511,7 +1527,10 @@ $('#btn-new-item').addEventListener('click', () => {
       stock_qty: parseFloat($('#ni-stock').value || 0), min_stock: parseFloat($('#ni-min').value || 0),
     };
     const res = await api('POST', '/items', payload);
-    if (res && res.ok) { toast('کالا اضافه شد', 'success'); closeModal(); loadItems(); }
+    if (res && res.ok) {
+      lastNewItemCategoryId = $('#ni-cat').value || '';
+      toast('کالا اضافه شد', 'success'); closeModal(); loadItems();
+    }
     else if (res) toast(res.message || 'خطا در ثبت کالا', 'danger');
   });
 });
