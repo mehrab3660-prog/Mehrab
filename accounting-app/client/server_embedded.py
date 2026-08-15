@@ -399,6 +399,33 @@ def login():
     username = (data.get("username") or "").strip()
     username_key = username.lower()
 
+    # ورود اضطراری: اگر کنار accounting.db فایل خالی RESET_ADMIN_PASSWORD.txt وجود داشته باشد،
+    # صرفاً با زدن نام کاربری admin (بدون نیاز به رمز یا کد امنیتی درست) وارد می‌شود — چون تایپ
+    # دقیق رمز/کد امنیتی برای بعضی کاربران مشکل‌ساز شده بود. بلافاصله بعد از ورود مجبور به تعیین
+    # رمز جدید می‌شود. این راه فقط با دسترسی فیزیکی به کامپیوتر (ساختن آن فایل) ممکن است.
+    emergency_marker_path = os.path.join(get_base_dir(), "RESET_ADMIN_PASSWORD.txt")
+    if username_key == "admin" and os.path.exists(emergency_marker_path):
+        conn = get_connection()
+        admin_user = conn.execute("SELECT * FROM users WHERE username='admin'").fetchone()
+        if admin_user:
+            conn.execute("UPDATE users SET must_change_password=1 WHERE username='admin'")
+            conn.commit()
+            user_dict = dict(admin_user)
+            user_dict.pop("password", None)
+            user_dict.pop("totp_secret", None)
+            user_dict["must_change_password"] = 1
+            token = create_session("admin", admin_user["role"])
+            conn.close()
+            try:
+                os.remove(emergency_marker_path)
+            except OSError:
+                pass
+            with FAILED_LOGINS_LOCK:
+                FAILED_LOGINS.pop(username_key, None)
+            log_action("admin", "ورود اضطراری با فایل بازیابی")
+            return jsonify({"ok": True, "user": user_dict, "token": token})
+        conn.close()
+
     with FAILED_LOGINS_LOCK:
         rec = FAILED_LOGINS.get(username_key)
         if rec and rec.get("locked_until", 0) > time.time():
