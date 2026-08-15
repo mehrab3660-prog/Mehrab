@@ -255,7 +255,15 @@ def init_db():
     # کار فقط با دسترسی فیزیکی به کامپیوتر ممکنه، امنیت لاگین آنلاین رو تضعیف نمی‌کنه
     reset_marker_path = os.path.join(get_base_dir(), "RESET_ADMIN_PASSWORD.txt")
     if os.path.exists(reset_marker_path):
-        new_password = secrets.token_urlsafe(9)
+        # اگر کاربر خودش یک رمز دلخواه داخل همین فایل نوشته باشد، همان استفاده می‌شود
+        # (مثلاً رمزی ساده و قابل تایپ که با کپی/پیست اشتباه نشه)؛ وگرنه یک رمز تصادفی ساخته می‌شود.
+        # چون must_change_password=1 هست، این رمز فقط برای همون یک بار ورود اول معتبره.
+        try:
+            with open(reset_marker_path, "r", encoding="utf-8") as f:
+                requested_password = f.read().strip()
+        except OSError:
+            requested_password = ""
+        new_password = requested_password or secrets.token_urlsafe(9)
         c.execute("UPDATE users SET password=?, must_change_password=1 WHERE username='admin'",
                    (generate_password_hash(new_password),))
         _announce_first_admin_password(new_password, is_reset=True)
