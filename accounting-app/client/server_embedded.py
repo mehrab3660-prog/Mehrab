@@ -2385,13 +2385,14 @@ def export_items_excel():
     import openpyxl
     conn = get_connection()
     rows = conn.execute("SELECT * FROM items WHERE deleted_at IS NULL ORDER BY name").fetchall()
+    cats_by_id = {c["id"]: c["name"] for c in conn.execute("SELECT * FROM categories").fetchall()}
     conn.close()
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "کالاها"
-    ws.append(["کد/بارکد", "نام", "برند", "واحد", "قیمت خرید", "قیمت فروش", "موجودی", "حداقل موجودی"])
+    ws.append(["کد/بارکد", "نام", "دسته‌بندی", "برند", "واحد", "قیمت خرید", "قیمت فروش", "موجودی", "حداقل موجودی"])
     for r in rows:
-        ws.append([r["code"] or "", r["name"], r["brand"] or "", r["unit"],
+        ws.append([r["code"] or "", r["name"], cats_by_id.get(r["category_id"], ""), r["brand"] or "", r["unit"],
                    r["purchase_price"], r["sale_price"], r["stock_qty"], r["min_stock"]])
     tmp_path = os.path.join(tempfile.gettempdir(), "items_export.xlsx")
     wb.save(tmp_path)
@@ -2400,8 +2401,9 @@ def export_items_excel():
 
 @app.route("/import/items.xlsx", methods=["POST"])
 def import_items_excel():
-    """ورودی گروهی کالا از فایل اکسل — همون فرمت خروجی اکسل (کد/بارکد، نام، برند، واحد،
-    قیمت خرید، قیمت فروش، موجودی، حداقل موجودی). ردیف‌های خراب رد می‌شوند، بقیه ثبت می‌شوند."""
+    """ورودی گروهی کالا از فایل اکسل — همون فرمت خروجی اکسل (کد/بارکد، نام، دسته‌بندی، برند،
+    واحد، قیمت خرید، قیمت فروش، موجودی، حداقل موجودی). دسته‌بندی الزامی است — اگر اسم دسته‌ای
+    قبلاً وجود نداشته باشد، خودکار ساخته می‌شود. ردیف‌های خراب رد می‌شوند، بقیه ثبت می‌شوند."""
     err = require_permission("can_manage_items")
     if err:
         return err
@@ -2421,16 +2423,27 @@ def import_items_excel():
         return jsonify({"ok": False, "message": "فایل اکسل قابل خواندن نبود"}), 400
 
     conn = get_connection()
+    cat_id_by_name = {c["name"]: c["id"] for c in conn.execute("SELECT * FROM categories").fetchall()}
     imported_count = 0
     errors = []
     for row_num, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
         if row is None or all(c is None or str(c).strip() == "" for c in row):
             continue
-        code, name, brand, unit, purchase_price, sale_price, stock_qty, min_stock = (list(row) + [None] * 8)[:8]
+        code, name, category_name, brand, unit, purchase_price, sale_price, stock_qty, min_stock = (list(row) + [None] * 9)[:9]
         name = str(name).strip() if name is not None else ""
         if not name:
             errors.append(f"ردیف {row_num}: نام کالا خالی است")
             continue
+        category_name = str(category_name).strip() if category_name is not None else ""
+        if not category_name:
+            errors.append(f"ردیف {row_num} ({name}): دسته‌بندی خالی است")
+            continue
+        if category_name in cat_id_by_name:
+            category_id = cat_id_by_name[category_name]
+        else:
+            cur = conn.execute("INSERT INTO categories (name) VALUES (?)", (category_name,))
+            category_id = cur.lastrowid
+            cat_id_by_name[category_name] = category_id
         try:
             purchase_price = float(purchase_price) if purchase_price not in (None, "") else 0
             sale_price = float(sale_price) if sale_price not in (None, "") else 0
@@ -2443,7 +2456,7 @@ def import_items_excel():
             conn.execute(
                 """INSERT INTO items (code, name, category_id, unit, purchase_price, sale_price, stock_qty, min_stock, brand)
                    VALUES (?,?,?,?,?,?,?,?,?)""",
-                (str(code).strip() if code else None, name, None, str(unit).strip() if unit else "عدد",
+                (str(code).strip() if code else None, name, category_id, str(unit).strip() if unit else "عدد",
                  purchase_price, sale_price, stock_qty, min_stock, str(brand).strip() if brand else None)
             )
             imported_count += 1
