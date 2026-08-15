@@ -1808,6 +1808,14 @@ def backup_now():
     return jsonify({"ok": True, "path": path})
 
 
+@app.route("/backup/on-close", methods=["POST"])
+def backup_on_close():
+    """بکاپ خودکار در لحظه‌ی بستن تب/برنامه (از رویداد beforeunload در مرورگر فراخوانی می‌شود).
+    برخلاف /backup/now نیاز به دسترسی مدیر ندارد، چون ممکن است هر کاربری آخرین نفر باشد که برنامه را می‌بندد."""
+    do_backup()
+    return jsonify({"ok": True})
+
+
 @app.route("/backup/list", methods=["GET"])
 def backup_list():
     err = require_admin()

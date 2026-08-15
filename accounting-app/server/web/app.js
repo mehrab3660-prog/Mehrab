@@ -457,8 +457,26 @@ function enterApp() {
   bindCommandPalette();
   bindUserBadgeMenu();
   bindGlobalSearch();
+  bindBackupOnClose();
   api('GET', '/settings/shop').then(s => { if (s) state.defaultMarginPercent = parseFloat(s.default_margin_percent) || 0; });
   loadNotifications();
+}
+
+// ===================== بکاپ خودکار وقتی برنامه/تب مرورگر بسته می‌شود =====================
+let backupOnCloseBound = false;
+function bindBackupOnClose() {
+  if (backupOnCloseBound) return;
+  backupOnCloseBound = true;
+  window.addEventListener('beforeunload', () => {
+    if (!state.token) return;
+    try {
+      fetch('/backup/on-close', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + state.token },
+        keepalive: true,
+      });
+    } catch (e) { /* در حال بسته شدن صفحه، خطا اهمیتی ندارد */ }
+  });
 }
 
 // ===================== منوی کاربر (بالای سایدبار سابق، حالا زیر نام کاربری) =====================
