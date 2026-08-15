@@ -1345,10 +1345,41 @@ function renderItemsTable() {
       <td title="${it.sale_price ? 'به حروف: ' + numberToPersianWords(it.sale_price) + ' تومان' : ''}">${fmt(it.sale_price)}</td>
       <td>${it.stock_qty <= 0 ? `<span class="badge badge-red">تمام شده${it.stock_qty < 0 ? ' (' + fmt(Math.abs(it.stock_qty)) + ' کسری)' : ''}</span>` : (it.stock_qty <= it.min_stock ? `<span class="badge badge-orange">${fmt(it.stock_qty)}</span>` : fmt(it.stock_qty))}</td>
       <td>
+        <button class="btn btn-sm btn-secondary" onclick="openEditItemModal(${it.id})">ویرایش</button>
         <button class="btn btn-sm btn-secondary" onclick="showStockLedger(${it.id})">گردش انبار</button>
         <button class="btn btn-sm btn-danger" onclick="deleteItemRow(${it.id})">حذف</button>
       </td>
     </tr>`).join('');
+}
+function openEditItemModal(itemId) {
+  const it = state.items.find(x => x.id === itemId);
+  if (!it) return;
+  const catOptions = state.categories.map(c => `<option value="${c.id}"${it.category_id === c.id ? ' selected' : ''}>${c.name}</option>`).join('');
+  openModal(`
+    <h3>ویرایش کالا</h3>
+    <div class="form-row"><div><label>کد/بارکد</label><input id="ei-code" value="${escHtml(it.code || '')}"></div><div><label>نام کالا</label><input id="ei-name" value="${escHtml(it.name || '')}"></div></div>
+    <div class="form-row"><div><label>برند</label><input id="ei-brand" value="${escHtml(it.brand || '')}"></div><div><label>واحد</label><input id="ei-unit" value="${escHtml(it.unit || 'عدد')}"></div></div>
+    <div class="form-row"><div><label>دسته‌بندی</label><select id="ei-cat"><option value="">—</option>${catOptions}</select></div></div>
+    <div class="form-row"><div${state.user.role !== 'admin' ? ' style="display:none"' : ''}><label>قیمت خرید</label><input type="text" inputmode="decimal" id="ei-purchase" value="${it.purchase_price ? Number(it.purchase_price).toLocaleString('en-US') : ''}"><div class="words-hint" id="ei-purchase-words"></div></div><div><label>قیمت فروش</label><input type="text" inputmode="decimal" id="ei-sale" value="${it.sale_price ? Number(it.sale_price).toLocaleString('en-US') : ''}"><div class="words-hint" id="ei-sale-words"></div></div></div>
+    <div class="form-row"><div><label>موجودی</label><input type="number" id="ei-stock" value="${it.stock_qty}"></div><div><label>حداقل موجودی</label><input type="number" id="ei-min" value="${it.min_stock}"></div></div>
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-edit-item-btn">ذخیره</button></div>`);
+  attachThousandsFormatting($('#ei-purchase'));
+  attachThousandsFormatting($('#ei-sale'));
+  attachWordsPreview($('#ei-purchase'), 'ei-purchase-words');
+  attachWordsPreview($('#ei-sale'), 'ei-sale-words');
+  $('#save-edit-item-btn').addEventListener('click', async () => {
+    const name = $('#ei-name').value.trim();
+    if (!name) { toast('نام کالا الزامی است', 'danger'); return; }
+    const payload = {
+      code: $('#ei-code').value, name, brand: $('#ei-brand').value, unit: $('#ei-unit').value || 'عدد',
+      category_id: $('#ei-cat').value || null,
+      purchase_price: readAmount($('#ei-purchase')), sale_price: readAmount($('#ei-sale')),
+      stock_qty: parseFloat($('#ei-stock').value || 0), min_stock: parseFloat($('#ei-min').value || 0),
+    };
+    const res = await api('PUT', `/items/${itemId}`, payload);
+    if (res && res.ok) { toast('کالا ذخیره شد', 'success'); closeModal(); loadItems(); }
+    else if (res) toast(res.message || 'خطا در ذخیره', 'danger');
+  });
 }
 async function deleteItemRow(itemId) {
   const it = state.items.find(x => x.id === itemId);
