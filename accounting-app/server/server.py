@@ -72,9 +72,10 @@ def notify_telegram_async(text):
     cfg = load_shop_settings()
     token = cfg.get("telegram_bot_token")
     chat_id = cfg.get("telegram_chat_id")
+    proxy = cfg.get("telegram_proxy") or None
     if not token or not chat_id:
         return
-    threading.Thread(target=notifier.send_telegram_message, args=(token, chat_id, text), daemon=True).start()
+    threading.Thread(target=notifier.send_telegram_message, args=(token, chat_id, text, proxy), daemon=True).start()
 
 
 WEB_DIR = os.path.join(get_bundle_dir(), "web")
@@ -260,6 +261,8 @@ def update_shop_settings():
         s["telegram_bot_token"] = d.get("telegram_bot_token").strip()
     if "telegram_chat_id" in d:
         s["telegram_chat_id"] = d.get("telegram_chat_id") or ""
+    if "telegram_proxy" in d:
+        s["telegram_proxy"] = (d.get("telegram_proxy") or "").strip()
     if "ai_enabled" in d:
         s["ai_enabled"] = bool(d.get("ai_enabled"))
     if d.get("ai_api_key"):
@@ -300,7 +303,8 @@ def test_telegram():
     s = load_shop_settings()
     ok, message = notifier.send_telegram_message(
         s.get("telegram_bot_token"), s.get("telegram_chat_id"),
-        "✅ این یک پیام تستی از برنامه حسابداری مغازه شماست."
+        "✅ این یک پیام تستی از برنامه حسابداری مغازه شماست.",
+        s.get("telegram_proxy") or None,
     )
     return jsonify({"ok": ok, "message": message})
 

@@ -9,6 +9,7 @@ import os
 import smtplib
 import urllib.request
 import urllib.parse
+import requests
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -155,18 +156,19 @@ def send_email_summary(summary_text, backup_path=None):
         return False, f"خطا در ارسال ایمیل: {e}"
 
 
-def send_telegram_message(bot_token, chat_id, text):
-    """پیام هشدار به تلگرام صاحب مغازه (کمبود موجودی، برگشت خوردن چک و...)"""
+def send_telegram_message(bot_token, chat_id, text, proxy=None):
+    """پیام هشدار به تلگرام صاحب مغازه (کمبود موجودی، برگشت خوردن چک و...)
+    proxy: آدرس پراکسی اختیاری (مثل http://127.0.0.1:1080 یا socks5://127.0.0.1:1080)
+    برای دور زدن فیلترینگ تلگرام در ایران؛ اگر خالی باشد اتصال مستقیم انجام می‌شود."""
     if not bot_token or not chat_id:
         return False, "توکن ربات یا شناسه چت تلگرام تنظیم نشده"
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    data = urllib.parse.urlencode({"chat_id": chat_id, "text": text}).encode("utf-8")
+    proxies = {"http": proxy, "https": proxy} if proxy else None
     try:
-        req = urllib.request.Request(url, data=data, method="POST")
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            if resp.status == 200:
-                return True, "پیام تلگرام ارسال شد"
-            return False, f"خطای تلگرام: کد {resp.status}"
+        resp = requests.post(url, data={"chat_id": chat_id, "text": text}, proxies=proxies, timeout=10)
+        if resp.status_code == 200:
+            return True, "پیام تلگرام ارسال شد"
+        return False, f"خطای تلگرام: کد {resp.status_code}"
     except Exception as e:
         return False, f"خطا در ارسال پیام تلگرام: {e}"
 

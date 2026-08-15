@@ -2842,6 +2842,7 @@ async function loadShopSettings() {
   $('#shop-telegram-token').value = '';
   $('#shop-telegram-token').placeholder = s.telegram_bot_token_set ? 'قبلاً تنظیم شده — فقط برای تغییر وارد کن' : '123456:ABC-...';
   $('#shop-telegram-chat-id').value = s.telegram_chat_id || '';
+  $('#shop-telegram-proxy').value = s.telegram_proxy || '';
   $('#shop-default-margin').value = s.default_margin_percent || '';
   $('#shop-invoice-footer').value = s.invoice_footer_message || '';
   $('#shop-national-id').value = s.national_id || '';
@@ -2873,6 +2874,7 @@ $('#btn-save-telegram').addEventListener('click', async () => {
   const res = await api('POST', '/settings/shop', {
     telegram_bot_token: $('#shop-telegram-token').value.trim(),
     telegram_chat_id: $('#shop-telegram-chat-id').value.trim(),
+    telegram_proxy: $('#shop-telegram-proxy').value.trim(),
   });
   if (res && res.ok) { toast('تنظیمات تلگرام ذخیره شد', 'success'); loadShopSettings(); }
 });

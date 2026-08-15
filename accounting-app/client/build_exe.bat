@@ -30,7 +30,7 @@ if errorlevel 1 (
 
 echo.
 echo [2/3] Building exe (this may take a few minutes)...
-python -m PyInstaller --onefile --windowed --name AccountingApp --icon=assets/icon.ico --add-data "web;web" --add-data "assets;assets" --add-data "fonts;fonts" --noconfirm run_app.py
+python -m PyInstaller --onefile --windowed --name AccountingApp --icon=assets/icon.ico --add-data "web;web" --add-data "assets;assets" --add-data "fonts;fonts" --hidden-import=socks --noconfirm run_app.py
 
 echo.
 if exist "dist\AccountingApp.exe" (
