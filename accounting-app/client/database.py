@@ -250,18 +250,32 @@ def init_db():
                    ("admin", generate_password_hash(admin_password), "admin"))
         _announce_first_admin_password(admin_password)
 
+    # بازیابی رمز مدیر: اگر رمز مدیر فراموش شده، کاربر باید کنار همین فایل (کنار accounting.db)
+    # یک فایل خالی به اسم RESET_ADMIN_PASSWORD.txt بسازد و برنامه را دوباره اجرا کند — چون این
+    # کار فقط با دسترسی فیزیکی به کامپیوتر ممکنه، امنیت لاگین آنلاین رو تضعیف نمی‌کنه
+    reset_marker_path = os.path.join(get_base_dir(), "RESET_ADMIN_PASSWORD.txt")
+    if os.path.exists(reset_marker_path):
+        new_password = secrets.token_urlsafe(9)
+        c.execute("UPDATE users SET password=?, must_change_password=1 WHERE username='admin'",
+                   (generate_password_hash(new_password),))
+        _announce_first_admin_password(new_password, is_reset=True)
+        try:
+            os.remove(reset_marker_path)
+        except OSError:
+            pass
+
     conn.commit()
     conn.close()
 
 
-def _announce_first_admin_password(password):
-    """نمایش رمز اولیه‌ی مدیر: هم در کنسول و هم در یک فایل متنی کنار برنامه،
+def _announce_first_admin_password(password, is_reset=False):
+    """نمایش رمز اولیه/بازیابی‌شده‌ی مدیر: هم در کنسول و هم در یک فایل متنی کنار برنامه،
     چون این برنامه ممکن است به‌صورت exe بدون پنجره کنسول اجرا شود."""
     lines = [
         "=" * 60,
-        "کاربر مدیر پیش‌فرض ساخته شد:",
+        "رمز عبور مدیر بازیابی شد:" if is_reset else "کاربر مدیر پیش‌فرض ساخته شد:",
         "  نام کاربری: admin",
-        f"  رمز عبور اولیه: {password}",
+        f"  رمز عبور {'جدید' if is_reset else 'اولیه'}: {password}",
         "این رمز فقط همین یک‌بار نمایش داده می‌شود.",
         "لطفاً همین حالا یادداشتش کنید، با آن وارد شوید و از بخش «مدیریت کاربران»",
         "در اسرع وقت آن را تغییر دهید — سپس فایل زیر را پاک کنید.",
@@ -273,8 +287,8 @@ def _announce_first_admin_password(password):
         with open(creds_path, "w", encoding="utf-8") as f:
             f.write(
                 "نام کاربری مدیر: admin\n"
-                f"رمز عبور اولیه: {password}\n\n"
-                "لطفاً پس از اولین ورود، این رمز را از «تنظیمات کلی › کاربران» تغییر دهید\n"
+                f"رمز عبور {'جدید (بازیابی‌شده)' if is_reset else 'اولیه'}: {password}\n\n"
+                "لطفاً پس از ورود، این رمز را از «تنظیمات کلی › کاربران» تغییر دهید\n"
                 "و سپس همین فایل را حذف کنید.\n"
             )
     except OSError:
