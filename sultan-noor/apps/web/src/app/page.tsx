@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
-import { Banner, Product } from "@/lib/types";
+import { Banner, Category, Product } from "@/lib/types";
 import ProductGrid from "@/components/ProductGrid";
-import HomeHero from "@/components/HomeHero";
+import HeroCarousel from "@/components/HeroCarousel";
 import RevealSection from "@/components/RevealSection";
 import TrustBadges from "@/components/TrustBadges";
 import SectionDivider from "@/components/SectionDivider";
+import CategoryShowcase from "@/components/CategoryShowcase";
+import FeaturedDeals from "@/components/FeaturedDeals";
+import PromoBanners from "@/components/PromoBanners";
+import B2BSection from "@/components/B2BSection";
+import AiAdvisorPromoCard from "@/components/AiAdvisorPromoCard";
 
 async function safeGet<T>(path: string, fallback: T): Promise<T> {
   try {
@@ -16,20 +21,49 @@ async function safeGet<T>(path: string, fallback: T): Promise<T> {
 }
 
 export default async function HomePage() {
-  const [banners, productsRes] = await Promise.all([
+  const [banners, productsRes, categories] = await Promise.all([
     safeGet<Banner[]>("/banners?placement=HOME_HERO", []),
-    safeGet<{ items: Product[] }>("/products?take=8", { items: [] }),
+    safeGet<{ items: Product[] }>("/products?take=24", { items: [] }),
+    safeGet<Category[]>("/categories", []),
   ]);
 
-  const hero = banners[0];
+  const deals = productsRes.items.filter(
+    (p) => p.compareAtPrice && Number(p.compareAtPrice) > Number(p.basePrice),
+  );
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
-      <HomeHero title={hero?.title} />
+      <HeroCarousel banners={banners} />
 
       <div className="mt-14">
         <TrustBadges />
       </div>
+
+      {categories.length > 0 && (
+        <>
+          <SectionDivider />
+          <RevealSection>
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-xl font-bold">
+                دسته‌بندی <span className="gradient-text">محصولات</span>
+              </h2>
+              <Link href="/products" className="text-sm font-medium text-brand transition hover:text-brand-dark">
+                مشاهده همه ←
+              </Link>
+            </div>
+            <CategoryShowcase categories={categories} />
+          </RevealSection>
+        </>
+      )}
+
+      {deals.length > 0 && (
+        <>
+          <SectionDivider />
+          <RevealSection>
+            <FeaturedDeals products={deals} />
+          </RevealSection>
+        </>
+      )}
 
       <SectionDivider />
 
@@ -48,8 +82,26 @@ export default async function HomePage() {
             <code> apps/api</code> اجرا کنید.
           </p>
         ) : (
-          <ProductGrid products={productsRes.items} />
+          <ProductGrid products={productsRes.items.slice(0, 8)} />
         )}
+      </RevealSection>
+
+      <SectionDivider />
+
+      <RevealSection>
+        <PromoBanners />
+      </RevealSection>
+
+      <SectionDivider />
+
+      <RevealSection>
+        <B2BSection />
+      </RevealSection>
+
+      <SectionDivider />
+
+      <RevealSection>
+        <AiAdvisorPromoCard />
       </RevealSection>
     </div>
   );

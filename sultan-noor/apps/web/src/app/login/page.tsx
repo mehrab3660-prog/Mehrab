@@ -58,7 +58,7 @@ export default function LoginPage() {
             onChange={(e) => setPhone(e.target.value)}
             className="w-full rounded-lg border border-border-color bg-background px-3 py-2"
           />
-          <button disabled={loading} className="w-full rounded-lg bg-brand py-2 font-bold text-white">
+          <button disabled={loading} className="w-full rounded-lg bg-brand py-2 font-bold text-[#0b0e14]">
             دریافت کد تایید
           </button>
         </form>
@@ -96,7 +96,7 @@ export default function LoginPage() {
               مشتری عمده (B2B)
             </label>
           </div>
-          <button disabled={loading} className="w-full rounded-lg bg-brand py-2 font-bold text-white">
+          <button disabled={loading} className="w-full rounded-lg bg-brand py-2 font-bold text-[#0b0e14]">
             تایید و ورود
           </button>
         </form>

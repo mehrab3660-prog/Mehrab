@@ -60,7 +60,7 @@ export default function AdminBannersPage() {
             </option>
           ))}
         </select>
-        <button className="col-span-3 rounded-lg bg-brand px-3 py-1 text-sm text-white">افزودن بنر</button>
+        <button className="col-span-3 rounded-lg bg-brand px-3 py-1 text-sm text-[#0b0e14]">افزودن بنر</button>
       </form>
       <ul className="space-y-1">
         {banners.map((b) => (

@@ -18,7 +18,7 @@ export default function CartPage() {
     return (
       <div className="mx-auto max-w-3xl px-4 py-16 text-center">
         <p>برای مشاهده سبد خرید ابتدا وارد شوید.</p>
-        <Link href="/login" className="mt-4 inline-block rounded-lg bg-brand px-5 py-2 text-white">
+        <Link href="/login" className="mt-4 inline-block rounded-lg bg-brand px-5 py-2 text-[#0b0e14]">
           ورود / ثبت‌نام
         </Link>
       </div>
@@ -61,7 +61,7 @@ export default function CartPage() {
 
       <button
         onClick={() => router.push("/checkout")}
-        className="mt-4 w-full rounded-lg bg-brand py-3 font-bold text-white"
+        className="mt-4 w-full rounded-lg bg-brand py-3 font-bold text-[#0b0e14]"
       >
         ادامه فرآیند خرید
       </button>

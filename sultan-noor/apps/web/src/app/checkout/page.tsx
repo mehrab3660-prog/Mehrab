@@ -147,7 +147,7 @@ export default function CheckoutPage() {
 
         {error && <p className="text-sm text-red-500">{error}</p>}
 
-        <button disabled={loading} className="w-full rounded-lg bg-brand py-3 font-bold text-white">
+        <button disabled={loading} className="w-full rounded-lg bg-brand py-3 font-bold text-[#0b0e14]">
           {loading ? "در حال انتقال به درگاه پرداخت..." : "پرداخت و ثبت سفارش"}
         </button>
       </form>

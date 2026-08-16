@@ -28,7 +28,7 @@ export default function OrdersPage() {
     return (
       <div className="mx-auto max-w-3xl px-4 py-16 text-center">
         <p>برای مشاهده سفارش‌ها ابتدا وارد شوید.</p>
-        <Link href="/login" className="mt-4 inline-block rounded-lg bg-brand px-5 py-2 text-white">
+        <Link href="/login" className="mt-4 inline-block rounded-lg bg-brand px-5 py-2 text-[#0b0e14]">
           ورود / ثبت‌نام
         </Link>
       </div>

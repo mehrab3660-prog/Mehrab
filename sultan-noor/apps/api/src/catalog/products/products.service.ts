@@ -44,7 +44,7 @@ export class ProductsService {
       }),
       this.prisma.product.count({ where }),
     ]);
-    return { items, total };
+    return { items: await this.withRatings(items), total };
   }
 
   async get(idOrSlug: string, requester?: AuthenticatedUser) {
@@ -59,7 +59,29 @@ export class ProductsService {
       },
     });
     if (!product) throw new NotFoundException('محصول یافت نشد');
-    return product;
+    const [withRating] = await this.withRatings([product]);
+    return withRating;
+  }
+
+  // Attaches a real average rating + review count computed from approved
+  // reviews (never fabricated) — avgRating is null when there are none yet.
+  private async withRatings<T extends { id: string }>(products: T[]): Promise<(T & { avgRating: number | null; reviewCount: number })[]> {
+    if (products.length === 0) return [];
+    const stats = await this.prisma.review.groupBy({
+      by: ['productId'],
+      where: { productId: { in: products.map((p) => p.id) }, isApproved: true },
+      _avg: { rating: true },
+      _count: { rating: true },
+    });
+    const statsByProduct = new Map(stats.map((s) => [s.productId, s]));
+    return products.map((p) => {
+      const stat = statsByProduct.get(p.id);
+      return {
+        ...p,
+        avgRating: stat?._avg.rating ?? null,
+        reviewCount: stat?._count.rating ?? 0,
+      };
+    });
   }
 
   // Internal existence lookup for update()/remove(), which are already staff-gated

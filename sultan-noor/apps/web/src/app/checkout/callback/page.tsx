@@ -41,7 +41,7 @@ function CheckoutCallbackContent() {
       {status !== "loading" && (
         <>
           <p className={status === "success" ? "text-brand" : "text-red-500"}>{message}</p>
-          <Link href="/orders" className="mt-6 inline-block rounded-lg bg-brand px-5 py-2 text-white">
+          <Link href="/orders" className="mt-6 inline-block rounded-lg bg-brand px-5 py-2 text-[#0b0e14]">
             مشاهده سفارش‌های من
           </Link>
         </>

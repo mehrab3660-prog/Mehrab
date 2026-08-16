@@ -46,7 +46,7 @@ export default function AdminBrandsPage() {
           onChange={(e) => setForm({ ...form, slug: e.target.value })}
           className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
         />
-        <button className="rounded-lg bg-brand px-3 py-1 text-sm text-white">افزودن</button>
+        <button className="rounded-lg bg-brand px-3 py-1 text-sm text-[#0b0e14]">افزودن</button>
       </form>
       <ul className="space-y-1">
         {brands.map((b) => (

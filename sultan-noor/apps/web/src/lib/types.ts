@@ -30,6 +30,7 @@ export interface Category {
   slug: string;
   parentId?: string | null;
   children?: Category[];
+  _count?: { products: number };
 }
 
 export interface Product {
@@ -45,6 +46,8 @@ export interface Product {
   category?: Category | null;
   images: ProductImage[];
   variants: ProductVariant[];
+  avgRating?: number | null;
+  reviewCount?: number;
 }
 
 export interface CartItem {

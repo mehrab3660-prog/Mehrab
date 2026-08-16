@@ -72,7 +72,7 @@ export default function AdminProductsPage() {
           onChange={(e) => setForm({ ...form, basePrice: e.target.value })}
           className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
         />
-        <button className="rounded-lg bg-brand px-3 py-1 text-sm text-white">افزودن محصول</button>
+        <button className="rounded-lg bg-brand px-3 py-1 text-sm text-[#0b0e14]">افزودن محصول</button>
         {error && <p className="col-span-4 text-sm text-red-500">{error}</p>}
       </form>
 

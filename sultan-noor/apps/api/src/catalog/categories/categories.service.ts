@@ -15,7 +15,10 @@ export class CategoriesService {
   }
 
   list() {
-    return this.prisma.category.findMany({ orderBy: { name: 'asc' } });
+    return this.prisma.category.findMany({
+      orderBy: { name: 'asc' },
+      include: { _count: { select: { products: true } } },
+    });
   }
 
   async get(id: string) {

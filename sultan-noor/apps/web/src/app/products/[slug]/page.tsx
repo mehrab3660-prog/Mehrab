@@ -79,7 +79,7 @@ export default function ProductDetailPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
       <div className="grid gap-8 md:grid-cols-2">
-        <div className="aspect-square overflow-hidden rounded-xl bg-black/5">
+        <div className="aspect-square overflow-hidden rounded-xl bg-surface-2">
           {product.images?.[0] ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={product.images[0].url} alt={product.name} className="h-full w-full object-cover" />
@@ -90,6 +90,15 @@ export default function ProductDetailPage() {
         <div>
           {product.brand && <p className="text-sm text-foreground/50">{product.brand.name}</p>}
           <h1 className="mt-1 text-2xl font-bold">{product.name}</h1>
+          {!!product.avgRating && (
+            <div className="mt-2 flex items-center gap-1 text-sm">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="#F5B82E">
+                <path d="m12 2 2.9 6.6 7.1.7-5.4 4.7 1.6 7-6.2-3.7L5.8 21l1.6-7L2 9.3l7.1-.7L12 2Z" />
+              </svg>
+              <span className="font-bold">{product.avgRating.toFixed(1)}</span>
+              <span className="text-foreground/50">({(product.reviewCount ?? 0).toLocaleString("fa-IR")} نظر)</span>
+            </div>
+          )}
           <p className="mt-4 text-2xl font-extrabold text-brand">{formatToman(product.basePrice)}</p>
           {product.minWholesaleQty && (
             <p className="mt-1 text-xs text-foreground/50">
@@ -106,7 +115,7 @@ export default function ProductDetailPage() {
               onChange={(e) => setQuantity(Number(e.target.value))}
               className="w-20 rounded-lg border border-border-color bg-background px-2 py-2 text-center"
             />
-            <button onClick={handleAddToCart} className="rounded-lg bg-brand px-5 py-2 font-bold text-white">
+            <button onClick={handleAddToCart} className="rounded-lg bg-brand px-5 py-2 font-bold text-[#0b0e14]">
               افزودن به سبد خرید
             </button>
           </div>
@@ -152,7 +161,7 @@ export default function ProductDetailPage() {
               onChange={(e) => setReviewForm({ ...reviewForm, body: e.target.value })}
               className="w-full rounded-lg border border-border-color bg-background px-2 py-1"
             />
-            <button type="submit" className="rounded-lg bg-brand px-4 py-1.5 text-sm text-white">
+            <button type="submit" className="rounded-lg bg-brand px-4 py-1.5 text-sm text-[#0b0e14]">
               ثبت نظر
             </button>
           </form>
@@ -183,7 +192,7 @@ export default function ProductDetailPage() {
               onChange={(e) => setQuestionBody(e.target.value)}
               className="flex-1 rounded-lg border border-border-color bg-background px-2 py-1"
             />
-            <button type="submit" className="rounded-lg bg-brand px-4 py-1.5 text-sm text-white">
+            <button type="submit" className="rounded-lg bg-brand px-4 py-1.5 text-sm text-[#0b0e14]">
               ارسال
             </button>
           </form>

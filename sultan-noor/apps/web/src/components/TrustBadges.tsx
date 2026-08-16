@@ -11,14 +11,16 @@ const ICONS: Record<string, React.ReactNode> = {
   support: (
     <path d="M12 3a9 9 0 0 0-9 9v4a3 3 0 0 0 3 3h1v-7H5v-1a7 7 0 0 1 14 0v1h-2v7h1a3 3 0 0 0 3-3v-1a9 9 0 0 0-9-9Z" />
   ),
-  price: <path d="M4 4h8l8 8-8 8-8-8V4Zm4 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z" />,
+  refund: (
+    <path d="M4 12a8 8 0 1 1 3 6.3M4 12v5M4 12H9" strokeLinecap="round" strokeLinejoin="round" fill="none" stroke="currentColor" strokeWidth="2" />
+  ),
 };
 
 const ITEMS = [
-  { icon: "shipping", title: "ارسال سریع", desc: "به سراسر کشور" },
-  { icon: "shield", title: "ضمانت اصالت کالا", desc: "۱۰۰٪ اورجینال" },
-  { icon: "support", title: "پشتیبانی ۲۴ ساعته", desc: "همیشه در دسترس" },
-  { icon: "price", title: "قیمت عمده ویژه", desc: "برای مشتریان B2B" },
+  { icon: "shield", title: "ضمانت اصالت کالا", desc: "کالای اورجینال با ضمانت" },
+  { icon: "shipping", title: "ارسال سریع", desc: "ارسال به سراسر ایران" },
+  { icon: "support", title: "پشتیبانی ۲۴/۷", desc: "همیشه همراه شما هستیم" },
+  { icon: "refund", title: "ضمانت بازگشت", desc: "۷ روز ضمانت بازگشت" },
 ];
 
 export default function TrustBadges() {
