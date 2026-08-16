@@ -42,7 +42,7 @@ export default async function HomePage() {
 
       {categories.length > 0 && (
         <>
-          <div className="mt-8 sm:mt-14" />
+          <div className="mt-6 sm:mt-10" />
           <RevealSection>
             <div className="mb-4 flex items-center justify-between sm:mb-6">
               <h2 className="text-lg font-bold sm:text-xl">

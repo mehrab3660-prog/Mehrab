@@ -183,6 +183,19 @@ export default function Header() {
         new containing block for position:fixed descendants (per the CSS spec for
         backdrop-filter), which would confine this overlay to the header's own box
         instead of the full viewport. */}
+    <AnimatePresence>
+      {megaOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          aria-hidden
+          onClick={() => setMegaOpen(false)}
+          className="fixed inset-0 z-20 hidden bg-black/50 backdrop-blur-sm md:block"
+        />
+      )}
+    </AnimatePresence>
     <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </>
   );
