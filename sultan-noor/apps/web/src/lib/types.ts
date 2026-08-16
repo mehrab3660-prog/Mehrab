@@ -22,6 +22,7 @@ export interface Brand {
   id: string;
   name: string;
   slug: string;
+  logoUrl?: string | null;
 }
 
 export interface Category {
@@ -48,6 +49,7 @@ export interface Product {
   variants: ProductVariant[];
   avgRating?: number | null;
   reviewCount?: number;
+  totalStock?: number;
 }
 
 export interface CartItem {

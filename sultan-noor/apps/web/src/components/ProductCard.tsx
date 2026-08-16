@@ -7,6 +7,7 @@ import { fadeUp } from "@/lib/motion";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
+import { useToast } from "@/context/ToastContext";
 
 function formatToman(value: string | number) {
   return `${Number(value).toLocaleString("fa-IR")} تومان`;
@@ -28,6 +29,7 @@ export default function ProductCard({ product }: { product: Product }) {
   const { user } = useAuth();
   const { addItem } = useCart();
   const { itemIds, toggle } = useWishlist();
+  const { toast } = useToast();
 
   const image = product.images?.[0]?.url;
   const hasDiscount = product.compareAtPrice && Number(product.compareAtPrice) > Number(product.basePrice);
@@ -35,17 +37,42 @@ export default function ProductCard({ product }: { product: Product }) {
     ? Math.round((1 - Number(product.basePrice) / Number(product.compareAtPrice)) * 100)
     : 0;
   const isWishlisted = itemIds.has(product.id);
+  const stockLabel =
+    product.totalStock === undefined
+      ? null
+      : product.totalStock <= 0
+        ? { text: "ناموجود", className: "bg-surface-2 text-foreground/50" }
+        : product.totalStock <= 5
+          ? { text: "موجودی محدود", className: "bg-brand/10 text-brand" }
+          : null;
 
   function handleWishlist(e: React.MouseEvent) {
     e.preventDefault();
-    if (!user) return;
+    if (!user) {
+      toast("برای افزودن به علاقه‌مندی‌ها ابتدا وارد شوید.", "info");
+      return;
+    }
+    const wasWishlisted = isWishlisted;
     toggle(product.id);
+    toast(wasWishlisted ? "از علاقه‌مندی‌ها حذف شد." : "به علاقه‌مندی‌ها اضافه شد.", "success");
   }
 
-  function handleQuickAdd(e: React.MouseEvent) {
+  async function handleQuickAdd(e: React.MouseEvent) {
     e.preventDefault();
-    if (!user) return;
-    addItem(product.id, 1, product.variants?.[0]?.id);
+    if (!user) {
+      toast("برای افزودن به سبد خرید ابتدا وارد شوید.", "info");
+      return;
+    }
+    if (product.totalStock !== undefined && product.totalStock <= 0) {
+      toast("این محصول در حال حاضر ناموجود است.", "error");
+      return;
+    }
+    try {
+      await addItem(product.id, 1, product.variants?.[0]?.id);
+      toast("به سبد خرید اضافه شد.", "success");
+    } catch {
+      toast("افزودن به سبد خرید با خطا مواجه شد.", "error");
+    }
   }
 
   return (
@@ -87,7 +114,7 @@ export default function ProductCard({ product }: { product: Product }) {
             <img
               src={image}
               alt={product.name}
-              className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-110"
+              className={`h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-110 ${product.totalStock === 0 ? "opacity-50 grayscale" : ""}`}
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-surface-2 to-background text-foreground/30">
@@ -109,19 +136,26 @@ export default function ProductCard({ product }: { product: Product }) {
           )}
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
-          <motion.button
-            whileTap={{ scale: 0.96 }}
-            onClick={handleQuickAdd}
-            className="pointer-events-none absolute inset-x-3 bottom-3 flex translate-y-2 items-center justify-center gap-1.5 rounded-lg bg-brand py-2 text-xs font-bold text-[#0b0e14] opacity-0 shadow-lg transition-all duration-300 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 6h2l2.4 11.4a2 2 0 0 0 2 1.6h7.2a2 2 0 0 0 2-1.6L20 8H6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            افزودن به سبد
-          </motion.button>
+          {product.totalStock !== 0 && (
+            <motion.button
+              whileTap={{ scale: 0.96 }}
+              onClick={handleQuickAdd}
+              className="pointer-events-none absolute inset-x-3 bottom-3 flex translate-y-2 items-center justify-center gap-1.5 rounded-lg bg-brand py-2 text-xs font-bold text-[#0b0e14] opacity-0 shadow-lg transition-all duration-300 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 6h2l2.4 11.4a2 2 0 0 0 2 1.6h7.2a2 2 0 0 0 2-1.6L20 8H6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              افزودن به سبد
+            </motion.button>
+          )}
         </div>
         <div className="flex flex-1 flex-col gap-1.5 p-4">
-          {product.brand && <span className="text-xs text-muted">{product.brand.name}</span>}
+          <div className="flex items-center justify-between gap-2">
+            {product.brand && <span className="text-xs text-muted">{product.brand.name}</span>}
+            {stockLabel && (
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${stockLabel.className}`}>{stockLabel.text}</span>
+            )}
+          </div>
           <h3 className="line-clamp-2 text-sm font-medium leading-6">{product.name}</h3>
           {!!product.avgRating && <RatingStars rating={product.avgRating} count={product.reviewCount ?? 0} />}
           <div className="mt-auto flex items-center gap-2 pt-2">

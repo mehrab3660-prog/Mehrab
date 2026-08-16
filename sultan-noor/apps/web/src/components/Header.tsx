@@ -5,6 +5,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
+import { useWishlist } from "@/context/WishlistContext";
 import SearchBar from "./SearchBar";
 import MegaMenu from "./MegaMenu";
 import NotificationBell from "./NotificationBell";
@@ -42,13 +43,16 @@ function IconLink({ href, label, count, children }: { href: string; label: strin
 export default function Header() {
   const { user } = useAuth();
   const { cart } = useCart();
+  const { itemIds } = useWishlist();
   const [megaOpen, setMegaOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   const itemCount = cart?.items?.reduce((sum, i) => sum + i.quantity, 0) ?? 0;
   const isStaff = user && ["SUPER_ADMIN", "ADMIN", "STAFF", "WAREHOUSE_MANAGER"].includes(user.role);
 
   return (
+    <>
     <motion.header
       initial={{ y: -12, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
@@ -90,7 +94,18 @@ export default function Header() {
         </div>
 
         <div className="mr-auto flex items-center gap-1">
-          <IconLink href="/wishlist" label="علاقه‌مندی‌ها">
+          <button
+            onClick={() => setMobileSearchOpen((v) => !v)}
+            className="flex h-9 w-9 items-center justify-center rounded-full text-foreground/70 transition-colors hover:bg-surface-2 hover:text-brand md:hidden"
+            aria-label="جستجو"
+            aria-expanded={mobileSearchOpen}
+          >
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.3-4.3" strokeLinecap="round" />
+            </svg>
+          </button>
+          <IconLink href="/wishlist" label="علاقه‌مندی‌ها" count={itemIds.size}>
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
               <path d="M12 20.5s-7.5-4.6-9.9-9.2C.5 7.9 2 4.5 5.4 3.7c2-.5 3.9.3 5 1.9a.7.7 0 0 0 1.2 0c1.1-1.6 3-2.4 5-1.9 3.4.8 4.9 4.2 3.3 7.6-2.4 4.6-9.9 9.2-9.9 9.2Z" />
             </svg>
@@ -112,10 +127,22 @@ export default function Header() {
         </div>
       </div>
 
-      {/* mobile search (always visible below the icon row) */}
-      <div className="px-4 pb-3 md:hidden">
-        <SearchBar />
-      </div>
+      {/* mobile search: collapsed by default, toggled via the search icon */}
+      <AnimatePresence initial={false}>
+        {mobileSearchOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="overflow-hidden md:hidden"
+          >
+            <div className="px-4 pb-3">
+              <SearchBar />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* row 2: nav bar with mega menu */}
       <div className="hidden border-t border-border-color/70 md:block">
@@ -151,8 +178,12 @@ export default function Header() {
           )}
         </nav>
       </div>
-
-      <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </motion.header>
+    {/* Rendered outside <header>: backdrop-blur-md on the sticky header creates a
+        new containing block for position:fixed descendants (per the CSS spec for
+        backdrop-filter), which would confine this overlay to the header's own box
+        instead of the full viewport. */}
+    <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+    </>
   );
 }

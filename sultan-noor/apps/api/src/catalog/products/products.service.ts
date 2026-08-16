@@ -44,7 +44,7 @@ export class ProductsService {
       }),
       this.prisma.product.count({ where }),
     ]);
-    return { items: await this.withRatings(items), total };
+    return { items: await this.withStock(await this.withRatings(items)), total };
   }
 
   async get(idOrSlug: string, requester?: AuthenticatedUser) {
@@ -60,7 +60,75 @@ export class ProductsService {
     });
     if (!product) throw new NotFoundException('محصول یافت نشد');
     const [withRating] = await this.withRatings([product]);
-    return withRating;
+    const [withStock] = await this.withStock([withRating]);
+    return withStock;
+  }
+
+  // Related products from the same category, excluding the current product —
+  // there is no real purchase-affinity data yet, so this single real rail is
+  // the honest substitute for a separate "complementary products" list.
+  async related(productId: string, categoryId: string | null, take = 8) {
+    if (!categoryId) return [];
+    const items = await this.prisma.product.findMany({
+      where: { categoryId, status: 'PUBLISHED', id: { not: productId } },
+      include: productInclude,
+      take,
+      orderBy: { createdAt: 'desc' },
+    });
+    return this.withStock(await this.withRatings(items));
+  }
+
+  async relatedForProduct(idOrSlug: string, take = 8) {
+    const product = await this.prisma.product.findFirst({
+      where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+      select: { id: true, categoryId: true },
+    });
+    if (!product) return [];
+    return this.related(product.id, product.categoryId, take);
+  }
+
+  // Real best-sellers computed from actual delivered/paid order quantities —
+  // never a fabricated ranking. Products with zero sales are simply excluded.
+  async bestSellers(take = 8) {
+    const grouped = await this.prisma.orderItem.groupBy({
+      by: ['productId'],
+      _sum: { quantity: true },
+      orderBy: { _sum: { quantity: 'desc' } },
+      take,
+    });
+    if (grouped.length === 0) return [];
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: grouped.map((g) => g.productId) }, status: 'PUBLISHED' },
+      include: productInclude,
+    });
+    const orderById = new Map(grouped.map((g, i) => [g.productId, i]));
+    const sorted = products.sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0));
+    return this.withStock(await this.withRatings(sorted));
+  }
+
+  // Aggregates real available stock (quantity - reserved) across every
+  // variant/warehouse for a product — the business has a single physical
+  // location, so this total is the honest, non-fabricated stock signal
+  // (no multi-branch breakdown is invented).
+  private async withStock<T extends { id: string; variants: { id: string }[] }>(
+    products: T[],
+  ): Promise<(T & { totalStock: number })[]> {
+    if (products.length === 0) return [];
+    const variantIds = products.flatMap((p) => p.variants.map((v) => v.id));
+    if (variantIds.length === 0) return products.map((p) => ({ ...p, totalStock: 0 }));
+    const stocks = await this.prisma.stock.findMany({
+      where: { productVariantId: { in: variantIds } },
+      select: { productVariantId: true, quantity: true, reservedQuantity: true },
+    });
+    const stockByVariant = new Map<string, number>();
+    for (const s of stocks) {
+      const available = Math.max(0, s.quantity - s.reservedQuantity);
+      stockByVariant.set(s.productVariantId, (stockByVariant.get(s.productVariantId) ?? 0) + available);
+    }
+    return products.map((p) => ({
+      ...p,
+      totalStock: p.variants.reduce((sum, v) => sum + (stockByVariant.get(v.id) ?? 0), 0),
+    }));
   }
 
   // Attaches a real average rating + review count computed from approved

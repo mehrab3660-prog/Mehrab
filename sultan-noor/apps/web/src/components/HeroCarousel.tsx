@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { easeOut } from "@/lib/motion";
 import { Banner } from "@/lib/types";
 import HeroIllustration from "./HeroIllustration";
+import { useAiAdvisor } from "@/context/AiAdvisorContext";
 
 interface Slide {
   title: string;
@@ -39,6 +40,7 @@ export default function HeroCarousel({ banners }: { banners: Banner[] }) {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [imageOk, setImageOk] = useState(false);
+  const { setOpen: openAiAdvisor } = useAiAdvisor();
 
   // Verify the banner image actually loads before rendering it — done via an
   // imperative preload (not the <img>'s own onError) because on an SSR'd
@@ -78,22 +80,15 @@ export default function HeroCarousel({ banners }: { banners: Banner[] }) {
       onMouseLeave={() => setPaused(false)}
       className="relative isolate overflow-hidden rounded-[2rem] border border-border-color bg-gradient-to-br from-surface via-surface to-[#0a1120]"
     >
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute -top-16 -left-16 h-72 w-72 rounded-full bg-brand/10 blur-3xl"
+        animate={{ opacity: [0.35, 0.5, 0.35] }}
+        transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+      />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.12]"
-        style={{ backgroundImage: "radial-gradient(circle, #F5B82E 1.5px, transparent 1.5px)", backgroundSize: "22px 22px" }}
-      />
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute -top-16 -left-16 h-72 w-72 rounded-full bg-brand/20 blur-3xl"
-        animate={{ y: [0, 16, 0], opacity: [0.4, 0.7, 0.4] }}
-        transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-      />
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute -bottom-20 right-0 h-64 w-64 rounded-full bg-accent-purple/10 blur-3xl"
-        animate={{ opacity: [0.3, 0.6, 0.3] }}
-        transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
+        className="pointer-events-none absolute -bottom-20 right-0 h-64 w-64 rounded-full bg-accent-purple/[0.06] blur-3xl"
       />
 
       <AnimatePresence mode="wait">
@@ -126,14 +121,18 @@ export default function HeroCarousel({ banners }: { banners: Banner[] }) {
                   {slide.ctaLabel} ←
                 </Link>
               </motion.div>
-              <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}>
-                <Link
-                  href="/login"
-                  className="inline-block rounded-xl border border-border-color px-6 py-3 font-bold text-foreground transition hover:border-brand hover:text-brand"
-                >
-                  عضویت رایگان
-                </Link>
-              </motion.div>
+              <motion.button
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => openAiAdvisor(true)}
+                className="inline-flex items-center gap-2 rounded-xl border border-border-color px-6 py-3 font-bold text-foreground transition hover:border-brand hover:text-brand"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M12 3a7 7 0 0 0-7 7c0 2 .8 3.7 2 5v2.5a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V15c1.2-1.3 2-3 2-5a7 7 0 0 0-7-7Z" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M10 21h4" strokeLinecap="round" />
+                </svg>
+                مشاوره هوشمند
+              </motion.button>
             </div>
           </div>
 

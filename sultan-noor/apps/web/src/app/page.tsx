@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
-import { Banner, Category, Product } from "@/lib/types";
+import { Banner, Category, Product, Brand, BlogPost } from "@/lib/types";
 import ProductGrid from "@/components/ProductGrid";
 import HeroCarousel from "@/components/HeroCarousel";
 import RevealSection from "@/components/RevealSection";
@@ -8,7 +8,9 @@ import TrustBadges from "@/components/TrustBadges";
 import SectionDivider from "@/components/SectionDivider";
 import CategoryShowcase from "@/components/CategoryShowcase";
 import FeaturedDeals from "@/components/FeaturedDeals";
-import PromoBanners from "@/components/PromoBanners";
+import TrustedBrands from "@/components/TrustedBrands";
+import LatestBlogPosts from "@/components/LatestBlogPosts";
+import FinalCta from "@/components/FinalCta";
 import B2BSection from "@/components/B2BSection";
 import AiAdvisorPromoCard from "@/components/AiAdvisorPromoCard";
 
@@ -21,10 +23,13 @@ async function safeGet<T>(path: string, fallback: T): Promise<T> {
 }
 
 export default async function HomePage() {
-  const [banners, productsRes, categories] = await Promise.all([
+  const [banners, productsRes, categories, bestSellers, brands, blogPosts] = await Promise.all([
     safeGet<Banner[]>("/banners?placement=HOME_HERO", []),
     safeGet<{ items: Product[] }>("/products?take=24", { items: [] }),
     safeGet<Category[]>("/categories", []),
+    safeGet<Product[]>("/products/best-sellers?take=8", []),
+    safeGet<Brand[]>("/brands", []),
+    safeGet<BlogPost[]>("/blog", []),
   ]);
 
   const deals = productsRes.items.filter(
@@ -35,13 +40,9 @@ export default async function HomePage() {
     <div className="mx-auto max-w-6xl px-4 py-8">
       <HeroCarousel banners={banners} />
 
-      <div className="mt-14">
-        <TrustBadges />
-      </div>
-
       {categories.length > 0 && (
         <>
-          <SectionDivider />
+          <div className="mt-14" />
           <RevealSection>
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-xl font-bold">
@@ -56,6 +57,23 @@ export default async function HomePage() {
         </>
       )}
 
+      {bestSellers.length > 0 && (
+        <>
+          <SectionDivider />
+          <RevealSection>
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-xl font-bold">
+                محصولات <span className="gradient-text">پرفروش</span>
+              </h2>
+              <Link href="/products" className="text-sm font-medium text-brand transition hover:text-brand-dark">
+                مشاهده همه ←
+              </Link>
+            </div>
+            <ProductGrid products={bestSellers} />
+          </RevealSection>
+        </>
+      )}
+
       {deals.length > 0 && (
         <>
           <SectionDivider />
@@ -65,32 +83,29 @@ export default async function HomePage() {
         </>
       )}
 
-      <SectionDivider />
+      {productsRes.items.length === 0 && bestSellers.length === 0 && (
+        <>
+          <SectionDivider />
+          <RevealSection>
+            <p className="rounded-xl border border-dashed border-border-color p-6 text-sm text-foreground/60">
+              هنوز محصولی ثبت نشده است. برای شروع، از پنل مدیریت محصول اضافه کنید یا دستور <code>pnpm seed</code> را در
+              <code> apps/api</code> اجرا کنید.
+            </p>
+          </RevealSection>
+        </>
+      )}
 
-      <RevealSection>
-        <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-xl font-bold">
-            محصولات <span className="gradient-text">پیشنهادی</span>
-          </h2>
-          <Link href="/products" className="text-sm font-medium text-brand transition hover:text-brand-dark">
-            مشاهده همه ←
-          </Link>
-        </div>
-        {productsRes.items.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border-color p-6 text-sm text-foreground/60">
-            هنوز محصولی ثبت نشده است. برای شروع، از پنل مدیریت محصول اضافه کنید یا دستور <code>pnpm seed</code> را در
-            <code> apps/api</code> اجرا کنید.
-          </p>
-        ) : (
-          <ProductGrid products={productsRes.items.slice(0, 8)} />
-        )}
-      </RevealSection>
-
-      <SectionDivider />
-
-      <RevealSection>
-        <PromoBanners />
-      </RevealSection>
+      {brands.length > 0 && (
+        <>
+          <SectionDivider />
+          <RevealSection>
+            <h2 className="mb-6 text-xl font-bold">
+              برندهای <span className="gradient-text">معتبر</span>
+            </h2>
+            <TrustedBrands brands={brands} />
+          </RevealSection>
+        </>
+      )}
 
       <SectionDivider />
 
@@ -102,6 +117,38 @@ export default async function HomePage() {
 
       <RevealSection>
         <AiAdvisorPromoCard />
+      </RevealSection>
+
+      <SectionDivider />
+
+      <RevealSection>
+        <h2 className="mb-6 text-xl font-bold">
+          چرا <span className="gradient-text">سلطان نور</span>؟
+        </h2>
+        <TrustBadges />
+      </RevealSection>
+
+      {blogPosts.length > 0 && (
+        <>
+          <SectionDivider />
+          <RevealSection>
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-xl font-bold">
+                آخرین <span className="gradient-text">مقالات</span>
+              </h2>
+              <Link href="/blog" className="text-sm font-medium text-brand transition hover:text-brand-dark">
+                مشاهده همه ←
+              </Link>
+            </div>
+            <LatestBlogPosts posts={blogPosts.slice(0, 3)} />
+          </RevealSection>
+        </>
+      )}
+
+      <SectionDivider />
+
+      <RevealSection>
+        <FinalCta />
       </RevealSection>
     </div>
   );

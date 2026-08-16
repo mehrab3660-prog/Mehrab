@@ -5,6 +5,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import { WishlistProvider } from "@/context/WishlistContext";
 import { AiAdvisorProvider } from "@/context/AiAdvisorContext";
+import { ToastProvider } from "@/context/ToastContext";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import AiAdvisorWidget from "@/components/AiAdvisorWidget";
@@ -26,19 +27,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="fa" dir="rtl" className={`${vazirmatn.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
         <AuthProvider>
-          <CartProvider>
-            <WishlistProvider>
-              <AiAdvisorProvider>
-                <Header />
-                <main className="flex-1 pb-16 sm:pb-0">
-                  <PageTransition>{children}</PageTransition>
-                </main>
-                <Footer />
-                <AiAdvisorWidget />
-                <MobileBottomNav />
-              </AiAdvisorProvider>
-            </WishlistProvider>
-          </CartProvider>
+          <ToastProvider>
+            <CartProvider>
+              <WishlistProvider>
+                <AiAdvisorProvider>
+                  <Header />
+                  <main className="flex-1 pb-16 sm:pb-0">
+                    <PageTransition>{children}</PageTransition>
+                  </main>
+                  <Footer />
+                  <AiAdvisorWidget />
+                  <MobileBottomNav />
+                </AiAdvisorProvider>
+              </WishlistProvider>
+            </CartProvider>
+          </ToastProvider>
         </AuthProvider>
       </body>
     </html>
