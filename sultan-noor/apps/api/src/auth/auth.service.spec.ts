@@ -13,9 +13,10 @@ describe('AuthService', () => {
     prisma = {
       otpCode: { create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
       user: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+      discountCode: { upsert: jest.fn().mockResolvedValue({}) },
     };
     jwt = { sign: jest.fn().mockReturnValue('signed-token'), verify: jest.fn() };
-    sms = { sendOtp: jest.fn().mockResolvedValue(undefined) };
+    sms = { sendOtp: jest.fn().mockResolvedValue(undefined), sendText: jest.fn().mockResolvedValue(undefined) };
     activity = { record: jest.fn().mockResolvedValue(undefined) };
     service = new AuthService(prisma, jwt, sms, activity);
   });
@@ -118,6 +119,11 @@ describe('AuthService', () => {
       });
 
       const result = await service.verifyOtp(baseDto);
+      // Flush the fire-and-forget welcome-discount send (it awaits the
+      // discount-code upsert before texting, so needs more than one tick).
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
 
       expect(prisma.otpCode.update).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 'otp1' }, data: expect.objectContaining({ consumedAt: expect.any(Date) }) }),
@@ -125,6 +131,12 @@ describe('AuthService', () => {
       expect(prisma.user.create).toHaveBeenCalledTimes(1);
       expect(result.accessToken).toBe('signed-token');
       expect(result.user).toMatchObject({ sub: 'user1', phone: '09120000001' });
+
+      // First-purchase welcome discount: only for genuinely new users.
+      expect(prisma.discountCode.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { code: 'WELCOME10' } }),
+      );
+      expect(sms.sendText).toHaveBeenCalledWith('09120000001', expect.stringContaining('WELCOME10'));
     });
 
     it('does not re-create or re-verify an already-verified existing user', async () => {
@@ -143,9 +155,11 @@ describe('AuthService', () => {
       });
 
       await service.verifyOtp(baseDto);
+      await Promise.resolve();
 
       expect(prisma.user.create).not.toHaveBeenCalled();
       expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(sms.sendText).not.toHaveBeenCalled();
     });
   });
 });

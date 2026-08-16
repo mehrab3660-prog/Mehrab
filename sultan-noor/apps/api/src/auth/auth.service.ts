@@ -104,6 +104,7 @@ export class AuthService {
     await this.prisma.otpCode.update({ where: { id: otp.id }, data: { consumedAt: new Date() } });
 
     let user = await this.prisma.user.findUnique({ where: { phone: dto.phone } });
+    const isNewUser = !user;
     if (!user) {
       user = await this.prisma.user.create({
         data: {
@@ -120,6 +121,12 @@ export class AuthService {
 
     await this.activity.record({ userId: user.id, event: 'auth.otp_verified', metadata: { purpose: dto.purpose } });
 
+    if (isNewUser) {
+      void this.sendWelcomeDiscount(user.phone).catch((err) =>
+        this.logger.error(`ارسال کد تخفیف خوش‌آمدگویی به ${user!.phone} ناموفق بود: ${(err as Error).message}`),
+      );
+    }
+
     return this.issueTokens(user.id, user.phone, user.role, user.customerType);
   }
 
@@ -132,6 +139,23 @@ export class AuthService {
     } catch {
       throw new UnauthorizedException('رفرش توکن نامعتبر است');
     }
+  }
+
+  // A single store-wide code, capped at one use per customer via the
+  // existing maxUsagePerUser mechanism (see PricingService.evaluateDiscountCode)
+  // — that cap is what makes it a "first purchase" offer without needing a
+  // dedicated per-user code or a new schema field.
+  private async ensureWelcomeDiscountCode() {
+    return this.prisma.discountCode.upsert({
+      where: { code: 'WELCOME10' },
+      create: { code: 'WELCOME10', type: 'PERCENTAGE', value: 10, maxUsagePerUser: 1, isActive: true },
+      update: {},
+    });
+  }
+
+  private async sendWelcomeDiscount(phone: string) {
+    await this.ensureWelcomeDiscountCode();
+    await this.sms.sendText(phone, 'به سلطان نور خوش آمدید! برای اولین خرید خود با کد WELCOME10 ده درصد تخفیف بگیرید.');
   }
 
   private issueTokens(userId: string, phone: string, role: string, customerType: string) {
