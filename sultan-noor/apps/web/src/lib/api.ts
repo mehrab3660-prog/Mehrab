@@ -4,6 +4,7 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
+    public retryAfterSeconds?: number,
   ) {
     super(message);
   }
@@ -28,7 +29,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new ApiError(body.message ?? `درخواست ناموفق بود (${res.status})`, res.status);
+    throw new ApiError(body.message ?? `درخواست ناموفق بود (${res.status})`, res.status, body.retryAfterSeconds);
   }
 
   if (res.status === 204) return undefined as T;

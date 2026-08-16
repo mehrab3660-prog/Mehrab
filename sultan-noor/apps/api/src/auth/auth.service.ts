@@ -1,4 +1,12 @@
-import { BadRequestException, Injectable, Logger, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { randomInt } from 'crypto';
@@ -11,6 +19,10 @@ import { VerifyOtpDto } from './dto/verify-otp.dto';
 
 const OTP_TTL_MINUTES = 5;
 const OTP_MAX_ATTEMPTS = 5;
+// Server-side floor on how often a real SMS can be sent to the same phone —
+// independent of the frontend's resend timer, which resets on page refresh
+// and would otherwise let someone burn SMS credit by just reloading.
+const OTP_RESEND_COOLDOWN_SECONDS = 120;
 
 @Injectable()
 export class AuthService {
@@ -29,6 +41,23 @@ export class AuthService {
   }
 
   async requestOtp(dto: RequestOtpDto) {
+    const recent = await this.prisma.otpCode.findFirst({
+      where: { phone: dto.phone, purpose: dto.purpose },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (recent) {
+      const secondsSince = (Date.now() - recent.createdAt.getTime()) / 1000;
+      if (secondsSince < OTP_RESEND_COOLDOWN_SECONDS) {
+        throw new HttpException(
+          {
+            message: 'کد تایید قبلاً برای این شماره ارسال شده است، کمی صبر کنید',
+            retryAfterSeconds: Math.ceil(OTP_RESEND_COOLDOWN_SECONDS - secondsSince),
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+    }
+
     const code = String(randomInt(10000, 99999));
     const codeHash = await bcrypt.hash(code, 10);
 

@@ -27,13 +27,28 @@ export default function LoginPage() {
     return () => clearInterval(timer);
   }, [resendIn]);
 
+  // A 429 here means the server already has a valid, unexpired code for this
+  // phone (e.g. the user reloaded the page and re-submitted it) — that's not
+  // a failure, it just means no new SMS should go out. Treat it the same as
+  // a successful send instead of blocking the user or burning SMS credit.
   async function sendOtp() {
-    const [exists] = await Promise.all([
-      api.get<{ exists: boolean }>(`/auth/user-exists?phone=${encodeURIComponent(phone)}`).then((r) => r.exists).catch(() => true),
-      requestOtp(phone, "LOGIN"),
-    ]);
-    setIsNewUser(!exists);
-    setResendIn(RESEND_COOLDOWN_SECONDS);
+    const existsPromise = api
+      .get<{ exists: boolean }>(`/auth/user-exists?phone=${encodeURIComponent(phone)}`)
+      .then((r) => r.exists)
+      .catch(() => true);
+
+    try {
+      await requestOtp(phone, "LOGIN");
+      setResendIn(RESEND_COOLDOWN_SECONDS);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 429) {
+        setResendIn(err.retryAfterSeconds ?? RESEND_COOLDOWN_SECONDS);
+        setError("کد قبلاً برای این شماره ارسال شده است، همان کد را وارد کنید.");
+      } else {
+        throw err;
+      }
+    }
+    setIsNewUser(!(await existsPromise));
   }
 
   async function handleRequestOtp(e: React.FormEvent) {

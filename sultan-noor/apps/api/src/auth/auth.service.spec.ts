@@ -42,6 +42,24 @@ describe('AuthService', () => {
         ServiceUnavailableException,
       );
     });
+
+    it('rejects a resend within the cooldown window without sending another SMS', async () => {
+      prisma.otpCode.findFirst.mockResolvedValue({ createdAt: new Date() });
+
+      await expect(service.requestOtp({ phone: '09120000001', purpose: 'LOGIN' } as any)).rejects.toMatchObject({
+        status: 429,
+      });
+      expect(sms.sendOtp).not.toHaveBeenCalled();
+      expect(prisma.otpCode.create).not.toHaveBeenCalled();
+    });
+
+    it('allows a resend once the cooldown window has passed', async () => {
+      prisma.otpCode.findFirst.mockResolvedValue({ createdAt: new Date(Date.now() - 121_000) });
+      prisma.otpCode.create.mockResolvedValue({});
+
+      await expect(service.requestOtp({ phone: '09120000001', purpose: 'LOGIN' } as any)).resolves.toBeDefined();
+      expect(sms.sendOtp).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('verifyOtp', () => {
