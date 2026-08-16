@@ -21,6 +21,18 @@ function formatToman(value: number) {
   return `${value.toLocaleString("fa-IR")} تومان`;
 }
 
+const DELIVERY_SLOTS: { value: "MORNING" | "AFTERNOON" | "EVENING"; label: string }[] = [
+  { value: "MORNING", label: "۹ صبح تا ۱۲ ظهر" },
+  { value: "AFTERNOON", label: "۱۲ ظهر تا ۴ عصر" },
+  { value: "EVENING", label: "۴ عصر تا ۸ شب" },
+];
+
+function isoDatePlusDays(days: number) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 export default function CheckoutPage() {
   const { user, accessToken, loading: authLoading } = useAuth();
   const { cart, refresh } = useCart();
@@ -42,6 +54,8 @@ export default function CheckoutPage() {
   const [discountCode, setDiscountCode] = useState("");
   const [suggestedCode, setSuggestedCode] = useState<{ code: string; amount: number } | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"ZARINPAL" | "IDPAY" | "CASH_ON_DELIVERY">("ZARINPAL");
+  const [deliveryDate, setDeliveryDate] = useState("");
+  const [deliverySlot, setDeliverySlot] = useState<"MORNING" | "AFTERNOON" | "EVENING" | "">("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -80,12 +94,21 @@ export default function CheckoutPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if ((deliveryDate && !deliverySlot) || (!deliveryDate && deliverySlot)) {
+      toast("در صورت انتخاب زمان تحویل، تاریخ و بازه‌ی زمانی هر دو لازم است.", "error");
+      return;
+    }
     setLoading(true);
     try {
       const finalAddressId = await ensureAddress();
       const order = await api.post<{ id: string }>(
         "/orders",
-        { addressId: finalAddressId, discountCode: discountCode || undefined },
+        {
+          addressId: finalAddressId,
+          discountCode: discountCode || undefined,
+          deliveryDate: deliveryDate || undefined,
+          deliverySlot: deliverySlot || undefined,
+        },
         accessToken,
       );
       const payment = await api.post<{ paymentUrl: string | null }>(
@@ -248,6 +271,36 @@ export default function CheckoutPage() {
                 پرداخت در محل (نقدی)
               </label>
             </div>
+          </section>
+
+          <section className="rounded-2xl surface-card p-4 sm:p-5">
+            <h2 className="mb-3 font-bold">زمان تحویل (اختیاری)</h2>
+            <input
+              type="date"
+              value={deliveryDate}
+              min={isoDatePlusDays(1)}
+              max={isoDatePlusDays(7)}
+              onChange={(e) => setDeliveryDate(e.target.value)}
+              className="mb-3 min-h-11 w-full rounded-lg border border-border-color bg-background px-3 py-2.5 text-sm focus:border-brand focus:outline-none"
+            />
+            {deliveryDate && (
+              <div className="space-y-2">
+                {DELIVERY_SLOTS.map((slot) => (
+                  <label
+                    key={slot.value}
+                    className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border-color px-3 py-2.5 text-sm has-[:checked]:border-brand has-[:checked]:bg-brand/10"
+                  >
+                    <input
+                      type="radio"
+                      name="deliverySlot"
+                      checked={deliverySlot === slot.value}
+                      onChange={() => setDeliverySlot(slot.value)}
+                    />
+                    {slot.label}
+                  </label>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* order summary inline on mobile, hidden here on desktop where the sticky column handles it */}

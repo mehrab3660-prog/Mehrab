@@ -13,6 +13,12 @@ interface OrderDetail extends Order {
   invoice?: { invoiceNumber: string } | null;
 }
 
+const DELIVERY_SLOT_LABEL: Record<string, string> = {
+  MORNING: "۹ صبح تا ۱۲ ظهر",
+  AFTERNOON: "۱۲ ظهر تا ۴ عصر",
+  EVENING: "۴ عصر تا ۸ شب",
+};
+
 const RETURN_STATUS_LABEL: Record<ReturnRequest["status"], string> = {
   PENDING: "در انتظار بررسی",
   APPROVED: "تایید شده — در انتظار بازگشت وجه",
@@ -111,7 +117,12 @@ export default function OrderDetailPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="mb-2 text-2xl font-bold">سفارش {order.orderNumber}</h1>
-      <p className="mb-6 text-sm text-foreground/50">وضعیت: {order.status}</p>
+      <p className="mb-2 text-sm text-foreground/50">وضعیت: {order.status}</p>
+      {order.deliveryDate && order.deliverySlot && (
+        <p className="mb-6 text-sm text-foreground/50">
+          زمان تحویل: {new Date(order.deliveryDate).toLocaleDateString("fa-IR")} — {DELIVERY_SLOT_LABEL[order.deliverySlot]}
+        </p>
+      )}
 
       <div className="space-y-2">
         {order.items.map((item) => (

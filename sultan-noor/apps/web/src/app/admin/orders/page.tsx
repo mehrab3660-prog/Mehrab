@@ -7,6 +7,12 @@ import { Order } from "@/lib/types";
 
 const STATUSES = ["PENDING_PAYMENT", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED", "REFUNDED"];
 
+const DELIVERY_SLOT_LABEL: Record<string, string> = {
+  MORNING: "۹ تا ۱۲",
+  AFTERNOON: "۱۲ تا ۱۶",
+  EVENING: "۱۶ تا ۲۰",
+};
+
 export default function AdminOrdersPage() {
   const { accessToken } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -31,6 +37,7 @@ export default function AdminOrdersPage() {
           <tr className="border-b border-border-color text-right">
             <th className="p-2">شماره سفارش</th>
             <th className="p-2">مبلغ نهایی</th>
+            <th className="p-2">زمان تحویل</th>
             <th className="p-2">وضعیت</th>
           </tr>
         </thead>
@@ -39,6 +46,11 @@ export default function AdminOrdersPage() {
             <tr key={o.id} className="border-b border-border-color">
               <td className="p-2">{o.orderNumber}</td>
               <td className="p-2">{Number(o.grandTotal).toLocaleString("fa-IR")} تومان</td>
+              <td className="p-2 text-xs text-foreground/60">
+                {o.deliveryDate && o.deliverySlot
+                  ? `${new Date(o.deliveryDate).toLocaleDateString("fa-IR")} — ${DELIVERY_SLOT_LABEL[o.deliverySlot]}`
+                  : "—"}
+              </td>
               <td className="p-2">
                 <select
                   value={o.status}

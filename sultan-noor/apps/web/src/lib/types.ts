@@ -79,6 +79,8 @@ export interface Order {
   shippingTotal: string;
   grandTotal: string;
   createdAt: string;
+  deliveryDate?: string | null;
+  deliverySlot?: "MORNING" | "AFTERNOON" | "EVENING" | null;
   items: { id: string; nameSnapshot: string; quantity: number; unitPrice: string; lineTotal: string }[];
 }
 

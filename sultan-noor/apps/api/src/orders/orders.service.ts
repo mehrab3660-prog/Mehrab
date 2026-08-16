@@ -47,6 +47,16 @@ export class OrdersService {
     const address = await this.prisma.address.findFirst({ where: { id: dto.addressId, userId } });
     if (!address) throw new NotFoundException('آدرس یافت نشد');
 
+    if (dto.deliveryDate && !dto.deliverySlot) throw new BadRequestException('بازه‌ی زمانی تحویل را انتخاب کنید');
+    if (dto.deliverySlot && !dto.deliveryDate) throw new BadRequestException('تاریخ تحویل را انتخاب کنید');
+    let deliveryDate: Date | undefined;
+    if (dto.deliveryDate) {
+      deliveryDate = new Date(dto.deliveryDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (deliveryDate < today) throw new BadRequestException('تاریخ تحویل نمی‌تواند در گذشته باشد');
+    }
+
     // Price each line at current tiered pricing and verify stock availability.
     const pricedItems = await Promise.all(
       cart.items.map(async (item) => {
@@ -116,6 +126,8 @@ export class OrdersService {
           taxTotal: 0,
           grandTotal,
           discountCodeId,
+          deliveryDate,
+          deliverySlot: dto.deliverySlot,
           items: { create: pricedItems },
           statusHistory: { create: { status: 'PENDING_PAYMENT', note: 'سفارش ثبت شد' } },
         },

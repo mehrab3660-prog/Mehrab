@@ -436,6 +436,12 @@ enum OrderStatus {
   REFUNDED
 }
 
+enum DeliverySlot {
+  MORNING
+  AFTERNOON
+  EVENING
+}
+
 model Order {
   id             String        @id @default(cuid())
   orderNumber    String        @unique
@@ -446,6 +452,11 @@ model Order {
   status         OrderStatus   @default(PENDING_PAYMENT)
   items          OrderItem[]
   statusHistory  OrderStatusEvent[]
+
+  // Customer's chosen delivery window at checkout — both optional, since an
+  // order placed without picking one just gets no scheduling preference.
+  deliveryDate   DateTime?
+  deliverySlot   DeliverySlot?
 
   subtotal       Decimal       @db.Decimal(14, 2)
   discountTotal  Decimal       @db.Decimal(14, 2) @default(0)
