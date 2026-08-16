@@ -6,6 +6,7 @@ import { CartProvider } from "@/context/CartContext";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import AiAdvisorWidget from "@/components/AiAdvisorWidget";
+import PageTransition from "@/components/PageTransition";
 
 const vazirmatn = Vazirmatn({
   variable: "--font-vazirmatn",
@@ -24,7 +25,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           <CartProvider>
             <Header />
-            <main className="flex-1">{children}</main>
+            <main className="flex-1">
+              <PageTransition>{children}</PageTransition>
+            </main>
             <Footer />
             <AiAdvisorWidget />
           </CartProvider>

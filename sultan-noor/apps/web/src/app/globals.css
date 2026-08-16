@@ -1,39 +1,107 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fbf8f3;
-  --foreground: #1c1a17;
-  --brand: #b8860b;
-  --brand-dark: #8a6508;
+  --background: #faf7f2;
+  --foreground: #1a1611;
+  --brand: #c8860b;
+  --brand-light: #f0b93f;
+  --brand-dark: #8a5f08;
   --surface: #ffffff;
-  --border-color: #e7e0d4;
+  --surface-2: #f4efe6;
+  --border-color: #e9e1d2;
+  --glow: 200 140 20;
+  --shadow-color: 26 22 17;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-brand: var(--brand);
+  --color-brand-light: var(--brand-light);
   --color-brand-dark: var(--brand-dark);
   --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
   --color-border-color: var(--border-color);
   --font-sans: var(--font-vazirmatn);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #171310;
-    --foreground: #f2ede4;
-    --surface: #211c17;
-    --border-color: #362e24;
+    --background: #0e0c09;
+    --foreground: #f5f0e6;
+    --surface: #17130e;
+    --surface-2: #1f1a13;
+    --border-color: #2c2418;
+    --shadow-color: 0 0 0;
   }
+}
+
+* {
+  border-color: var(--border-color);
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-vazirmatn), Tahoma, sans-serif;
+  position: relative;
 }
 
-* {
-  border-color: var(--border-color);
+/* Ambient warm glow behind the page — reinforces the "light/nour" brand motif */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 40rem at 15% -10%, rgba(var(--glow) / 0.14), transparent 60%),
+    radial-gradient(50rem 35rem at 110% 10%, rgba(var(--glow) / 0.08), transparent 60%);
+}
+
+.gradient-text {
+  background: linear-gradient(90deg, var(--brand-light), var(--brand));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.surface-card {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 1px 2px rgba(var(--shadow-color) / 0.04);
+}
+
+.glow-shadow {
+  box-shadow:
+    0 12px 30px -12px rgba(var(--glow) / 0.35),
+    0 2px 8px rgba(var(--shadow-color) / 0.06);
+}
+
+::selection {
+  background: rgba(var(--glow) / 0.3);
+}
+
+/* Shimmering skeleton placeholder used while data is loading */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(var(--glow) / 0.15), transparent);
+  animation: shimmer 1.6s infinite;
+}
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }

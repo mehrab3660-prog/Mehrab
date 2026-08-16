@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import ProductCard from "@/components/ProductCard";
+import ProductGrid from "@/components/ProductGrid";
 import { Product } from "@/lib/types";
 
 interface WishlistItem {
@@ -38,11 +38,7 @@ export default function WishlistPage() {
       {items.length === 0 ? (
         <p className="text-foreground/60">فهرست علاقه‌مندی‌های شما خالی است.</p>
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-          {items.map((item) => (
-            <ProductCard key={item.id} product={item.product} />
-          ))}
-        </div>
+        <ProductGrid products={items.map((item) => item.product)} />
       )}
     </div>
   );

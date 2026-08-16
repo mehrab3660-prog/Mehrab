@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { Banner, Product } from "@/lib/types";
-import ProductCard from "@/components/ProductCard";
+import ProductGrid from "@/components/ProductGrid";
+import HomeHero from "@/components/HomeHero";
+import RevealSection from "@/components/RevealSection";
 
 async function safeGet<T>(path: string, fallback: T): Promise<T> {
   try {
@@ -21,36 +23,24 @@ export default async function HomePage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
-      <section className="overflow-hidden rounded-2xl bg-gradient-to-l from-brand to-brand-dark p-10 text-white">
-        <h1 className="text-3xl font-extrabold">{hero?.title ?? "به فروشگاه سلطان نور خوش آمدید"}</h1>
-        <p className="mt-3 max-w-xl text-white/90">
-          خرید محصولات روشنایی با بهترین کیفیت — برای مصرف‌کنندگان و همچنین قیمت‌گذاری ویژه عمده‌فروشان.
-        </p>
-        <Link href="/products" className="mt-6 inline-block rounded-lg bg-white px-5 py-2 font-bold text-brand-dark">
-          مشاهده محصولات
-        </Link>
-      </section>
+      <HomeHero title={hero?.title} />
 
-      <section className="mt-12">
-        <div className="mb-4 flex items-center justify-between">
+      <RevealSection className="mt-14">
+        <div className="mb-6 flex items-center justify-between">
           <h2 className="text-xl font-bold">محصولات پیشنهادی</h2>
-          <Link href="/products" className="text-sm text-brand">
-            مشاهده همه
+          <Link href="/products" className="text-sm font-medium text-brand transition hover:text-brand-dark">
+            مشاهده همه ←
           </Link>
         </div>
         {productsRes.items.length === 0 ? (
-          <p className="text-foreground/60">
+          <p className="rounded-xl border border-dashed border-border-color p-6 text-sm text-foreground/60">
             هنوز محصولی ثبت نشده است. برای شروع، از پنل مدیریت محصول اضافه کنید یا دستور <code>pnpm seed</code> را در
             <code> apps/api</code> اجرا کنید.
           </p>
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-            {productsRes.items.map((p) => (
-              <ProductCard key={p.id} product={p} />
-            ))}
-          </div>
+          <ProductGrid products={productsRes.items} />
         )}
-      </section>
+      </RevealSection>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/api";
 import { Product } from "@/lib/types";
-import ProductCard from "@/components/ProductCard";
+import ProductGrid from "@/components/ProductGrid";
 
 async function safeGet<T>(path: string, fallback: T): Promise<T> {
   try {
@@ -44,11 +44,7 @@ export default async function ProductsPage({
     <div className="mx-auto max-w-6xl px-4 py-8">
       <h1 className="mb-6 text-2xl font-bold">{params.q ? `نتایج جستجو: ${params.q}` : "همه محصولات"}</h1>
       {note && <p className="text-foreground/60">{note}</p>}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-        {products.map((p) => (
-          <ProductCard key={p.id} product={p} />
-        ))}
-      </div>
+      <ProductGrid products={products} />
     </div>
   );
 }
