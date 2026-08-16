@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SearchService } from '../search/search.service';
+import { SettingsService } from '../settings/settings.service';
 import { ImageSearchDto, VoiceSearchDto } from './dto/media-search.dto';
 
 // Both endpoints are functional today via graceful fallbacks, with a clear
@@ -19,6 +20,7 @@ export class MediaSearchService {
   constructor(
     private prisma: PrismaService,
     private search: SearchService,
+    private settings: SettingsService,
   ) {}
 
   async searchByImage(_dto: ImageSearchDto) {
@@ -38,7 +40,7 @@ export class MediaSearchService {
   }
 
   async searchByVoice(dto: VoiceSearchDto) {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = await this.settings.resolve('openaiApiKey');
     if (!apiKey) {
       return {
         mode: 'unavailable' as const,

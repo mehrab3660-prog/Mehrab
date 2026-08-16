@@ -647,3 +647,22 @@ model AiMessage {
   content        String
   createdAt      DateTime       @default(now())
 }
+
+// ────────────────────────────── Runtime settings ──────────────────────────────
+
+// Single-row table (id is always 1) holding operator-configurable secrets and
+// settings that were previously only settable via .env — lets a SUPER_ADMIN
+// manage them from the admin dashboard instead of needing server access.
+// Each service falls back to its env var when the corresponding column here
+// is null, so nothing breaks for deployments that still prefer env-based config.
+model AppSettings {
+  id                   Int      @id @default(1)
+  zarinpalMerchantId   String?
+  smsApiKey            String?
+  kavenegarOtpTemplate String?
+  anthropicApiKey      String?
+  anthropicModel       String?
+  openaiApiKey         String?
+  siteUrl              String?
+  updatedAt            DateTime @updatedAt
+}

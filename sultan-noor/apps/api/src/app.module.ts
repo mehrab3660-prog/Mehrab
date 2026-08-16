@@ -33,6 +33,7 @@ import { BannersModule } from './banners/banners.module';
 import { AiAdvisorModule } from './ai-advisor/ai-advisor.module';
 import { MediaSearchModule } from './media-search/media-search.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { SettingsModule } from './settings/settings.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     AuditModule,
     ActivityModule,
     SearchModule,
+    SettingsModule,
 
     AuthModule,
     UsersModule,

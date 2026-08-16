@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { SettingsService } from '../settings/settings.service';
 import { InitiatePaymentDto, VerifyPaymentDto } from './dto/payment.dto';
 
 const ZARINPAL_BASE = 'https://api.zarinpal.com/pg/v4/payment';
@@ -13,23 +14,22 @@ export class PaymentsService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private settings: SettingsService,
   ) {}
-
-  private get isSandbox() {
-    return !process.env.ZARINPAL_MERCHANT_ID;
-  }
 
   async initiate(userId: string, dto: InitiatePaymentDto) {
     const order = await this.prisma.order.findFirst({ where: { id: dto.orderId, userId } });
     if (!order) throw new NotFoundException('سفارش یافت نشد');
     if (order.status !== 'PENDING_PAYMENT') throw new BadRequestException('این سفارش قابل پرداخت نیست');
 
-    const callbackUrl = `${process.env.WEB_ORIGIN?.split(',')[0] ?? 'http://localhost:3000'}/checkout/callback?orderId=${order.id}`;
+    const merchantId = await this.settings.resolve('zarinpalMerchantId');
+    const siteUrl = (await this.settings.resolve('siteUrl'))?.split(',')[0] ?? 'http://localhost:3000';
+    const callbackUrl = `${siteUrl}/checkout/callback?orderId=${order.id}`;
 
     let authority: string;
     let paymentUrl: string;
 
-    if (this.isSandbox) {
+    if (!merchantId) {
       // No merchant credentials configured — issue a fake authority so the
       // full checkout → payment → order-confirmed flow works in dev/testing.
       authority = `SANDBOX-${randomUUID()}`;
@@ -40,7 +40,7 @@ export class PaymentsService {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          merchant_id: process.env.ZARINPAL_MERCHANT_ID,
+          merchant_id: merchantId,
           amount: Number(order.grandTotal) * 10, // تومان به ریال
           callback_url: callbackUrl,
           description: `پرداخت سفارش ${order.orderNumber}`,
@@ -66,10 +66,11 @@ export class PaymentsService {
     });
     if (!payment) throw new NotFoundException('تراکنش یافت نشد');
 
+    const merchantId = await this.settings.resolve('zarinpalMerchantId');
     let succeeded: boolean;
     let refId: string | undefined;
 
-    if (this.isSandbox) {
+    if (!merchantId) {
       succeeded = true;
       refId = `SANDBOX-REF-${Date.now()}`;
     } else {
@@ -77,7 +78,7 @@ export class PaymentsService {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          merchant_id: process.env.ZARINPAL_MERCHANT_ID,
+          merchant_id: merchantId,
           amount: Number(payment.amount) * 10,
           authority: dto.authority,
         }),

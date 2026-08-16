@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SearchService } from '../search/search.service';
+import { SettingsService } from '../settings/settings.service';
 import { AskAdvisorDto } from './dto/ai-advisor.dto';
 
 const SYSTEM_PROMPT = `شما دستیار خرید فروشگاه اینترنتی «سلطان نور» هستید. بر اساس نیاز مشتری و فهرست
@@ -17,6 +18,7 @@ export class AiAdvisorService {
   constructor(
     private prisma: PrismaService,
     private search: SearchService,
+    private settings: SettingsService,
   ) {}
 
   async ask(userId: string | undefined, dto: AskAdvisorDto) {
@@ -36,7 +38,7 @@ export class AiAdvisorService {
   }
 
   private async generateReply(userMessage: string, products: unknown[]): Promise<string> {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = await this.settings.resolve('anthropicApiKey');
     if (!apiKey) {
       // Rule-based fallback so the advisor works without an LLM key configured.
       if (!products.length) {
@@ -47,6 +49,7 @@ export class AiAdvisorService {
     }
 
     try {
+      const model = (await this.settings.resolve('anthropicModel')) ?? 'claude-sonnet-4-5';
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -55,7 +58,7 @@ export class AiAdvisorService {
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-          model: process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-5',
+          model,
           max_tokens: 400,
           system: SYSTEM_PROMPT,
           messages: [
