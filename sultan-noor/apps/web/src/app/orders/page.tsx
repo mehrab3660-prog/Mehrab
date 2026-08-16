@@ -16,7 +16,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function OrdersPage() {
-  const { user, accessToken } = useAuth();
+  const { user, accessToken, logout } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
 
   useEffect(() => {
@@ -37,7 +37,15 @@ export default function OrdersPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <h1 className="mb-6 text-2xl font-bold">سفارش‌های من</h1>
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold">سفارش‌های من</h1>
+        <button
+          onClick={logout}
+          className="rounded-lg border border-border-color px-3 py-1.5 text-sm font-medium text-foreground/70 transition-colors hover:border-red-400/40 hover:text-red-400"
+        >
+          خروج از حساب
+        </button>
+      </div>
       {orders.length === 0 ? (
         <p className="text-foreground/60">هنوز سفارشی ثبت نکرده‌اید.</p>
       ) : (

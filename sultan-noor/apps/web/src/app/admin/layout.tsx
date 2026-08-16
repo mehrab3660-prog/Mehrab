@@ -24,7 +24,7 @@ const NAV = [
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, logout } = useAuth();
 
   if (loading) return <div className="p-8 text-center">در حال بارگذاری...</div>;
 
@@ -44,6 +44,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             {item.label}
           </Link>
         ))}
+        <button
+          onClick={logout}
+          className="block w-full rounded-lg px-3 py-2 text-start text-sm text-foreground/70 hover:bg-surface hover:text-red-400"
+        >
+          خروج از حساب
+        </button>
       </aside>
       <div className="flex-1">{children}</div>
     </div>

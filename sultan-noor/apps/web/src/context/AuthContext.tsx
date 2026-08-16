@@ -1,8 +1,15 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
+import { createContext, useContext, useEffect, useRef, useState, ReactNode, useCallback } from "react";
 import { api } from "@/lib/api";
 import { AuthUser } from "@/lib/types";
+
+// Matches the API's access-token TTL (15m, see apps/api/src/auth/auth.service.ts) —
+// there's no silent refresh, so a token this old would fail on the next request
+// anyway. Logging the user out on the same schedule turns that into a clean,
+// predictable session instead of a confusing "logged in but every action fails".
+const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+const ACTIVITY_EVENTS = ["mousedown", "keydown", "touchstart", "scroll"] as const;
 
 interface AuthState {
   user: AuthUser | null;
@@ -53,13 +60,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     persist(res.accessToken, res.user, res.refreshToken);
   };
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem("sn_access_token");
     localStorage.removeItem("sn_refresh_token");
     localStorage.removeItem("sn_user");
     setAccessToken(null);
     setUser(null);
-  };
+  }, []);
+
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => {
+    if (!accessToken) return;
+
+    const resetIdleTimer = () => {
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+      idleTimer.current = setTimeout(logout, IDLE_TIMEOUT_MS);
+    };
+
+    resetIdleTimer();
+    ACTIVITY_EVENTS.forEach((event) => window.addEventListener(event, resetIdleTimer));
+
+    return () => {
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+      ACTIVITY_EVENTS.forEach((event) => window.removeEventListener(event, resetIdleTimer));
+    };
+  }, [accessToken, logout]);
 
   return (
     <AuthContext.Provider value={{ user, accessToken, loading, requestOtp, verifyOtp, logout }}>
