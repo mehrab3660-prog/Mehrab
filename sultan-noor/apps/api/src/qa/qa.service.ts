@@ -11,6 +11,25 @@ export class QaService {
     private notifications: NotificationsService,
   ) {}
 
+  // Staff-only: every question across all products, newest first, with an
+  // `isAnswered` flag so moderators can find unanswered ones without having
+  // to already know which product to look under.
+  async listAll() {
+    const questions = await this.prisma.question.findMany({
+      select: {
+        id: true,
+        body: true,
+        isPublished: true,
+        createdAt: true,
+        product: { select: { id: true, name: true, slug: true } },
+        user: { select: { fullName: true, phone: true } },
+        answers: { select: { id: true, body: true, isFromStaff: true, createdAt: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return questions.map((q) => ({ ...q, isAnswered: q.answers.length > 0 }));
+  }
+
   listForProduct(productId: string) {
     // select (not include) at every level so no raw userId scalar is ever
     // returned to this public, unauthenticated endpoint.

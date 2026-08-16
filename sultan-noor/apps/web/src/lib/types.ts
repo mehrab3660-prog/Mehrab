@@ -99,3 +99,100 @@ export interface Banner {
   linkUrl?: string | null;
   placement: string;
 }
+
+export interface Warehouse {
+  id: string;
+  name: string;
+  address?: string | null;
+  isActive: boolean;
+}
+
+export interface StockLevel {
+  id: string;
+  quantity: number;
+  reservedQuantity: number;
+  productVariant: {
+    id: string;
+    sku: string;
+    product: { id: string; name: string };
+  };
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  contactName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  isActive: boolean;
+}
+
+export interface CustomerGroup {
+  id: string;
+  name: string;
+}
+
+export interface DiscountCode {
+  id: string;
+  code: string;
+  type: "PERCENTAGE" | "FIXED_AMOUNT";
+  value: string;
+  minOrderTotal?: string | null;
+  maxUsage?: number | null;
+  maxUsagePerUser?: number | null;
+  usedCount: number;
+  isActive: boolean;
+  startsAt?: string | null;
+  expiresAt?: string | null;
+}
+
+export interface PriceTier {
+  id: string;
+  productId: string;
+  customerGroupId: string;
+  minQuantity: number;
+  unitPrice: string;
+  customerGroup?: CustomerGroup;
+}
+
+export interface PendingReview {
+  id: string;
+  rating: number;
+  title?: string | null;
+  body?: string | null;
+  createdAt: string;
+  product: { id: string; name: string };
+  user: { fullName: string | null; phone: string };
+}
+
+export interface AdminQuestion {
+  id: string;
+  body: string;
+  isPublished: boolean;
+  isAnswered: boolean;
+  createdAt: string;
+  product: { id: string; name: string; slug: string };
+  user: { fullName: string | null; phone: string };
+  answers: { id: string; body: string; isFromStaff: boolean; createdAt: string }[];
+}
+
+export interface AdminUser {
+  id: string;
+  phone: string;
+  fullName?: string | null;
+  role: AuthUser["role"];
+  customerType: "RETAIL" | "WHOLESALE";
+  createdAt: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  before?: unknown;
+  after?: unknown;
+  createdAt: string;
+  user?: { fullName: string | null; phone: string } | null;
+}

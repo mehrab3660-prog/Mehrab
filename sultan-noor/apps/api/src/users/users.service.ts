@@ -22,7 +22,27 @@ export class UsersService {
   async list(params: { skip?: number; take?: number; role?: Role }) {
     const where = params.role ? { role: params.role } : {};
     const [items, total] = await Promise.all([
-      this.prisma.user.findMany({ where, skip: params.skip, take: params.take ?? 20, orderBy: { createdAt: 'desc' } }),
+      this.prisma.user.findMany({
+        where,
+        skip: params.skip,
+        take: params.take ?? 20,
+        orderBy: { createdAt: 'desc' },
+        // Never return passwordHash (unused with OTP auth but still a secret
+        // if ever set) or nationalId (PII) to STAFF-tier callers of this
+        // endpoint — only the fields the admin user list actually needs.
+        select: {
+          id: true,
+          phone: true,
+          email: true,
+          fullName: true,
+          role: true,
+          customerType: true,
+          companyName: true,
+          isActive: true,
+          isPhoneVerified: true,
+          createdAt: true,
+        },
+      }),
       this.prisma.user.count({ where }),
     ]);
     return { items, total };
@@ -41,7 +61,11 @@ export class UsersService {
       }
     }
 
-    const after = await this.prisma.user.update({ where: { id: targetUserId }, data: { role } });
+    const after = await this.prisma.user.update({
+      where: { id: targetUserId },
+      data: { role },
+      select: { id: true, phone: true, fullName: true, role: true, customerType: true },
+    });
 
     await this.auditLog.record({
       userId: adminId,

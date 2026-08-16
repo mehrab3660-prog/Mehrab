@@ -12,6 +12,14 @@ const NAV = [
   { href: "/admin/categories", label: "دسته‌بندی‌ها" },
   { href: "/admin/brands", label: "برندها" },
   { href: "/admin/banners", label: "بنرها" },
+  { href: "/admin/warehouses", label: "انبارها" },
+  { href: "/admin/suppliers", label: "تامین‌کنندگان" },
+  { href: "/admin/pricing", label: "قیمت‌گذاری" },
+  { href: "/admin/reviews", label: "نظرات" },
+  { href: "/admin/qa", label: "پرسش و پاسخ" },
+  { href: "/admin/blog", label: "وبلاگ" },
+  { href: "/admin/users", label: "کاربران" },
+  { href: "/admin/audit-logs", label: "لاگ فعالیت" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
