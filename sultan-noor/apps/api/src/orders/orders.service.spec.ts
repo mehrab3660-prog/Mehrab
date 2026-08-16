@@ -46,6 +46,7 @@ describe('OrdersService.createFromCart', () => {
     auditLog = {};
     notifications = { notify: jest.fn().mockResolvedValue(undefined) };
     shippingService = { resolveShippingCost: jest.fn().mockResolvedValue(50000) };
+    const smsProvider = { sendText: jest.fn().mockResolvedValue(undefined) };
 
     service = new OrdersService(
       prisma,
@@ -55,6 +56,7 @@ describe('OrdersService.createFromCart', () => {
       auditLog,
       notifications,
       shippingService,
+      smsProvider as any,
     );
 
     prisma.user.findUniqueOrThrow.mockResolvedValue({ id: 'u1', customerGroupId: null });

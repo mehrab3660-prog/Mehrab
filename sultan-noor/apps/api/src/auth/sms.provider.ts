@@ -19,7 +19,7 @@ export class SmsProvider {
     const melipayamakApiKey = await this.settings.resolve('melipayamakApiKey');
     const melipayamakSender = await this.settings.resolve('melipayamakSender');
     if (melipayamakApiKey && melipayamakSender) {
-      return this.sendViaMelipayamak(phone, code, melipayamakApiKey, melipayamakSender);
+      return this.sendViaMelipayamak(phone, `کد تایید شما: ${code}`, melipayamakApiKey, melipayamakSender);
     }
 
     const kavenegarApiKey = await this.settings.resolve('smsApiKey');
@@ -31,11 +31,25 @@ export class SmsProvider {
     this.logger.warn(`[DEV SMS] OTP for ${phone}: ${code}`);
   }
 
-  private async sendViaMelipayamak(phone: string, code: string, apiKey: string, sender: string): Promise<void> {
+  // Free-text transactional SMS (order status, etc). Kavenegar's configured
+  // credentials are OTP-template-only (verify/lookup), so only MeliPayamak
+  // can send arbitrary text; without it this degrades to a log line, same
+  // as the OTP dev fallback above.
+  async sendText(phone: string, text: string): Promise<void> {
+    const melipayamakApiKey = await this.settings.resolve('melipayamakApiKey');
+    const melipayamakSender = await this.settings.resolve('melipayamakSender');
+    if (melipayamakApiKey && melipayamakSender) {
+      return this.sendViaMelipayamak(phone, text, melipayamakApiKey, melipayamakSender);
+    }
+
+    this.logger.warn(`[DEV SMS] To ${phone}: ${text}`);
+  }
+
+  private async sendViaMelipayamak(phone: string, text: string, apiKey: string, sender: string): Promise<void> {
     const res = await fetch(`https://console.melipayamak.com/api/send/simple/${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: sender, to: phone, text: `کد تایید شما: ${code}` }),
+      body: JSON.stringify({ from: sender, to: phone, text }),
     });
     const data = await res.json().catch(() => null);
 

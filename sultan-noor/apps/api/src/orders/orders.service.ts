@@ -7,7 +7,16 @@ import { InvoiceService } from './invoice/invoice.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ShippingService } from '../shipping/shipping.service';
+import { SmsProvider } from '../auth/sms.provider';
 import { CreateOrderDto, UpdateOrderStatusDto } from './dto/order.dto';
+
+const ORDER_STATUS_SMS_LABELS: Record<string, string> = {
+  PROCESSING: 'در حال آماده‌سازی',
+  SHIPPED: 'ارسال شد',
+  DELIVERED: 'تحویل داده شد',
+  CANCELLED: 'لغو شد',
+  REFUNDED: 'مبلغ آن بازگردانده شد',
+};
 
 @Injectable()
 export class OrdersService {
@@ -19,6 +28,7 @@ export class OrdersService {
     private auditLog: AuditLogService,
     private notifications: NotificationsService,
     private shippingService: ShippingService,
+    private smsProvider: SmsProvider,
   ) {}
 
   async createFromCart(userId: string, dto: CreateOrderDto) {
@@ -142,7 +152,7 @@ export class OrdersService {
   }
 
   async updateStatus(adminId: string, id: string, dto: UpdateOrderStatusDto) {
-    const order = await this.prisma.order.findUnique({ where: { id } });
+    const order = await this.prisma.order.findUnique({ where: { id }, include: { user: { select: { phone: true } } } });
     if (!order) throw new NotFoundException('سفارش یافت نشد');
 
     const updated = await this.prisma.order.update({
@@ -160,6 +170,13 @@ export class OrdersService {
     });
 
     await this.notifications.notify(order.userId, 'ORDER_UPDATE', 'وضعیت سفارش تغییر کرد', `سفارش ${order.orderNumber}: ${dto.status}`);
+
+    const smsLabel = ORDER_STATUS_SMS_LABELS[dto.status];
+    if (smsLabel) {
+      void this.smsProvider
+        .sendText(order.user.phone, `سلطان نور: سفارش ${order.orderNumber} ${smsLabel}.`)
+        .catch(() => undefined);
+    }
 
     if (dto.status === 'DELIVERED' || dto.status === 'PROCESSING') {
       await this.invoiceService.generateForOrder(id).catch(() => undefined);

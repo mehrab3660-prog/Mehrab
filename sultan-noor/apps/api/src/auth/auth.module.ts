@@ -11,6 +11,6 @@ import { SettingsModule } from '../settings/settings.module';
   imports: [PassportModule, JwtModule.register({}), SettingsModule],
   controllers: [AuthController],
   providers: [AuthService, SmsProvider, JwtStrategy],
-  exports: [AuthService],
+  exports: [AuthService, SmsProvider],
 })
 export class AuthModule {}
