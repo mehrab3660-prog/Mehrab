@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProductsService } from '../catalog/products/products.service';
+import { PricingService } from '../pricing/pricing.service';
 import { AddCartItemDto, UpdateCartItemDto } from './dto/cart.dto';
 
 const cartInclude = {
@@ -14,6 +15,7 @@ export class CartService {
   constructor(
     private prisma: PrismaService,
     private productsService: ProductsService,
+    private pricingService: PricingService,
   ) {}
 
   private async getOrCreateCart(userId: string) {
@@ -92,5 +94,10 @@ export class CartService {
     );
     const subtotal = items.reduce((sum, i) => sum + i.lineTotal, 0);
     return { ...cart, items, subtotal };
+  }
+
+  async suggestDiscount(userId: string) {
+    const cart = await this.getCart(userId);
+    return this.pricingService.suggestBestDiscountCode(userId, cart.subtotal);
   }
 }

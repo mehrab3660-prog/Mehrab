@@ -14,6 +14,11 @@ export class CartController {
     return this.cartService.getCart(user.id);
   }
 
+  @Get('suggested-discount')
+  suggestedDiscount(@CurrentUser() user: AuthenticatedUser) {
+    return this.cartService.suggestDiscount(user.id);
+  }
+
   @Post('items')
   addItem(@CurrentUser() user: AuthenticatedUser, @Body() dto: AddCartItemDto) {
     return this.cartService.addItem(user.id, dto);

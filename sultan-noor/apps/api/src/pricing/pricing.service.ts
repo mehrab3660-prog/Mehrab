@@ -89,4 +89,30 @@ export class PricingService {
 
     return { discount, amount: Math.min(amount, subtotal) };
   }
+
+  // Best code this user could actually apply right now, for a checkout
+  // nudge — tries every currently-active code through the same eligibility
+  // checks as applying one for real, and keeps the one worth the most.
+  async suggestBestDiscountCode(userId: string, subtotal: number) {
+    if (subtotal <= 0) return null;
+
+    const now = new Date();
+    const candidates = await this.prisma.discountCode.findMany({
+      where: {
+        isActive: true,
+        OR: [{ startsAt: null }, { startsAt: { lte: now } }],
+      },
+    });
+
+    let best: { code: string; amount: number } | null = null;
+    for (const candidate of candidates) {
+      try {
+        const { amount } = await this.evaluateDiscountCode(candidate.code, userId, subtotal);
+        if (amount > 0 && (!best || amount > best.amount)) best = { code: candidate.code, amount };
+      } catch {
+        // Not eligible for this one — try the rest.
+      }
+    }
+    return best;
+  }
 }

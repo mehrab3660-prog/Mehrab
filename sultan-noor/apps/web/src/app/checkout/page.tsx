@@ -40,6 +40,7 @@ export default function CheckoutPage() {
     receiverPhone: "",
   });
   const [discountCode, setDiscountCode] = useState("");
+  const [suggestedCode, setSuggestedCode] = useState<{ code: string; amount: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -58,6 +59,14 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (!authLoading && !user) router.push("/login");
   }, [authLoading, user, router]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    api
+      .get<{ code: string; amount: number } | null>("/cart/suggested-discount", accessToken)
+      .then(setSuggestedCode)
+      .catch(() => setSuggestedCode(null));
+  }, [accessToken]);
 
   if (authLoading || !user) return null;
 
@@ -181,6 +190,15 @@ export default function CheckoutPage() {
 
           <section className="rounded-2xl surface-card p-4 sm:p-5">
             <h2 className="mb-3 font-bold">کد تخفیف</h2>
+            {suggestedCode && suggestedCode.code !== discountCode && (
+              <button
+                type="button"
+                onClick={() => setDiscountCode(suggestedCode.code)}
+                className="mb-3 w-full rounded-lg border border-brand/40 bg-brand/10 px-3 py-2.5 text-start text-sm text-brand"
+              >
+                کد <span className="font-bold">{suggestedCode.code}</span> برای شما فعال است — {formatToman(suggestedCode.amount)} تخفیف بگیرید
+              </button>
+            )}
             <input
               value={discountCode}
               onChange={(e) => setDiscountCode(e.target.value)}
