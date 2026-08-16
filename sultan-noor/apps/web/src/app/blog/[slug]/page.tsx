@@ -1,5 +1,32 @@
+import type { Metadata } from "next";
 import { apiFetch } from "@/lib/api";
 import { BlogPost } from "@/lib/types";
+
+async function getPost(slug: string) {
+  try {
+    return await apiFetch<BlogPost>(`/blog/${slug}`);
+  } catch {
+    return null;
+  }
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const post = await getPost(slug);
+  if (!post) return { title: "مقاله یافت نشد | سلطان نور" };
+
+  const description = post.excerpt ?? post.content.slice(0, 160);
+  return {
+    title: `${post.title} | وبلاگ سلطان نور`,
+    description,
+    openGraph: {
+      title: post.title,
+      description,
+      type: "article",
+      images: post.coverImageUrl ? [post.coverImageUrl] : undefined,
+    },
+  };
+}
 
 export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;

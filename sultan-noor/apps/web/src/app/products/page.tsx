@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { apiFetch } from "@/lib/api";
 import { Product } from "@/lib/types";
 import ProductGrid from "@/components/ProductGrid";
@@ -8,6 +9,21 @@ async function safeGet<T>(path: string, fallback: T): Promise<T> {
   } catch {
     return fallback;
   }
+}
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}): Promise<Metadata> {
+  const { q } = await searchParams;
+  if (q) {
+    return { title: `نتایج جستجو: ${q} | سلطان نور` };
+  }
+  return {
+    title: "محصولات | سلطان نور",
+    description: "خرید انواع تجهیزات برق و روشنایی با قیمت مناسب و ارسال سریع از فروشگاه سلطان نور.",
+  };
 }
 
 export default async function ProductsPage({
