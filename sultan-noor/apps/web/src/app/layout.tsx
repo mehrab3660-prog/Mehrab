@@ -20,7 +20,7 @@ const vazirmatn = Vazirmatn({
 
 export const metadata: Metadata = {
   title: "سلطان نور | فروشگاه اینترنتی روشنایی",
-  description: "فروشگاه کامل B2C و B2B سلطان نور — محصولات روشنایی، قیمت‌گذاری عمده و مشاور خرید هوشمند.",
+  description: "فروشگاه سلطان نور — محصولات روشنایی و تجهیزات برق، با مشاور خرید هوشمند.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

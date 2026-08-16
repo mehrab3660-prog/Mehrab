@@ -66,7 +66,7 @@ export default function Footer() {
             <span className="gradient-text">سلطان</span> نور
           </p>
           <p className="mt-3 max-w-xs text-sm leading-6 text-muted">
-            فروشگاه تخصصی تجهیزات برق و روشنایی — B2C و B2B، با قیمت‌گذاری پلکانی و مشاور خرید هوشمند.
+            فروشگاه تخصصی تجهیزات برق و روشنایی، با مشاور خرید هوشمند.
           </p>
         </div>
 

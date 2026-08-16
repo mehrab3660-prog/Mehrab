@@ -15,7 +15,6 @@ export default function LoginPage() {
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [fullName, setFullName] = useState("");
-  const [customerType, setCustomerType] = useState<"RETAIL" | "WHOLESALE">("RETAIL");
   const [isNewUser, setIsNewUser] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -82,7 +81,7 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      await verifyOtp({ phone, code, purpose: "LOGIN", fullName: fullName || undefined, customerType });
+      await verifyOtp({ phone, code, purpose: "LOGIN", fullName: fullName || undefined });
       router.push("/");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "کد وارد شده نادرست است");
@@ -120,32 +119,12 @@ export default function LoginPage() {
           />
 
           {isNewUser && (
-            <>
-              <input
-                placeholder="نام و نام خانوادگی"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="w-full rounded-lg border border-border-color bg-background px-3 py-2"
-              />
-              <div className="flex gap-4 text-sm">
-                <label className="flex items-center gap-1">
-                  <input
-                    type="radio"
-                    checked={customerType === "RETAIL"}
-                    onChange={() => setCustomerType("RETAIL")}
-                  />
-                  مشتری عادی (B2C)
-                </label>
-                <label className="flex items-center gap-1">
-                  <input
-                    type="radio"
-                    checked={customerType === "WHOLESALE"}
-                    onChange={() => setCustomerType("WHOLESALE")}
-                  />
-                  مشتری عمده (B2B)
-                </label>
-              </div>
-            </>
+            <input
+              placeholder="نام و نام خانوادگی"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="w-full rounded-lg border border-border-color bg-background px-3 py-2"
+            />
           )}
 
           <button disabled={loading} className="w-full rounded-lg bg-brand py-2 font-bold text-[#0b0e14]">

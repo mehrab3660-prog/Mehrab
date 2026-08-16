@@ -11,7 +11,6 @@ import FeaturedDeals from "@/components/FeaturedDeals";
 import TrustedBrands from "@/components/TrustedBrands";
 import LatestBlogPosts from "@/components/LatestBlogPosts";
 import FinalCta from "@/components/FinalCta";
-import B2BSection from "@/components/B2BSection";
 import AiAdvisorPromoCard from "@/components/AiAdvisorPromoCard";
 
 async function safeGet<T>(path: string, fallback: T): Promise<T> {
@@ -106,12 +105,6 @@ export default async function HomePage() {
           </RevealSection>
         </>
       )}
-
-      <SectionDivider />
-
-      <RevealSection>
-        <B2BSection />
-      </RevealSection>
 
       <SectionDivider />
 
