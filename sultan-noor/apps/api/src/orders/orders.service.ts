@@ -18,6 +18,11 @@ const ORDER_STATUS_SMS_LABELS: Record<string, string> = {
   REFUNDED: 'مبلغ آن بازگردانده شد',
 };
 
+// Matches the admin dashboard's own "low stock" count (dashboard.service.ts)
+// so a warehouse manager's alert threshold always agrees with what they see
+// on the summary page.
+const LOW_STOCK_THRESHOLD = 5;
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -75,6 +80,8 @@ export class OrdersService {
     const grandTotal = Math.max(subtotal - discountTotal + shippingTotal, 0);
     const orderNumber = this.generateOrderNumber();
 
+    const lowStockAlerts: { name: string; sku?: string; remaining: number }[] = [];
+
     const order = await this.prisma.$transaction(async (tx) => {
       // Reserve stock for every item (best-effort at first available warehouse).
       // A missing variant here would silently skip the stock check entirely —
@@ -86,7 +93,16 @@ export class OrdersService {
           where: { productVariantId: item.productVariantId, quantity: { gte: item.quantity } },
         });
         if (!stock) throw new BadRequestException(`موجودی کافی برای «${item.nameSnapshot}» وجود ندارد`);
-        await tx.stock.update({ where: { id: stock.id }, data: { quantity: { decrement: item.quantity } } });
+        const updatedStock = await tx.stock.update({
+          where: { id: stock.id },
+          data: { quantity: { decrement: item.quantity } },
+        });
+        // Only fire the moment this warehouse row crosses into low-stock —
+        // not on every order against an already-low row — so the manager
+        // gets one alert per depletion, not one per subsequent sale.
+        if (stock.quantity > LOW_STOCK_THRESHOLD && updatedStock.quantity <= LOW_STOCK_THRESHOLD) {
+          lowStockAlerts.push({ name: item.nameSnapshot, sku: item.skuSnapshot, remaining: updatedStock.quantity });
+        }
       }
 
       const created = await tx.order.create({
@@ -117,7 +133,19 @@ export class OrdersService {
 
     await this.notifications.notify(userId, 'ORDER_UPDATE', 'سفارش شما ثبت شد', `سفارش ${order.orderNumber} در انتظار پرداخت است.`);
 
+    if (lowStockAlerts.length > 0) {
+      void this.notifyLowStock(lowStockAlerts).catch(() => undefined);
+    }
+
     return order;
+  }
+
+  private async notifyLowStock(alerts: { name: string; sku?: string; remaining: number }[]) {
+    const managers = await this.prisma.user.findMany({ where: { role: 'WAREHOUSE_MANAGER' }, select: { id: true } });
+    for (const alert of alerts) {
+      const body = `«${alert.name}»${alert.sku ? ` (${alert.sku})` : ''} تنها ${alert.remaining} عدد باقی مانده است.`;
+      await Promise.all(managers.map((m) => this.notifications.notify(m.id, 'SYSTEM', 'هشدار موجودی کم', body)));
+    }
   }
 
   async get(userId: string, id: string, isAdmin: boolean) {

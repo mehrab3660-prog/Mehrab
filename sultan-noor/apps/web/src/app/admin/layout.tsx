@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
+import NotificationBell from "@/components/NotificationBell";
 
 const STAFF_ROLES = ["SUPER_ADMIN", "ADMIN", "STAFF", "WAREHOUSE_MANAGER"];
 
@@ -52,7 +53,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           خروج از حساب
         </button>
       </aside>
-      <div className="flex-1">{children}</div>
+      <div className="flex-1">
+        <div className="mb-4 flex justify-end">
+          <NotificationBell />
+        </div>
+        {children}
+      </div>
     </div>
   );
 }
