@@ -115,6 +115,43 @@ export class ProductsService {
     return this.withStock(await this.withRatings(sorted));
   }
 
+  // Real co-purchase cross-sell: other products that showed up in the same
+  // orders as this one, ranked by combined quantity actually sold together —
+  // not a fabricated pairing. Falls back to the same-category rail when
+  // there's no purchase history yet for this product (new store/product).
+  async frequentlyBoughtWith(idOrSlug: string, take = 6) {
+    const product = await this.prisma.product.findFirst({
+      where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+      select: { id: true, categoryId: true },
+    });
+    if (!product) return [];
+
+    const ordersWithProduct = await this.prisma.orderItem.findMany({
+      where: { productId: product.id },
+      select: { orderId: true },
+      distinct: ['orderId'],
+    });
+    const orderIds = ordersWithProduct.map((o) => o.orderId);
+    if (orderIds.length === 0) return this.related(product.id, product.categoryId, take);
+
+    const grouped = await this.prisma.orderItem.groupBy({
+      by: ['productId'],
+      where: { orderId: { in: orderIds }, productId: { not: product.id } },
+      _sum: { quantity: true },
+      orderBy: { _sum: { quantity: 'desc' } },
+      take,
+    });
+    if (grouped.length === 0) return this.related(product.id, product.categoryId, take);
+
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: grouped.map((g) => g.productId) }, status: 'PUBLISHED' },
+      include: productInclude,
+    });
+    const orderById = new Map(grouped.map((g, i) => [g.productId, i]));
+    const sorted = products.sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0));
+    return this.withStock(await this.withRatings(sorted));
+  }
+
   // Aggregates real available stock (quantity - reserved) across every
   // variant/warehouse for a product — the business has a single physical
   // location, so this total is the honest, non-fabricated stock signal

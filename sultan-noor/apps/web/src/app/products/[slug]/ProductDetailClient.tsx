@@ -69,6 +69,7 @@ export default function ProductDetailClient() {
   const [product, setProduct] = useState<Product | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [related, setRelated] = useState<Product[]>([]);
+  const [frequentlyBoughtTogether, setFrequentlyBoughtTogether] = useState<Product[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [quantity, setQuantity] = useState(1);
@@ -102,6 +103,10 @@ export default function ProductDetailClient() {
     api.get<Review[]>(`/reviews?productId=${product.id}`).then(setReviews).catch(() => {});
     api.get<Question[]>(`/qa/questions?productId=${product.id}`).then(setQuestions).catch(() => {});
     api.get<Product[]>(`/products/${product.slug}/related`).then(setRelated).catch(() => setRelated([]));
+    api
+      .get<Product[]>(`/products/${product.slug}/frequently-bought-together`)
+      .then(setFrequentlyBoughtTogether)
+      .catch(() => setFrequentlyBoughtTogether([]));
   }, [product]);
 
   const attributeKeys = useMemo(() => {
@@ -471,6 +476,15 @@ export default function ProductDetailClient() {
           </form>
         )}
       </section>
+
+      {frequentlyBoughtTogether.length > 0 && (
+        <section className="mt-8 sm:mt-14">
+          <h2 className="mb-6 text-lg font-bold">
+            معمولاً با هم <span className="gradient-text">خریداری می‌شوند</span>
+          </h2>
+          <ProductGrid products={frequentlyBoughtTogether} />
+        </section>
+      )}
 
       {related.length > 0 && (
         <section className="mt-8 sm:mt-14">

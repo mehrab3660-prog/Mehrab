@@ -30,6 +30,11 @@ export class ProductsController {
     return this.productsService.relatedForProduct(idOrSlug, take ? Number(take) : undefined);
   }
 
+  @Get(':idOrSlug/frequently-bought-together')
+  frequentlyBoughtTogether(@Param('idOrSlug') idOrSlug: string, @Query('take') take?: string) {
+    return this.productsService.frequentlyBoughtWith(idOrSlug, take ? Number(take) : undefined);
+  }
+
   @Get(':idOrSlug')
   @UseGuards(OptionalJwtAuthGuard)
   get(@CurrentUser() requester: AuthenticatedUser | undefined, @Param('idOrSlug') idOrSlug: string) {
