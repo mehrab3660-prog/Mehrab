@@ -10,6 +10,8 @@ import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { useToast } from "@/context/ToastContext";
 import ProductGrid from "@/components/ProductGrid";
+import RecentlyViewed from "@/components/RecentlyViewed";
+import { addRecentlyViewed } from "@/lib/recentlyViewed";
 
 interface Review {
   id: string;
@@ -88,6 +90,7 @@ export default function ProductDetailClient() {
       .then((p) => {
         setProduct(p);
         setRestockSubscribed(!!p.restockSubscribed);
+        addRecentlyViewed(p.id);
         const firstAttrs = p.variants?.[0]?.attributes;
         if (firstAttrs) setSelectedAttrs(firstAttrs);
       })
@@ -477,6 +480,8 @@ export default function ProductDetailClient() {
           <ProductGrid products={related} />
         </section>
       )}
+
+      <RecentlyViewed excludeProductId={product.id} />
     </div>
   );
 }
