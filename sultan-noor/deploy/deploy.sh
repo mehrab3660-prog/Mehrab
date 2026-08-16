@@ -67,19 +67,25 @@ if ! command -v nginx >/dev/null || ! command -v certbot >/dev/null; then
   apt-get install -y nginx certbot python3-certbot-nginx
 fi
 
-log "Installing Nginx site for $DOMAIN"
-sed "s/__DOMAIN__/$DOMAIN/g" deploy/nginx.conf.template > "/etc/nginx/sites-available/$DOMAIN"
-ln -sf "/etc/nginx/sites-available/$DOMAIN" "/etc/nginx/sites-enabled/$DOMAIN"
-rm -f /etc/nginx/sites-enabled/default
-nginx -t
-systemctl reload nginx || systemctl restart nginx
+# certbot rewrites this file in place to add the HTTPS server block — once
+# that's happened, re-running the plain HTTP template here would clobber it.
+if [[ -f "/etc/nginx/sites-available/$DOMAIN" ]] && grep -q "listen 443" "/etc/nginx/sites-available/$DOMAIN"; then
+  log "Nginx site for $DOMAIN already has HTTPS configured, skipping template"
+else
+  log "Installing Nginx site for $DOMAIN"
+  sed "s/__DOMAIN__/$DOMAIN/g" deploy/nginx.conf.template > "/etc/nginx/sites-available/$DOMAIN"
+  ln -sf "/etc/nginx/sites-available/$DOMAIN" "/etc/nginx/sites-enabled/$DOMAIN"
+  rm -f /etc/nginx/sites-enabled/default
+  nginx -t
+  systemctl reload nginx || systemctl restart nginx
+fi
 
-if [[ ! -d "/etc/letsencrypt/live/$DOMAIN" ]]; then
-  log "Requesting Let's Encrypt certificate for $DOMAIN"
+if [[ ! -d "/etc/letsencrypt/live/$DOMAIN" ]] || ! grep -q "listen 443" "/etc/nginx/sites-available/$DOMAIN"; then
+  log "Requesting/attaching Let's Encrypt certificate for $DOMAIN"
   warn "This requires $DOMAIN's DNS A record to already point at this server's public IP."
   certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$LETSENCRYPT_EMAIL" --redirect
 else
-  log "Certificate for $DOMAIN already exists, skipping certbot (renewal runs automatically via the certbot systemd timer)"
+  log "HTTPS for $DOMAIN already configured, skipping certbot (renewal runs automatically via the certbot systemd timer)"
 fi
 
 # --- 5. Build and start the app containers ------------------------------------
