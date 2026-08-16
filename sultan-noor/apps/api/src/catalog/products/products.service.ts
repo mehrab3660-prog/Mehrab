@@ -1,9 +1,20 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
+import { randomUUID } from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SearchService } from '../../search/search.service';
 import { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import { CreateProductDto, ListProductsQueryDto, UpdateProductDto } from './dto/product.dto';
+
+const IMAGE_DIR = process.env.PRODUCT_IMAGE_STORAGE_DIR ?? path.join(process.cwd(), 'storage', 'products');
+const ALLOWED_IMAGE_TYPES: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+};
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 const productInclude = {
   brand: true,
@@ -202,6 +213,47 @@ export class ProductsService {
     await this.findRawById(id);
     await this.prisma.product.delete({ where: { id } });
     await this.search.removeProduct(id);
+    return { success: true };
+  }
+
+  // baseUrl is the request's own scheme+host (e.g. https://74211.xyz or
+  // http://localhost:4000) — every other place in the app that renders
+  // product.images[].url treats it as a ready-to-use absolute URL, exactly
+  // like the manually-pasted external URLs the imageUrls field already
+  // supports, so this stores one instead of a relative path.
+  async addImage(productId: string, file: Express.Multer.File, baseUrl: string) {
+    await this.findRawById(productId);
+
+    const extension = ALLOWED_IMAGE_TYPES[file.mimetype];
+    if (!extension) throw new BadRequestException('فقط تصاویر JPG، PNG یا WebP پذیرفته می‌شود');
+    if (file.size > MAX_IMAGE_BYTES) throw new BadRequestException('حجم تصویر نباید بیشتر از ۵ مگابایت باشد');
+
+    fs.mkdirSync(IMAGE_DIR, { recursive: true });
+    // Never trust the client-supplied filename — generate our own to rule out
+    // path traversal and filename collisions entirely.
+    const filename = `${randomUUID()}${extension}`;
+    fs.writeFileSync(path.join(IMAGE_DIR, filename), file.buffer);
+
+    const position = await this.prisma.productImage.count({ where: { productId } });
+    const image = await this.prisma.productImage.create({
+      data: { productId, url: `${baseUrl}/api/product-images/${filename}`, position },
+    });
+    await this.reindex(productId);
+    return image;
+  }
+
+  async removeImage(imageId: string) {
+    const image = await this.prisma.productImage.findUnique({ where: { id: imageId } });
+    if (!image) throw new NotFoundException('تصویر یافت نشد');
+
+    await this.prisma.productImage.delete({ where: { id: imageId } });
+
+    const filename = path.basename(image.url);
+    fs.rm(path.join(IMAGE_DIR, filename), { force: true }, () => {
+      // Best-effort — the DB row is the source of truth for what's shown;
+      // a leftover orphaned file on disk isn't worth failing the request over.
+    });
+    await this.reindex(image.productId);
     return { success: true };
   }
 
