@@ -23,6 +23,11 @@ export class AuthService {
     private activity: ActivityLogService,
   ) {}
 
+  async userExists(phone: string): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({ where: { phone }, select: { id: true } });
+    return !!user;
+  }
+
   async requestOtp(dto: RequestOtpDto) {
     const code = String(randomInt(10000, 99999));
     const codeHash = await bcrypt.hash(code, 10);
