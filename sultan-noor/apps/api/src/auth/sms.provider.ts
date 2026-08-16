@@ -1,12 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SettingsService } from '../settings/settings.service';
 
-// Thin abstraction over an Iranian SMS gateway. Currently implements
-// Kavenegar's Verify Lookup API (https://kavenegar.com/rest.html#lookup),
-// which requires a pre-approved OTP template in the Kavenegar panel.
-// In development (or until an API key/template are set, via either the
-// admin dashboard's Settings page or SMS_API_KEY/KAVENEGAR_OTP_TEMPLATE)
-// it just logs the code so the OTP flow is fully testable without a paid account.
+// Thin abstraction over an Iranian SMS gateway. Supports MeliPayamak's
+// simple REST send (https://console.melipayamak.com/api/send/simple/{apiKey})
+// and Kavenegar's Verify Lookup API (https://kavenegar.com/rest.html#lookup) —
+// whichever has credentials configured (via the admin dashboard's Settings
+// page, or the matching env vars) is used, MeliPayamak taking priority since
+// it needs no pre-approved template. In development (or until either is
+// configured) it just logs the code so the OTP flow is fully testable
+// without a paid account.
 @Injectable()
 export class SmsProvider {
   private readonly logger = new Logger(SmsProvider.name);
@@ -14,14 +16,38 @@ export class SmsProvider {
   constructor(private settings: SettingsService) {}
 
   async sendOtp(phone: string, code: string): Promise<void> {
-    const apiKey = await this.settings.resolve('smsApiKey');
-    const template = await this.settings.resolve('kavenegarOtpTemplate');
-
-    if (!apiKey || !template) {
-      this.logger.warn(`[DEV SMS] OTP for ${phone}: ${code}`);
-      return;
+    const melipayamakApiKey = await this.settings.resolve('melipayamakApiKey');
+    const melipayamakSender = await this.settings.resolve('melipayamakSender');
+    if (melipayamakApiKey && melipayamakSender) {
+      return this.sendViaMelipayamak(phone, code, melipayamakApiKey, melipayamakSender);
     }
 
+    const kavenegarApiKey = await this.settings.resolve('smsApiKey');
+    const kavenegarTemplate = await this.settings.resolve('kavenegarOtpTemplate');
+    if (kavenegarApiKey && kavenegarTemplate) {
+      return this.sendViaKavenegar(phone, code, kavenegarApiKey, kavenegarTemplate);
+    }
+
+    this.logger.warn(`[DEV SMS] OTP for ${phone}: ${code}`);
+  }
+
+  private async sendViaMelipayamak(phone: string, code: string, apiKey: string, sender: string): Promise<void> {
+    const res = await fetch(`https://console.melipayamak.com/api/send/simple/${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: sender, to: phone, text: `کد تایید شما: ${code}` }),
+    });
+    const data = await res.json().catch(() => null);
+
+    // MeliPayamak returns a positive message id string/number on success,
+    // a negative error code on failure.
+    const recId = Number(data?.recId ?? data);
+    if (!res.ok || !Number.isFinite(recId) || recId <= 0) {
+      throw new Error(`MeliPayamak send failed: ${JSON.stringify(data)}`);
+    }
+  }
+
+  private async sendViaKavenegar(phone: string, code: string, apiKey: string, template: string): Promise<void> {
     const url = `https://api.kavenegar.com/v1/${apiKey}/verify/lookup.json`;
     const body = new URLSearchParams({ receptor: phone, token: code, template });
 

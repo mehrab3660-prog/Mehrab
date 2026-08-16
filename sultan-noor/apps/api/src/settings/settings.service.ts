@@ -6,6 +6,8 @@ type SettingKey =
   | 'zarinpalMerchantId'
   | 'smsApiKey'
   | 'kavenegarOtpTemplate'
+  | 'melipayamakApiKey'
+  | 'melipayamakSender'
   | 'anthropicApiKey'
   | 'anthropicModel'
   | 'openaiApiKey'
@@ -17,13 +19,15 @@ const ENV_FALLBACK: Record<SettingKey, string> = {
   zarinpalMerchantId: 'ZARINPAL_MERCHANT_ID',
   smsApiKey: 'SMS_API_KEY',
   kavenegarOtpTemplate: 'KAVENEGAR_OTP_TEMPLATE',
+  melipayamakApiKey: 'MELIPAYAMAK_API_KEY',
+  melipayamakSender: 'MELIPAYAMAK_SENDER',
   anthropicApiKey: 'ANTHROPIC_API_KEY',
   anthropicModel: 'ANTHROPIC_MODEL',
   openaiApiKey: 'OPENAI_API_KEY',
   siteUrl: 'WEB_ORIGIN',
 };
 
-const SECRET_KEYS: SettingKey[] = ['zarinpalMerchantId', 'smsApiKey', 'anthropicApiKey', 'openaiApiKey'];
+const SECRET_KEYS: SettingKey[] = ['zarinpalMerchantId', 'smsApiKey', 'melipayamakApiKey', 'anthropicApiKey', 'openaiApiKey'];
 
 function mask(value: string): string {
   return value.length <= 4 ? '••••' : `••••${value.slice(-4)}`;

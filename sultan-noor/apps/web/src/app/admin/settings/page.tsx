@@ -12,7 +12,15 @@ interface SettingStatus {
 }
 
 type SettingsResponse = Record<
-  "zarinpalMerchantId" | "smsApiKey" | "kavenegarOtpTemplate" | "anthropicApiKey" | "anthropicModel" | "openaiApiKey" | "siteUrl",
+  | "zarinpalMerchantId"
+  | "smsApiKey"
+  | "kavenegarOtpTemplate"
+  | "melipayamakApiKey"
+  | "melipayamakSender"
+  | "anthropicApiKey"
+  | "anthropicModel"
+  | "openaiApiKey"
+  | "siteUrl",
   SettingStatus
 >;
 
@@ -155,12 +163,35 @@ export default function AdminSettingsPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 text-lg font-bold">پیامک (کاوه‌نگار)</h2>
+          <h2 className="mb-3 text-lg font-bold">پیامک (ملی‌پیامک)</h2>
+          <div className="space-y-3">
+            <SettingField
+              fieldKey="melipayamakApiKey"
+              label="API Key"
+              helpText="از کنسول ملی‌پیامک (وب‌سرویس > REST API) — اگر این و شماره خط پر شوند، پیامک از طریق ملی‌پیامک ارسال می‌شود."
+              status={settings.melipayamakApiKey}
+              onSave={handleSave}
+            />
+            <SettingField
+              fieldKey="melipayamakSender"
+              label="شماره خط ارسالی"
+              helpText="همان شماره خطی که در پنل ملی‌پیامک برای ارسال تخصیص داده شده."
+              status={settings.melipayamakSender}
+              onSave={handleSave}
+            />
+          </div>
+        </section>
+
+        <section>
+          <h2 className="mb-3 text-lg font-bold">پیامک (کاوه‌نگار — جایگزین)</h2>
+          <p className="mb-3 text-xs text-foreground/50">
+            فقط وقتی استفاده می‌شود که ملی‌پیامک بالا تنظیم نشده باشد.
+          </p>
           <div className="space-y-3">
             <SettingField
               fieldKey="smsApiKey"
               label="API Key"
-              helpText="تا وقتی تنظیم نشده، کد تایید OTP فقط در لاگ سرور نمایش داده می‌شود."
+              helpText="تا وقتی هیچ‌کدام از این دو تنظیم نشده، کد تایید OTP فقط در لاگ سرور نمایش داده می‌شود."
               status={settings.smsApiKey}
               onSave={handleSave}
             />

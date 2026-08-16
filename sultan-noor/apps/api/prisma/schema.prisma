@@ -660,6 +660,8 @@ model AppSettings {
   zarinpalMerchantId   String?
   smsApiKey            String?
   kavenegarOtpTemplate String?
+  melipayamakApiKey    String?
+  melipayamakSender    String?
   anthropicApiKey      String?
   anthropicModel       String?
   openaiApiKey         String?

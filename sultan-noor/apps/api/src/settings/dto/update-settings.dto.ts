@@ -18,6 +18,14 @@ export class UpdateSettingsDto {
 
   @IsOptional()
   @IsString()
+  melipayamakApiKey?: string;
+
+  @IsOptional()
+  @IsString()
+  melipayamakSender?: string;
+
+  @IsOptional()
+  @IsString()
   anthropicApiKey?: string;
 
   @IsOptional()
