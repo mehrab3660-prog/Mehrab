@@ -357,6 +357,12 @@ model WishlistItem {
   productVariantId String?
   productVariant   ProductVariant? @relation(fields: [productVariantId], references: [id])
 
+  // The product's basePrice when this item was wishlisted, and the price it
+  // was last alerted at (so a further drop after an alert can alert again,
+  // while a bounce back up to the same price doesn't re-alert).
+  priceAtAdd       Decimal  @db.Decimal(14, 2)
+  lastAlertedPrice Decimal? @db.Decimal(14, 2)
+
   createdAt DateTime @default(now())
 
   @@unique([wishlistId, productId, productVariantId])
