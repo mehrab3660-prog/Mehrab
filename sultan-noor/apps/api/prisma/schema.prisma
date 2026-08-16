@@ -57,6 +57,7 @@ model User {
   aiConversations AiConversation[]
   blogPosts     BlogPost[]
   stockSubscriptions StockSubscription[]
+  returnRequests ReturnRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -457,6 +458,7 @@ model Order {
 
   invoice        Invoice?
   payments       Payment[]
+  returnRequests ReturnRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -478,6 +480,8 @@ model OrderItem {
   unitPrice        Decimal         @db.Decimal(14, 2)
   quantity         Int
   lineTotal        Decimal         @db.Decimal(14, 2)
+
+  returnRequestItems ReturnRequestItem[]
 }
 
 model OrderStatusEvent {
@@ -487,6 +491,43 @@ model OrderStatusEvent {
   status    OrderStatus
   note      String?
   createdAt DateTime    @default(now())
+}
+
+enum ReturnRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REFUNDED
+}
+
+// A customer's request to return some (or all) items from a DELIVERED
+// order. Approval/rejection is an admin decision; moving to REFUNDED also
+// flips the underlying Order/Payment to REFUNDED (see ReturnsService).
+model ReturnRequest {
+  id        String               @id @default(cuid())
+  orderId   String
+  order     Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User                 @relation(fields: [userId], references: [id])
+  reason    String
+  status    ReturnRequestStatus  @default(PENDING)
+  adminNote String?
+  items     ReturnRequestItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([userId])
+}
+
+model ReturnRequestItem {
+  id              String        @id @default(cuid())
+  returnRequestId String
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  orderItemId     String
+  orderItem       OrderItem     @relation(fields: [orderItemId], references: [id])
+  quantity        Int
 }
 
 model Invoice {

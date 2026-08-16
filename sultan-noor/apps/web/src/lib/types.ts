@@ -82,6 +82,17 @@ export interface Order {
   items: { id: string; nameSnapshot: string; quantity: number; unitPrice: string; lineTotal: string }[];
 }
 
+export interface ReturnRequest {
+  id: string;
+  reason: string;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "REFUNDED";
+  adminNote?: string | null;
+  createdAt: string;
+  order: { orderNumber: string };
+  user: { fullName: string | null; phone: string };
+  items: { id: string; quantity: number; orderItem: { nameSnapshot: string; skuSnapshot?: string | null } }[];
+}
+
 export interface BlogPost {
   id: string;
   title: string;

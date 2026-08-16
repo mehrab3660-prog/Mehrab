@@ -37,6 +37,7 @@ import { MediaSearchModule } from './media-search/media-search.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { SettingsModule } from './settings/settings.module';
 import { StockSubscriptionsModule } from './stock-subscriptions/stock-subscriptions.module';
+import { ReturnsModule } from './returns/returns.module';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { StockSubscriptionsModule } from './stock-subscriptions/stock-subscripti
     MediaSearchModule,
     DashboardModule,
     StockSubscriptionsModule,
+    ReturnsModule,
   ],
   controllers: [AppController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
