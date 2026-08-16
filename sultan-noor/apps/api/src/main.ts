@@ -22,6 +22,9 @@ async function bootstrap() {
   app.useStaticAssets(process.env.PRODUCT_IMAGE_STORAGE_DIR ?? path.join(process.cwd(), 'storage', 'products'), {
     prefix: '/api/product-images/',
   });
+  app.useStaticAssets(process.env.REVIEW_IMAGE_STORAGE_DIR ?? path.join(process.cwd(), 'storage', 'reviews'), {
+    prefix: '/api/review-images/',
+  });
 
   app.use(
     helmet({

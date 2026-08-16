@@ -56,6 +56,14 @@ export default function AdminReviewsPage() {
               </div>
               {r.title && <p className="mt-1 font-medium">{r.title}</p>}
               {r.body && <p className="mt-1 text-foreground/70">{r.body}</p>}
+              {r.images.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {r.images.map((img) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img key={img.id} src={img.url} alt="" className="h-16 w-16 rounded-lg border border-border-color object-cover" />
+                  ))}
+                </div>
+              )}
               <p className="mt-1 text-xs text-foreground/40">
                 {r.user.fullName ?? "کاربر"} — {r.user.phone}
               </p>

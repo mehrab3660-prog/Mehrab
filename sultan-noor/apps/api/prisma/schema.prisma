@@ -498,10 +498,19 @@ model Review {
   title     String?
   body      String?
   isApproved Boolean @default(false)
+  images    ReviewImage[]
 
   createdAt DateTime @default(now())
 
   @@index([productId])
+}
+
+model ReviewImage {
+  id       String @id @default(cuid())
+  reviewId String
+  review   Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  url      String
+  position Int    @default(0)
 }
 
 model Question {

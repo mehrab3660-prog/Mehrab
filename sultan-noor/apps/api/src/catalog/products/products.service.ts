@@ -1,20 +1,13 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
-import { randomUUID } from 'crypto';
-import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SearchService } from '../../search/search.service';
 import { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
+import { deleteUploadedImage, saveUploadedImage } from '../../common/utils/image-upload.util';
 import { CreateProductDto, ListProductsQueryDto, UpdateProductDto } from './dto/product.dto';
 
 const IMAGE_DIR = process.env.PRODUCT_IMAGE_STORAGE_DIR ?? path.join(process.cwd(), 'storage', 'products');
-const ALLOWED_IMAGE_TYPES: Record<string, string> = {
-  'image/jpeg': '.jpg',
-  'image/png': '.png',
-  'image/webp': '.webp',
-};
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 const productInclude = {
   brand: true,
@@ -223,16 +216,7 @@ export class ProductsService {
   // supports, so this stores one instead of a relative path.
   async addImage(productId: string, file: Express.Multer.File, baseUrl: string) {
     await this.findRawById(productId);
-
-    const extension = ALLOWED_IMAGE_TYPES[file.mimetype];
-    if (!extension) throw new BadRequestException('فقط تصاویر JPG، PNG یا WebP پذیرفته می‌شود');
-    if (file.size > MAX_IMAGE_BYTES) throw new BadRequestException('حجم تصویر نباید بیشتر از ۵ مگابایت باشد');
-
-    fs.mkdirSync(IMAGE_DIR, { recursive: true });
-    // Never trust the client-supplied filename — generate our own to rule out
-    // path traversal and filename collisions entirely.
-    const filename = `${randomUUID()}${extension}`;
-    fs.writeFileSync(path.join(IMAGE_DIR, filename), file.buffer);
+    const filename = saveUploadedImage(file, IMAGE_DIR);
 
     const position = await this.prisma.productImage.count({ where: { productId } });
     const image = await this.prisma.productImage.create({
@@ -247,12 +231,7 @@ export class ProductsService {
     if (!image) throw new NotFoundException('تصویر یافت نشد');
 
     await this.prisma.productImage.delete({ where: { id: imageId } });
-
-    const filename = path.basename(image.url);
-    fs.rm(path.join(IMAGE_DIR, filename), { force: true }, () => {
-      // Best-effort — the DB row is the source of truth for what's shown;
-      // a leftover orphaned file on disk isn't worth failing the request over.
-    });
+    deleteUploadedImage(image.url, IMAGE_DIR);
     await this.reindex(image.productId);
     return { success: true };
   }

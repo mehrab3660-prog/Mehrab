@@ -164,6 +164,7 @@ export interface PendingReview {
   createdAt: string;
   product: { id: string; name: string };
   user: { fullName: string | null; phone: string };
+  images: { id: string; url: string }[];
 }
 
 export interface AdminQuestion {

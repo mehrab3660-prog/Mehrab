@@ -17,6 +17,7 @@ interface Review {
   title?: string | null;
   body?: string | null;
   user: { fullName: string | null };
+  images: { id: string; url: string }[];
 }
 
 interface Question {
@@ -73,6 +74,7 @@ export default function ProductDetailClient() {
   const [selectedAttrs, setSelectedAttrs] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [reviewForm, setReviewForm] = useState({ rating: 5, title: "", body: "" });
+  const [reviewPhoto, setReviewPhoto] = useState<File | null>(null);
   const [questionBody, setQuestionBody] = useState("");
 
   useEffect(() => {
@@ -168,8 +170,12 @@ export default function ProductDetailClient() {
     e.preventDefault();
     if (!accessToken) return;
     try {
-      await api.post("/reviews", { productId: product!.id, ...reviewForm }, accessToken);
+      const review = await api.post<{ id: string }>("/reviews", { productId: product!.id, ...reviewForm }, accessToken);
+      if (reviewPhoto) {
+        await api.upload(`/reviews/${review.id}/images`, reviewPhoto, "file", accessToken);
+      }
       setReviewForm({ rating: 5, title: "", body: "" });
+      setReviewPhoto(null);
       toast("نظر شما ثبت شد و پس از تایید نمایش داده می‌شود.", "success");
     } catch {
       toast("ثبت نظر با خطا مواجه شد.", "error");
@@ -342,6 +348,14 @@ export default function ProductDetailClient() {
               <div className="font-bold">{"⭐".repeat(r.rating)}</div>
               {r.title && <p className="mt-1 font-medium">{r.title}</p>}
               {r.body && <p className="mt-1 text-foreground/70">{r.body}</p>}
+              {r.images.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {r.images.map((img) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img key={img.id} src={img.url} alt="" className="h-16 w-16 rounded-lg border border-border-color object-cover" />
+                  ))}
+                </div>
+              )}
               <p className="mt-1 text-xs text-foreground/40">{r.user.fullName ?? "کاربر"}</p>
             </div>
           ))}
@@ -370,6 +384,12 @@ export default function ProductDetailClient() {
               value={reviewForm.body}
               onChange={(e) => setReviewForm({ ...reviewForm, body: e.target.value })}
               className="w-full rounded-lg border border-border-color bg-background px-2 py-1"
+            />
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(e) => setReviewPhoto(e.target.files?.[0] ?? null)}
+              className="w-full text-xs text-foreground/60"
             />
             <button type="submit" className="rounded-lg bg-brand px-4 py-1.5 text-sm font-bold text-[#0b0e14]">
               ثبت نظر
