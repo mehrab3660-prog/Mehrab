@@ -6,9 +6,8 @@ import { PricingService } from '../pricing/pricing.service';
 import { InvoiceService } from './invoice/invoice.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ShippingService } from '../shipping/shipping.service';
 import { CreateOrderDto, UpdateOrderStatusDto } from './dto/order.dto';
-
-const SHIPPING_FLAT_RATE = 50000; // تومان — نرخ ثابت ارسال برای MVP
 
 @Injectable()
 export class OrdersService {
@@ -19,6 +18,7 @@ export class OrdersService {
     private invoiceService: InvoiceService,
     private auditLog: AuditLogService,
     private notifications: NotificationsService,
+    private shippingService: ShippingService,
   ) {}
 
   async createFromCart(userId: string, dto: CreateOrderDto) {
@@ -58,7 +58,10 @@ export class OrdersService {
       discountCodeId = discount.id;
     }
 
-    const shippingTotal = SHIPPING_FLAT_RATE;
+    const shippingTotal = await this.shippingService.resolveShippingCost(
+      cart.items.map((item) => ({ quantity: item.quantity, productVariant: item.productVariant })),
+      address.province,
+    );
     const grandTotal = Math.max(subtotal - discountTotal + shippingTotal, 0);
     const orderNumber = this.generateOrderNumber();
 

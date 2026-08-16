@@ -15,6 +15,7 @@ const NAV = [
   { href: "/admin/warehouses", label: "انبارها" },
   { href: "/admin/suppliers", label: "تامین‌کنندگان" },
   { href: "/admin/pricing", label: "قیمت‌گذاری" },
+  { href: "/admin/shipping", label: "نرخ ارسال" },
   { href: "/admin/reviews", label: "نظرات" },
   { href: "/admin/qa", label: "پرسش و پاسخ" },
   { href: "/admin/blog", label: "وبلاگ" },

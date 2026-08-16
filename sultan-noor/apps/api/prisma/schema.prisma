@@ -380,6 +380,21 @@ model DiscountCode {
   updatedAt DateTime @updatedAt
 }
 
+// A shipping cost band: this rate applies to orders addressed to `province`
+// (null = fallback band used when no rate matches the order's own province)
+// weighing up to `maxWeightGrams`. The cheapest/lightest matching band wins.
+// With no rates configured at all, order pricing falls back to a flat rate —
+// same graceful-degradation pattern as Meilisearch/AI advisor.
+model ShippingRate {
+  id             String   @id @default(cuid())
+  province       String?
+  maxWeightGrams Int
+  price          Decimal  @db.Decimal(14, 2)
+  createdAt      DateTime @default(now())
+
+  @@unique([province, maxWeightGrams])
+}
+
 // ────────────────────────────── Orders / Invoices / Payments ──────────────────────────────
 
 enum OrderStatus {

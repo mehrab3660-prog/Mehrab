@@ -23,6 +23,7 @@ describe('OrdersService.createFromCart', () => {
   let invoiceService: any;
   let auditLog: any;
   let notifications: any;
+  let shippingService: any;
   let service: OrdersService;
   let tx: any;
 
@@ -44,11 +45,20 @@ describe('OrdersService.createFromCart', () => {
     invoiceService = {};
     auditLog = {};
     notifications = { notify: jest.fn().mockResolvedValue(undefined) };
+    shippingService = { resolveShippingCost: jest.fn().mockResolvedValue(50000) };
 
-    service = new OrdersService(prisma, productsService, pricingService, invoiceService, auditLog, notifications);
+    service = new OrdersService(
+      prisma,
+      productsService,
+      pricingService,
+      invoiceService,
+      auditLog,
+      notifications,
+      shippingService,
+    );
 
     prisma.user.findUniqueOrThrow.mockResolvedValue({ id: 'u1', customerGroupId: null });
-    prisma.address.findFirst.mockResolvedValue({ id: 'addr1' });
+    prisma.address.findFirst.mockResolvedValue({ id: 'addr1', province: 'تهران' });
   });
 
   it('rejects when the cart is empty', async () => {

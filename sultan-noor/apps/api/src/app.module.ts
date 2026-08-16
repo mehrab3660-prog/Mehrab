@@ -23,6 +23,7 @@ import { CartModule } from './cart/cart.module';
 import { WishlistModule } from './wishlist/wishlist.module';
 import { PricingModule } from './pricing/pricing.module';
 import { OrdersModule } from './orders/orders.module';
+import { ShippingModule } from './shipping/shipping.module';
 import { PaymentsModule } from './payments/payments.module';
 
 import { ReviewsModule } from './reviews/reviews.module';
@@ -60,6 +61,7 @@ import { SettingsModule } from './settings/settings.module';
     WishlistModule,
     PricingModule,
     OrdersModule,
+    ShippingModule,
     PaymentsModule,
 
     ReviewsModule,

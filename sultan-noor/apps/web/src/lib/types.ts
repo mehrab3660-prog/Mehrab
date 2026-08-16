@@ -147,6 +147,13 @@ export interface DiscountCode {
   expiresAt?: string | null;
 }
 
+export interface ShippingRate {
+  id: string;
+  province: string | null;
+  maxWeightGrams: number;
+  price: string;
+}
+
 export interface PriceTier {
   id: string;
   productId: string;
