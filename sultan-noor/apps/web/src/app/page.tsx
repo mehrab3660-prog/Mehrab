@@ -4,6 +4,8 @@ import { Banner, Product } from "@/lib/types";
 import ProductGrid from "@/components/ProductGrid";
 import HomeHero from "@/components/HomeHero";
 import RevealSection from "@/components/RevealSection";
+import TrustBadges from "@/components/TrustBadges";
+import SectionDivider from "@/components/SectionDivider";
 
 async function safeGet<T>(path: string, fallback: T): Promise<T> {
   try {
@@ -25,9 +27,17 @@ export default async function HomePage() {
     <div className="mx-auto max-w-6xl px-4 py-8">
       <HomeHero title={hero?.title} />
 
-      <RevealSection className="mt-14">
+      <div className="mt-14">
+        <TrustBadges />
+      </div>
+
+      <SectionDivider />
+
+      <RevealSection>
         <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-xl font-bold">محصولات پیشنهادی</h2>
+          <h2 className="text-xl font-bold">
+            محصولات <span className="gradient-text">پیشنهادی</span>
+          </h2>
           <Link href="/products" className="text-sm font-medium text-brand transition hover:text-brand-dark">
             مشاهده همه ←
           </Link>

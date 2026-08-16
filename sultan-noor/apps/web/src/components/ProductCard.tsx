@@ -12,14 +12,31 @@ function formatToman(value: string | number) {
 export default function ProductCard({ product }: { product: Product }) {
   const image = product.images?.[0]?.url;
   const hasDiscount = product.compareAtPrice && Number(product.compareAtPrice) > Number(product.basePrice);
+  const discountPercent = hasDiscount
+    ? Math.round((1 - Number(product.basePrice) / Number(product.compareAtPrice)) * 100)
+    : 0;
 
   return (
-    <motion.div variants={fadeUp} whileHover={{ y: -6 }} transition={{ type: "spring", stiffness: 300, damping: 22 }}>
+    <motion.div
+      variants={fadeUp}
+      whileHover={{ y: -6 }}
+      transition={{ type: "spring", stiffness: 300, damping: 22 }}
+      className="group relative"
+    >
+      {/* animated gradient ring on hover */}
+      <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-brand-light to-brand opacity-0 blur-[2px] transition-opacity duration-300 group-hover:opacity-60" />
+
       <Link
         href={`/products/${product.slug}`}
-        className="group flex h-full flex-col overflow-hidden rounded-2xl surface-card transition-shadow duration-300 hover:glow-shadow"
+        className="relative flex h-full flex-col overflow-hidden rounded-2xl surface-card transition-shadow duration-300 group-hover:glow-shadow"
       >
         <div className="relative aspect-square w-full overflow-hidden bg-surface-2">
+          {hasDiscount && (
+            <span className="absolute right-3 top-3 z-10 rounded-full bg-gradient-to-l from-brand-light to-brand px-2.5 py-1 text-xs font-bold text-white shadow">
+              ٪{discountPercent}−
+            </span>
+          )}
+
           {image ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -45,7 +62,16 @@ export default function ProductCard({ product }: { product: Product }) {
               <span className="text-xs">بدون تصویر</span>
             </div>
           )}
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+
+          {/* quick-view affordance on hover */}
+          <motion.span
+            initial={{ opacity: 0, y: 8 }}
+            whileHover={{}}
+            className="pointer-events-none absolute inset-x-3 bottom-3 flex translate-y-2 items-center justify-center rounded-lg bg-white/90 py-2 text-xs font-bold text-brand-dark opacity-0 backdrop-blur transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100"
+          >
+            مشاهده محصول
+          </motion.span>
         </div>
         <div className="flex flex-1 flex-col gap-1 p-4">
           {product.brand && <span className="text-xs text-foreground/45">{product.brand.name}</span>}
