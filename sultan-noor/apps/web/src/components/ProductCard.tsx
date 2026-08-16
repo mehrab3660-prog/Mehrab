@@ -101,7 +101,7 @@ export default function ProductCard({ product }: { product: Product }) {
               whileTap={{ scale: 0.85 }}
               onClick={handleWishlist}
               aria-label="افزودن به علاقه‌مندی‌ها"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-surface/80 text-foreground/70 backdrop-blur transition-colors hover:text-brand"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-surface/80 text-foreground/70 backdrop-blur transition-colors hover:text-brand sm:h-8 sm:w-8"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill={isWishlisted ? "#F5B82E" : "none"} stroke="currentColor" strokeWidth="1.8">
                 <path d="M12 20.5s-7.5-4.6-9.9-9.2C.5 7.9 2 4.5 5.4 3.7c2-.5 3.9.3 5 1.9a.7.7 0 0 0 1.2 0c1.1-1.6 3-2.4 5-1.9 3.4.8 4.9 4.2 3.3 7.6-2.4 4.6-9.9 9.2-9.9 9.2Z" />
@@ -140,7 +140,7 @@ export default function ProductCard({ product }: { product: Product }) {
             <motion.button
               whileTap={{ scale: 0.96 }}
               onClick={handleQuickAdd}
-              className="pointer-events-none absolute inset-x-3 bottom-3 flex translate-y-2 items-center justify-center gap-1.5 rounded-lg bg-brand py-2 text-xs font-bold text-[#0b0e14] opacity-0 shadow-lg transition-all duration-300 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100"
+              className="pointer-events-auto absolute inset-x-3 bottom-3 flex translate-y-0 items-center justify-center gap-1.5 rounded-lg bg-brand py-2.5 text-xs font-bold text-[#0b0e14] opacity-100 shadow-lg transition-all duration-300 sm:pointer-events-none sm:translate-y-2 sm:opacity-0 sm:group-hover:pointer-events-auto sm:group-hover:translate-y-0 sm:group-hover:opacity-100"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M3 6h2l2.4 11.4a2 2 0 0 0 2 1.6h7.2a2 2 0 0 0 2-1.6L20 8H6" strokeLinecap="round" strokeLinejoin="round" />

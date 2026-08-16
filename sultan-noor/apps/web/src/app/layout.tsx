@@ -11,6 +11,7 @@ import Footer from "@/components/Footer";
 import AiAdvisorWidget from "@/components/AiAdvisorWidget";
 import PageTransition from "@/components/PageTransition";
 import MobileBottomNav from "@/components/MobileBottomNav";
+import MainContent from "@/components/MainContent";
 
 const vazirmatn = Vazirmatn({
   variable: "--font-vazirmatn",
@@ -32,9 +33,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <WishlistProvider>
                 <AiAdvisorProvider>
                   <Header />
-                  <main className="flex-1 pb-16 sm:pb-0">
+                  <MainContent>
                     <PageTransition>{children}</PageTransition>
-                  </main>
+                  </MainContent>
                   <Footer />
                   <AiAdvisorWidget />
                   <MobileBottomNav />

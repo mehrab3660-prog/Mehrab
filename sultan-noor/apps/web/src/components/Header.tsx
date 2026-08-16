@@ -159,7 +159,7 @@ export default function Header() {
               </svg>
               <span className="absolute inset-x-0 -bottom-0.5 h-[1.5px] origin-right scale-x-0 bg-brand transition-transform duration-300 ease-out group-hover:scale-x-100" />
             </Link>
-            <MegaMenu open={megaOpen} />
+            <MegaMenu open={megaOpen} onNavigate={() => setMegaOpen(false)} />
           </div>
 
           {NAV_LINKS.map((l) => (

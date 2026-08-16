@@ -95,6 +95,20 @@ body::before {
   color: #0b0e14;
 }
 
+/* Visible keyboard-focus ring on every interactive element, independent of
+   each component's own styling — never suppressed, only shown for
+   keyboard/AT navigation (not on mouse/touch clicks). */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 /* Shimmering skeleton placeholder used while data is loading */
 .skeleton {
   position: relative;

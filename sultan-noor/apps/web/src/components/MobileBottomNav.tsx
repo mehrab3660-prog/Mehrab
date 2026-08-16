@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
+import { useBottomNavVisible } from "@/lib/useBottomNav";
 
 const ICONS = {
   home: (
@@ -25,7 +26,10 @@ export default function MobileBottomNav() {
   const pathname = usePathname();
   const { user } = useAuth();
   const { cart } = useCart();
+  const visible = useBottomNavVisible();
   const itemCount = cart?.items?.reduce((sum, i) => sum + i.quantity, 0) ?? 0;
+
+  if (!visible) return null;
 
   const items = [
     { href: "/", icon: "home", label: "خانه" },
@@ -36,7 +40,10 @@ export default function MobileBottomNav() {
   ] as const;
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border-color bg-surface/95 backdrop-blur-md sm:hidden">
+    <nav
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-border-color bg-surface/95 backdrop-blur-md sm:hidden"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
       <div className="grid grid-cols-5">
         {items.map((item) => {
           const active = pathname === item.href.split("?")[0];

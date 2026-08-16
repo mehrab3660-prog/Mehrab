@@ -1,4 +1,8 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
+import { useBottomNavVisible } from "@/lib/useBottomNav";
 
 const QUICK_LINKS = [
   { href: "/products", label: "محصولات" },
@@ -13,59 +17,93 @@ const SUPPORT_LINKS = [
   { href: "/contact", label: "تماس با ما" },
 ];
 
-export default function Footer() {
+function FooterSection({ title, children }: { title: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+
   return (
-    <footer className="relative mt-20 overflow-hidden border-t border-border-color bg-surface pb-16 sm:pb-0">
+    <div className="border-b border-border-color py-1 sm:border-0 sm:py-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between py-3 text-right text-sm font-bold sm:pointer-events-none sm:py-0 sm:mb-3"
+      >
+        {title}
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          className={`text-foreground/40 transition-transform sm:hidden ${open ? "rotate-180" : ""}`}
+        >
+          <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      <div className={`overflow-hidden text-sm sm:!block sm:!h-auto ${open ? "block pb-4" : "hidden"}`}>{children}</div>
+    </div>
+  );
+}
+
+export default function Footer() {
+  const bottomNavVisible = useBottomNavVisible();
+
+  return (
+    <footer
+      className="relative mt-12 overflow-hidden border-t border-border-color bg-surface sm:mt-20 sm:!pb-0"
+      style={bottomNavVisible ? { paddingBottom: "calc(5rem + env(safe-area-inset-bottom))" } : undefined}
+    >
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-[0.04]"
         style={{ backgroundImage: "radial-gradient(circle, #F5B82E 1.2px, transparent 1.2px)", backgroundSize: "20px 20px" }}
       />
-      <div className="relative mx-auto grid max-w-6xl gap-10 px-4 py-12 text-sm sm:grid-cols-2 md:grid-cols-4">
-        <div>
+      <div className="relative mx-auto max-w-6xl px-4 py-8 sm:py-12">
+        {/* brand blurb — always visible, never collapsed, per "important info visible when closed" */}
+        <div className="pb-5 sm:pb-0">
           <p className="text-lg font-extrabold">
             <span className="gradient-text">سلطان</span> نور
           </p>
-          <p className="mt-3 max-w-xs leading-6 text-muted">
+          <p className="mt-3 max-w-xs text-sm leading-6 text-muted">
             فروشگاه تخصصی تجهیزات برق و روشنایی — B2C و B2B، با قیمت‌گذاری پلکانی و مشاور خرید هوشمند.
           </p>
         </div>
 
-        <div>
-          <p className="mb-3 font-bold">دسترسی سریع</p>
-          <ul className="space-y-2 text-muted">
-            {QUICK_LINKS.map((l) => (
-              <li key={l.label}>
-                <Link href={l.href} className="transition-colors hover:text-brand">
-                  {l.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <div className="grid gap-0 sm:mt-10 sm:grid-cols-3 sm:gap-10">
+          <FooterSection title="دسترسی سریع">
+            <ul className="space-y-2.5 text-muted">
+              {QUICK_LINKS.map((l) => (
+                <li key={l.label}>
+                  <Link href={l.href} className="inline-block py-0.5 transition-colors hover:text-brand">
+                    {l.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </FooterSection>
 
-        <div>
-          <p className="mb-3 font-bold">خدمات مشتریان</p>
-          <ul className="space-y-2 text-muted">
-            {SUPPORT_LINKS.map((l) => (
-              <li key={l.label}>
-                <Link href={l.href} className="transition-colors hover:text-brand">
-                  {l.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
+          <FooterSection title="خدمات مشتریان">
+            <ul className="space-y-2.5 text-muted">
+              {SUPPORT_LINKS.map((l) => (
+                <li key={l.label}>
+                  <Link href={l.href} className="inline-block py-0.5 transition-colors hover:text-brand">
+                    {l.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </FooterSection>
 
-        <div>
-          <p className="mb-3 font-bold">ارتباط با ما</p>
-          <p className="text-muted">
-            اطلاعات تماس به‌زودی تکمیل می‌شود. تا آن زمان از طریق{" "}
-            <Link href="/contact" className="text-brand hover:underline">
-              صفحه تماس
-            </Link>{" "}
-            یا مشاور هوشمند در دسترس هستیم.
-          </p>
+          <FooterSection title="ارتباط با ما">
+            <p className="leading-6 text-muted">
+              اطلاعات تماس به‌زودی تکمیل می‌شود. تا آن زمان از طریق{" "}
+              <Link href="/contact" className="text-brand hover:underline">
+                صفحه تماس
+              </Link>{" "}
+              یا مشاور هوشمند در دسترس هستیم.
+            </p>
+          </FooterSection>
         </div>
       </div>
       <div className="relative border-t border-border-color px-4 py-4 text-center text-xs text-muted">

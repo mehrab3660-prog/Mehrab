@@ -333,7 +333,7 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
-      <section className="mt-12">
+      <section className="mt-8 sm:mt-12">
         <h2 className="mb-4 text-lg font-bold">نظرات کاربران</h2>
         <div className="space-y-3">
           {reviews.length === 0 && <p className="text-sm text-foreground/50">هنوز نظری ثبت نشده است.</p>}
@@ -378,7 +378,7 @@ export default function ProductDetailPage() {
         )}
       </section>
 
-      <section className="mt-12">
+      <section className="mt-8 sm:mt-12">
         <h2 className="mb-4 text-lg font-bold">پرسش و پاسخ</h2>
         <div className="space-y-3">
           {questions.length === 0 && <p className="text-sm text-foreground/50">هنوز پرسشی ثبت نشده است.</p>}
@@ -410,7 +410,7 @@ export default function ProductDetailPage() {
       </section>
 
       {related.length > 0 && (
-        <section className="mt-14">
+        <section className="mt-8 sm:mt-14">
           <h2 className="mb-6 text-lg font-bold">
             محصولات <span className="gradient-text">مرتبط</span>
           </h2>

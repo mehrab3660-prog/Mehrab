@@ -136,21 +136,21 @@ export default function CheckoutPage() {
                 {addresses.map((a) => (
                   <label
                     key={a.id}
-                    className={`flex items-center gap-2 rounded-lg border p-3 text-sm transition-colors ${
+                    className={`flex min-h-11 items-center gap-3 rounded-lg border p-3.5 text-sm transition-colors ${
                       addressId === a.id ? "border-brand bg-brand/5" : "border-border-color"
                     }`}
                   >
-                    <input type="radio" checked={addressId === a.id} onChange={() => setAddressId(a.id)} className="accent-[#F5B82E]" />
+                    <input type="radio" checked={addressId === a.id} onChange={() => setAddressId(a.id)} className="h-4 w-4 flex-shrink-0 accent-[#F5B82E]" />
                     {a.title} — {a.province}، {a.city}، {a.line1}
                   </label>
                 ))}
-                <button type="button" onClick={() => setShowNewAddress(true)} className="text-sm font-medium text-brand">
+                <button type="button" onClick={() => setShowNewAddress(true)} className="min-h-11 px-1 text-sm font-medium text-brand">
                   + افزودن آدرس جدید
                 </button>
               </div>
             )}
             {addressesLoaded && showNewAddress && (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                 {(
                   [
                     ["title", "عنوان آدرس"],
@@ -167,11 +167,11 @@ export default function CheckoutPage() {
                     placeholder={label}
                     value={newAddress[key]}
                     onChange={(e) => setNewAddress({ ...newAddress, [key]: e.target.value })}
-                    className="rounded-lg border border-border-color bg-background px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                    className="min-h-11 rounded-lg border border-border-color bg-background px-3 py-2.5 text-sm focus:border-brand focus:outline-none"
                   />
                 ))}
                 {addresses.length > 0 && (
-                  <button type="button" onClick={() => setShowNewAddress(false)} className="col-span-full text-right text-xs text-foreground/50">
+                  <button type="button" onClick={() => setShowNewAddress(false)} className="col-span-full min-h-11 py-1 text-right text-xs text-foreground/50">
                     انصراف و انتخاب از آدرس‌های ثبت‌شده
                   </button>
                 )}
@@ -185,21 +185,26 @@ export default function CheckoutPage() {
               value={discountCode}
               onChange={(e) => setDiscountCode(e.target.value)}
               placeholder="کد تخفیف (اختیاری)"
-              className="w-full rounded-lg border border-border-color bg-background px-3 py-2 text-sm focus:border-brand focus:outline-none"
+              className="min-h-11 w-full rounded-lg border border-border-color bg-background px-3 py-2.5 text-sm focus:border-brand focus:outline-none"
             />
           </section>
 
           {/* order summary inline on mobile, hidden here on desktop where the sticky column handles it */}
           <div className="lg:hidden">{orderSummary}</div>
 
-          {error && <p className="text-sm text-red-400">{error}</p>}
-
-          <button
-            disabled={loading}
-            className="w-full rounded-xl bg-brand py-3 font-bold text-[#0b0e14] shadow-lg shadow-brand/20 transition-shadow hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60"
+          {/* sticky on mobile so the pay action is always reachable without covering other content; a normal in-flow block on desktop */}
+          <div
+            className="sticky bottom-0 z-10 -mx-4 border-t border-border-color bg-background/95 px-4 pt-3 backdrop-blur-md lg:static lg:z-auto lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:pt-0 lg:backdrop-blur-none"
+            style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
           >
-            {loading ? "در حال انتقال به درگاه پرداخت..." : "پرداخت و ثبت سفارش"}
-          </button>
+            {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
+            <button
+              disabled={loading}
+              className="w-full rounded-xl bg-brand py-3.5 font-bold text-[#0b0e14] shadow-lg shadow-brand/20 transition-shadow hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? "در حال انتقال به درگاه پرداخت..." : "پرداخت و ثبت سفارش"}
+            </button>
+          </div>
         </form>
 
         <div className="order-1 hidden lg:order-2 lg:block">{orderSummary}</div>

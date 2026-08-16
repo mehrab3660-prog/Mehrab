@@ -1,6 +1,6 @@
 export default function SectionDivider() {
   return (
-    <div aria-hidden className="my-14 flex items-center gap-3">
+    <div aria-hidden className="my-8 flex items-center gap-3 sm:my-14">
       <span className="h-px flex-1 bg-gradient-to-l from-transparent via-border-color to-transparent" />
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" className="text-brand/60">
         <path

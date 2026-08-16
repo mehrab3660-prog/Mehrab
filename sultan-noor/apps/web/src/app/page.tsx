@@ -37,15 +37,15 @@ export default async function HomePage() {
   );
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
+    <div className="mx-auto max-w-6xl px-4 py-5 sm:py-8">
       <HeroCarousel banners={banners} />
 
       {categories.length > 0 && (
         <>
-          <div className="mt-14" />
+          <div className="mt-8 sm:mt-14" />
           <RevealSection>
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold">
+            <div className="mb-4 flex items-center justify-between sm:mb-6">
+              <h2 className="text-lg font-bold sm:text-xl">
                 دسته‌بندی <span className="gradient-text">محصولات</span>
               </h2>
               <Link href="/products" className="text-sm font-medium text-brand transition hover:text-brand-dark">
@@ -61,8 +61,8 @@ export default async function HomePage() {
         <>
           <SectionDivider />
           <RevealSection>
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold">
+            <div className="mb-4 flex items-center justify-between sm:mb-6">
+              <h2 className="text-lg font-bold sm:text-xl">
                 محصولات <span className="gradient-text">پرفروش</span>
               </h2>
               <Link href="/products" className="text-sm font-medium text-brand transition hover:text-brand-dark">
@@ -99,7 +99,7 @@ export default async function HomePage() {
         <>
           <SectionDivider />
           <RevealSection>
-            <h2 className="mb-6 text-xl font-bold">
+            <h2 className="mb-4 text-lg font-bold sm:mb-6 sm:text-xl">
               برندهای <span className="gradient-text">معتبر</span>
             </h2>
             <TrustedBrands brands={brands} />
@@ -122,7 +122,7 @@ export default async function HomePage() {
       <SectionDivider />
 
       <RevealSection>
-        <h2 className="mb-6 text-xl font-bold">
+        <h2 className="mb-4 text-lg font-bold sm:mb-6 sm:text-xl">
           چرا <span className="gradient-text">سلطان نور</span>؟
         </h2>
         <TrustBadges />
@@ -132,8 +132,8 @@ export default async function HomePage() {
         <>
           <SectionDivider />
           <RevealSection>
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold">
+            <div className="mb-4 flex items-center justify-between sm:mb-6">
+              <h2 className="text-lg font-bold sm:text-xl">
                 آخرین <span className="gradient-text">مقالات</span>
               </h2>
               <Link href="/blog" className="text-sm font-medium text-brand transition hover:text-brand-dark">

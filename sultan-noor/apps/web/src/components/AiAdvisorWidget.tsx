@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
 import { useAiAdvisor } from "@/context/AiAdvisorContext";
+import { useBottomNavVisible } from "@/lib/useBottomNav";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -12,6 +14,16 @@ interface ChatMessage {
 
 export default function AiAdvisorWidget() {
   const { open, setOpen, prefill, consumePrefill } = useAiAdvisor();
+  const pathname = usePathname();
+  const bottomNavVisible = useBottomNavVisible();
+  // Checkout has its own sticky, full-width pay CTA at the very bottom on
+  // mobile — the floating button needs extra clearance there so nothing
+  // fixed ever sits on top of the payment action.
+  const fabOffset = pathname.startsWith("/checkout")
+    ? "bottom-24"
+    : bottomNavVisible
+      ? "bottom-20 sm:bottom-4"
+      : "bottom-4";
   const [conversationId, setConversationId] = useState<string | undefined>();
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: "assistant", content: "سلام! من دستیار خرید سلطان نور هستم. چه محصولی می‌خواهید پیدا کنید؟" },
@@ -45,7 +57,7 @@ export default function AiAdvisorWidget() {
   }
 
   return (
-    <div className="fixed bottom-20 left-4 z-40 sm:bottom-4">
+    <div className={`fixed left-4 z-40 transition-[bottom] duration-300 ${fabOffset}`}>
       <AnimatePresence>
         {open && (
           <motion.div
