@@ -36,6 +36,7 @@ import { AiAdvisorModule } from './ai-advisor/ai-advisor.module';
 import { MediaSearchModule } from './media-search/media-search.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { SettingsModule } from './settings/settings.module';
+import { StockSubscriptionsModule } from './stock-subscriptions/stock-subscriptions.module';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { SettingsModule } from './settings/settings.module';
     AiAdvisorModule,
     MediaSearchModule,
     DashboardModule,
+    StockSubscriptionsModule,
   ],
   controllers: [AppController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

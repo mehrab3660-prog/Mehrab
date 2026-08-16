@@ -73,6 +73,8 @@ export default function ProductDetailClient() {
   const [activeImage, setActiveImage] = useState(0);
   const [selectedAttrs, setSelectedAttrs] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [restockSubscribed, setRestockSubscribed] = useState(false);
+  const [restockSubmitting, setRestockSubmitting] = useState(false);
   const [reviewForm, setReviewForm] = useState({ rating: 5, title: "", body: "" });
   const [reviewPhoto, setReviewPhoto] = useState<File | null>(null);
   const [questionBody, setQuestionBody] = useState("");
@@ -85,6 +87,7 @@ export default function ProductDetailClient() {
       .get<Product>(`/products/${slug}`)
       .then((p) => {
         setProduct(p);
+        setRestockSubscribed(!!p.restockSubscribed);
         const firstAttrs = p.variants?.[0]?.attributes;
         if (firstAttrs) setSelectedAttrs(firstAttrs);
       })
@@ -154,6 +157,29 @@ export default function ProductDetailClient() {
       toast("افزودن به سبد خرید با خطا مواجه شد.", "error");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleRestockToggle() {
+    if (!user) {
+      toast("برای دریافت اطلاع‌رسانی ابتدا وارد شوید.", "info");
+      return;
+    }
+    setRestockSubmitting(true);
+    try {
+      if (restockSubscribed) {
+        await api.delete(`/products/${product!.id}/notify-restock`, accessToken);
+        setRestockSubscribed(false);
+        toast("اطلاع‌رسانی لغو شد.", "success");
+      } else {
+        await api.post(`/products/${product!.id}/notify-restock`, undefined, accessToken);
+        setRestockSubscribed(true);
+        toast("هر وقت این کالا موجود شد، پیامک می‌گیرید.", "success");
+      }
+    } catch {
+      toast("ثبت درخواست با خطا مواجه شد.", "error");
+    } finally {
+      setRestockSubmitting(false);
     }
   }
 
@@ -336,6 +362,20 @@ export default function ProductDetailClient() {
               خرید فوری
             </button>
           </div>
+
+          {outOfStock && (
+            <button
+              onClick={handleRestockToggle}
+              disabled={restockSubmitting}
+              className={`mt-3 rounded-lg border px-5 py-2.5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                restockSubscribed
+                  ? "border-brand bg-brand/10 text-brand"
+                  : "border-border-color text-foreground/70 hover:border-brand hover:text-brand"
+              }`}
+            >
+              {restockSubscribed ? "اطلاع‌رسانی فعال است — لغو" : "اطلاع بده وقتی موجود شد"}
+            </button>
+          )}
         </div>
       </div>
 

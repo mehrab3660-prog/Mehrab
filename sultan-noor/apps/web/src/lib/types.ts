@@ -50,6 +50,7 @@ export interface Product {
   avgRating?: number | null;
   reviewCount?: number;
   totalStock?: number;
+  restockSubscribed?: boolean;
 }
 
 export interface CartItem {

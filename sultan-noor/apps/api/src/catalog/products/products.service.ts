@@ -65,7 +65,12 @@ export class ProductsService {
     if (!product) throw new NotFoundException('محصول یافت نشد');
     const [withRating] = await this.withRatings([product]);
     const [withStock] = await this.withStock([withRating]);
-    return withStock;
+
+    if (!requester) return withStock;
+    const subscription = await this.prisma.stockSubscription.findUnique({
+      where: { userId_productId: { userId: requester.id, productId: product.id } },
+    });
+    return { ...withStock, restockSubscribed: !!subscription && !subscription.notifiedAt };
   }
 
   // Related products from the same category, excluding the current product —

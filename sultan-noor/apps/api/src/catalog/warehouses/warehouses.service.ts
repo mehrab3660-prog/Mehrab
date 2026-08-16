@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../../audit/audit-log.service';
+import { StockSubscriptionsService } from '../../stock-subscriptions/stock-subscriptions.service';
 import { CreateWarehouseDto, UpdateWarehouseDto, AdjustStockDto } from './dto/warehouse.dto';
 
 @Injectable()
@@ -8,6 +9,7 @@ export class WarehousesService {
   constructor(
     private prisma: PrismaService,
     private auditLog: AuditLogService,
+    private stockSubscriptions: StockSubscriptionsService,
   ) {}
 
   list() {
@@ -46,6 +48,21 @@ export class WarehousesService {
   async adjustStock(adminId: string, warehouseId: string, dto: AdjustStockDto) {
     await this.get(warehouseId);
 
+    const variant = await this.prisma.productVariant.findUnique({
+      where: { id: dto.productVariantId },
+      select: { productId: true },
+    });
+    if (!variant) throw new NotFoundException('گزینه محصول یافت نشد');
+
+    const existing = await this.prisma.stock.findUnique({
+      where: { warehouseId_productVariantId: { warehouseId, productVariantId: dto.productVariantId } },
+    });
+    const productStockAgg = await this.prisma.stock.aggregate({
+      where: { productVariant: { productId: variant.productId } },
+      _sum: { quantity: true },
+    });
+    const totalBefore = productStockAgg._sum.quantity ?? 0;
+
     const stock = await this.prisma.stock.upsert({
       where: { warehouseId_productVariantId: { warehouseId, productVariantId: dto.productVariantId } },
       create: { warehouseId, productVariantId: dto.productVariantId, quantity: Math.max(dto.quantityDelta, 0) },
@@ -68,6 +85,14 @@ export class WarehousesService {
       before: { quantity: stock.quantity },
       after: { quantity: updated.quantity },
     });
+
+    // Product-wide stock (summed across every variant/warehouse) crossed
+    // from empty to available — this is the moment subscribers waited for,
+    // not just this one warehouse row moving.
+    const totalAfter = totalBefore - (existing?.quantity ?? 0) + updated.quantity;
+    if (totalBefore <= 0 && totalAfter > 0) {
+      void this.stockSubscriptions.notifyBackInStock(variant.productId).catch(() => undefined);
+    }
 
     return updated;
   }
