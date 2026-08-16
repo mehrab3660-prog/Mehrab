@@ -312,6 +312,11 @@ model Cart {
   user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   items  CartItem[]
 
+  // Set once an abandoned-cart recovery SMS has gone out, so the cron job
+  // never texts the same idle cart twice; cleared whenever the cart is
+  // touched again so a fresh abandonment can be reminded again later.
+  abandonedReminderSentAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

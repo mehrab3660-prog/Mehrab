@@ -44,6 +44,10 @@ export class CartService {
       },
       update: { quantity: { increment: dto.quantity } },
     });
+    // New activity on this cart — let a future abandonment be reminded
+    // again, and this write also refreshes `updatedAt` (the abandonment
+    // clock the recovery cron reads).
+    await this.prisma.cart.update({ where: { id: cart.id }, data: { abandonedReminderSentAt: null } });
     return this.getCart(userId);
   }
 
