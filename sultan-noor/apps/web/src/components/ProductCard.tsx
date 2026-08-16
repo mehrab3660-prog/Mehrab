@@ -7,6 +7,7 @@ import { fadeUp } from "@/lib/motion";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
+import { useCompare } from "@/context/CompareContext";
 import { useToast } from "@/context/ToastContext";
 
 function formatToman(value: string | number) {
@@ -29,6 +30,7 @@ export default function ProductCard({ product }: { product: Product }) {
   const { user } = useAuth();
   const { addItem } = useCart();
   const { itemIds, toggle } = useWishlist();
+  const { isComparing, toggle: toggleCompare } = useCompare();
   const { toast } = useToast();
 
   const image = product.images?.[0]?.url;
@@ -164,6 +166,19 @@ export default function ProductCard({ product }: { product: Product }) {
               <span className="text-xs text-muted line-through">{formatToman(product.compareAtPrice!)}</span>
             )}
           </div>
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              toggleCompare(product.id);
+            }}
+            className={`self-start rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors ${
+              isComparing(product.id)
+                ? "border-brand bg-brand/10 text-brand"
+                : "border-border-color text-foreground/50 hover:border-brand/50"
+            }`}
+          >
+            {isComparing(product.id) ? "در حال مقایسه ✓" : "+ مقایسه"}
+          </button>
         </div>
       </Link>
     </motion.div>

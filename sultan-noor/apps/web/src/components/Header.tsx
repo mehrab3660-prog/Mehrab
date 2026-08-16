@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
+import { useCompare } from "@/context/CompareContext";
 import SearchBar from "./SearchBar";
 import MegaMenu from "./MegaMenu";
 import NotificationBell from "./NotificationBell";
@@ -44,6 +45,7 @@ export default function Header() {
   const { user } = useAuth();
   const { cart } = useCart();
   const { itemIds } = useWishlist();
+  const { ids: compareIds } = useCompare();
   const [megaOpen, setMegaOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -108,6 +110,11 @@ export default function Header() {
           <IconLink href="/wishlist" label="علاقه‌مندی‌ها" count={itemIds.size}>
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
               <path d="M12 20.5s-7.5-4.6-9.9-9.2C.5 7.9 2 4.5 5.4 3.7c2-.5 3.9.3 5 1.9a.7.7 0 0 0 1.2 0c1.1-1.6 3-2.4 5-1.9 3.4.8 4.9 4.2 3.3 7.6-2.4 4.6-9.9 9.2-9.9 9.2Z" />
+            </svg>
+          </IconLink>
+          <IconLink href="/compare" label="مقایسه محصولات" count={compareIds.length}>
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M8 3v18M16 3v18M4 8h4M16 8h4M4 16h4M16 16h4" strokeLinecap="round" />
             </svg>
           </IconLink>
           <IconLink href="/cart" label="سبد خرید" count={itemCount}>

@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import { WishlistProvider } from "@/context/WishlistContext";
+import { CompareProvider } from "@/context/CompareContext";
 import { AiAdvisorProvider } from "@/context/AiAdvisorContext";
 import { ToastProvider } from "@/context/ToastContext";
 import Header from "@/components/Header";
@@ -31,15 +32,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ToastProvider>
             <CartProvider>
               <WishlistProvider>
-                <AiAdvisorProvider>
-                  <Header />
-                  <MainContent>
-                    <PageTransition>{children}</PageTransition>
-                  </MainContent>
-                  <Footer />
-                  <AiAdvisorWidget />
-                  <MobileBottomNav />
-                </AiAdvisorProvider>
+                <CompareProvider>
+                  <AiAdvisorProvider>
+                    <Header />
+                    <MainContent>
+                      <PageTransition>{children}</PageTransition>
+                    </MainContent>
+                    <Footer />
+                    <AiAdvisorWidget />
+                    <MobileBottomNav />
+                  </AiAdvisorProvider>
+                </CompareProvider>
               </WishlistProvider>
             </CartProvider>
           </ToastProvider>
