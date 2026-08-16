@@ -63,9 +63,12 @@ export class OrdersService {
     const orderNumber = this.generateOrderNumber();
 
     const order = await this.prisma.$transaction(async (tx) => {
-      // Reserve stock for variant-tracked items (best-effort at first available warehouse).
+      // Reserve stock for every item (best-effort at first available warehouse).
+      // A missing variant here would silently skip the stock check entirely —
+      // CartService.addItem always resolves one, but this stays a hard error
+      // as defense in depth rather than a silent `continue`.
       for (const item of pricedItems) {
-        if (!item.productVariantId) continue;
+        if (!item.productVariantId) throw new BadRequestException(`گزینه‌ی محصول برای «${item.nameSnapshot}» نامشخص است`);
         const stock = await tx.stock.findFirst({
           where: { productVariantId: item.productVariantId, quantity: { gte: item.quantity } },
         });

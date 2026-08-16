@@ -480,6 +480,10 @@ model Payment {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Every payment lookup (initiate, verify, duplicate-callback checks) filters
+  // by these two together — was completely unindexed.
+  @@index([orderId, authority])
 }
 
 // ────────────────────────────── Reviews & Q&A ──────────────────────────────

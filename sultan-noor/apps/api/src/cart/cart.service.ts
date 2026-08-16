@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProductsService } from '../catalog/products/products.service';
 import { AddCartItemDto, UpdateCartItemDto } from './dto/cart.dto';
@@ -30,17 +30,28 @@ export class CartService {
 
   async addItem(userId: string, dto: AddCartItemDto) {
     const cart = await this.getOrCreateCart(userId);
+    // Stock reservation at checkout is keyed by variant — a cart item without
+    // one silently skips inventory checks entirely. Never trust the client to
+    // supply it: resolve it here so every line always tracks real stock.
+    const productVariantId = dto.productVariantId ?? (await this.resolveDefaultVariantId(dto.productId));
     await this.prisma.cartItem.upsert({
-      where: { cartId_productVariantId: { cartId: cart.id, productVariantId: dto.productVariantId ?? '' } },
+      where: { cartId_productVariantId: { cartId: cart.id, productVariantId } },
       create: {
         cartId: cart.id,
         productId: dto.productId,
-        productVariantId: dto.productVariantId,
+        productVariantId,
         quantity: dto.quantity,
       },
       update: { quantity: { increment: dto.quantity } },
     });
     return this.getCart(userId);
+  }
+
+  private async resolveDefaultVariantId(productId: string): Promise<string> {
+    const variants = await this.prisma.productVariant.findMany({ where: { productId }, select: { id: true }, take: 2 });
+    if (variants.length === 0) throw new BadRequestException('این محصول هیچ گزینه‌ی قابل خریدی ندارد');
+    if (variants.length > 1) throw new BadRequestException('لطفاً یک گزینه از محصول را انتخاب کنید');
+    return variants[0].id;
   }
 
   async updateItem(userId: string, itemId: string, dto: UpdateCartItemDto) {

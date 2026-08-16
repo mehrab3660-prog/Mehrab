@@ -15,7 +15,7 @@ export class PaymentsController {
   }
 
   @Post('verify')
-  verify(@Body() dto: VerifyPaymentDto) {
-    return this.paymentsService.verify(dto);
+  verify(@CurrentUser() user: AuthenticatedUser, @Body() dto: VerifyPaymentDto) {
+    return this.paymentsService.verify(user.id, dto);
   }
 }

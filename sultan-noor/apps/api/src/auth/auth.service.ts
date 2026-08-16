@@ -10,7 +10,6 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { randomInt } from 'crypto';
-import { OtpPurpose } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SmsProvider } from './sms.provider';
 import { ActivityLogService } from '../activity/activity-log.service';
@@ -41,8 +40,12 @@ export class AuthService {
   }
 
   async requestOtp(dto: RequestOtpDto) {
+    // Only an unconsumed code counts toward the cooldown — once a code has
+    // actually been used to log in, there's nothing left to protect against
+    // resending, and blocking a fresh request would lock the user out of a
+    // quick re-login for no reason.
     const recent = await this.prisma.otpCode.findFirst({
-      where: { phone: dto.phone, purpose: dto.purpose },
+      where: { phone: dto.phone, purpose: dto.purpose, consumedAt: null },
       orderBy: { createdAt: 'desc' },
     });
     if (recent) {

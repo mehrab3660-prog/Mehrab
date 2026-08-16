@@ -27,7 +27,7 @@ export class NotificationsGateway implements OnGatewayConnection {
 
     try {
       const payload = this.jwt.verify<{ sub: string }>(token, { secret: process.env.JWT_ACCESS_SECRET });
-      client.join(`user:${payload.sub}`);
+      void client.join(`user:${payload.sub}`);
     } catch (err) {
       this.logger.debug(`Rejected unauthenticated socket: ${(err as Error).message}`);
       client.disconnect(true);

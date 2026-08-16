@@ -59,12 +59,19 @@ export class PaymentsService {
     return { paymentUrl, authority };
   }
 
-  async verify(dto: VerifyPaymentDto) {
+  async verify(userId: string, dto: VerifyPaymentDto) {
     const payment = await this.prisma.payment.findFirst({
-      where: { orderId: dto.orderId, authority: dto.authority },
+      where: { orderId: dto.orderId, authority: dto.authority, order: { userId } },
       include: { order: true },
     });
     if (!payment) throw new NotFoundException('تراکنش یافت نشد');
+
+    // Idempotent: a duplicate callback (page reload, retried redirect) for an
+    // already-settled payment must not re-verify with the gateway, re-decrement
+    // anything, or re-notify the customer — just report the existing result.
+    if (payment.status === 'SUCCEEDED' || payment.status === 'FAILED') {
+      return { succeeded: payment.status === 'SUCCEEDED', refId: payment.refId ?? undefined, payment };
+    }
 
     const merchantId = await this.settings.resolve('zarinpalMerchantId');
     let succeeded: boolean;

@@ -34,7 +34,13 @@ export async function loginViaOtp(page: Page, phone: string, fullName = "کار�
 
   const otp = latestOtp(phone);
   await page.fill('input[placeholder="کد تایید"]', otp);
-  await page.fill('input[placeholder*="نام و نام خانوادگی"]', fullName);
+  // The name field only renders for a phone that isn't registered yet (see
+  // GET /auth/user-exists) — an existing account (e.g. the seeded super
+  // admin) skips straight to the code, so only fill it in if it's there.
+  const nameField = page.locator('input[placeholder*="نام و نام خانوادگی"]');
+  if (await nameField.isVisible().catch(() => false)) {
+    await nameField.fill(fullName);
+  }
   await page.click('button:has-text("تایید و ورود")');
   await page.waitForURL("/", { timeout: 8000 });
 }
