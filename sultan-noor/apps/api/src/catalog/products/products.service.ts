@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -23,11 +23,28 @@ function isStaff(requester: AuthenticatedUser | undefined): boolean {
 }
 
 @Injectable()
-export class ProductsService {
+export class ProductsService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(ProductsService.name);
+
   constructor(
     private prisma: PrismaService,
     private search: SearchService,
   ) {}
+
+  // Meilisearch only learns about a product on create/update — a catalog
+  // that predates the search index (or an index that was ever wiped) would
+  // otherwise stay permanently unsearchable. Re-syncing everything once per
+  // boot is cheap (indexProduct is a Meilisearch upsert) and self-heals that.
+  async onApplicationBootstrap() {
+    try {
+      const products = await this.prisma.product.findMany({
+        include: { brand: true, category: true, images: { take: 1, orderBy: { position: 'asc' } } },
+      });
+      await Promise.all(products.map((p) => this.search.indexProduct(this.toSearchDoc(p))));
+    } catch (err) {
+      this.logger.warn(`همگام‌سازی اولیه‌ی نمایه‌ی جستجو ناموفق بود: ${(err as Error).message}`);
+    }
+  }
 
   async list(query: ListProductsQueryDto, requester?: AuthenticatedUser) {
     const staff = isStaff(requester);
@@ -284,7 +301,21 @@ export class ProductsService {
       include: { brand: true, category: true, images: { take: 1, orderBy: { position: 'asc' } } },
     });
     if (!product) return;
-    await this.search.indexProduct({
+    await this.search.indexProduct(this.toSearchDoc(product));
+  }
+
+  private toSearchDoc(product: {
+    id: string;
+    name: string;
+    slug: string;
+    description: string | null;
+    basePrice: Prisma.Decimal;
+    status: string;
+    brand: { name: string } | null;
+    category: { name: string } | null;
+    images: { url: string }[];
+  }) {
+    return {
       id: product.id,
       name: product.name,
       slug: product.slug,
@@ -294,7 +325,7 @@ export class ProductsService {
       basePrice: Number(product.basePrice),
       status: product.status,
       imageUrl: product.images[0]?.url ?? null,
-    });
+    };
   }
 
   // Resolves the unit price for a product given the buyer's customer group and

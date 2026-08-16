@@ -28,6 +28,8 @@ set -a; source .env; set +a
 [[ "$POSTGRES_PASSWORD" != "change-me-to-a-long-random-password" ]] || die "POSTGRES_PASSWORD is still the placeholder — edit .env first."
 [[ "$JWT_ACCESS_SECRET" != "change-me-access-secret" ]] || die "JWT_ACCESS_SECRET is still the placeholder — edit .env first."
 [[ "$JWT_REFRESH_SECRET" != "change-me-refresh-secret" ]] || die "JWT_REFRESH_SECRET is still the placeholder — edit .env first."
+: "${MEILISEARCH_API_KEY:?Set MEILISEARCH_API_KEY in .env}"
+[[ "$MEILISEARCH_API_KEY" != "change-me-meilisearch-key" ]] || die "MEILISEARCH_API_KEY is still the placeholder — edit .env first."
 
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-}"
 [[ -n "$LETSENCRYPT_EMAIL" ]] || die "Set LETSENCRYPT_EMAIL=you@example.com before running (needed for certificate expiry notices)."

@@ -33,6 +33,20 @@ services:
     volumes:
       - redis_data:/data
 
+  meilisearch:
+    image: getmeili/meilisearch:v1.10
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: ${MEILISEARCH_API_KEY}
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - meilisearch_data:/meili_data
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7700/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   api:
     build:
       context: .
@@ -42,12 +56,15 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379
+      MEILISEARCH_HOST: http://meilisearch:7700
       PORT: 4000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
+      meilisearch:
+        condition: service_healthy
     volumes:
       - api_storage:/app/storage
     ports:
@@ -69,4 +86,5 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  meilisearch_data:
   api_storage:
