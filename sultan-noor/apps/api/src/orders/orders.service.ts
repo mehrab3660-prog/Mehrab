@@ -119,7 +119,17 @@ export class OrdersService {
 
   async listAll(skip = 0, take = 20) {
     const [items, total] = await Promise.all([
-      this.prisma.order.findMany({ skip, take, orderBy: { createdAt: 'desc' }, include: { user: true, items: true } }),
+      this.prisma.order.findMany({
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          // Never the raw user row (passwordHash, nationalId) — only what
+          // the admin order list actually displays.
+          user: { select: { id: true, fullName: true, phone: true } },
+          items: true,
+        },
+      }),
       this.prisma.order.count(),
     ]);
     return { items, total };

@@ -5,7 +5,7 @@ import * as path from 'path';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
-type OrderWithInvoiceRelations = Prisma.OrderGetPayload<{ include: { items: true; user: true; address: true } }>;
+type OrderWithInvoiceRelations = Prisma.OrderGetPayload<{ include: { items: true; address: true } }>;
 
 const INVOICE_DIR = process.env.INVOICE_STORAGE_DIR ?? path.join(process.cwd(), 'storage', 'invoices');
 
@@ -20,7 +20,7 @@ export class InvoiceService {
   async generateForOrder(orderId: string): Promise<{ invoiceNumber: string; pdfUrl: string }> {
     const order = await this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
-      include: { items: true, user: true, address: true },
+      include: { items: true, address: true },
     });
 
     const invoiceNumber = `INV-${order.orderNumber}`;

@@ -28,7 +28,16 @@ export class ReviewsService {
   }
 
   listPending() {
-    return this.prisma.review.findMany({ where: { isApproved: false }, include: { product: true, user: true }, orderBy: { createdAt: 'asc' } });
+    return this.prisma.review.findMany({
+      where: { isApproved: false },
+      include: {
+        product: true,
+        // Never the raw user row (passwordHash, nationalId) — only what the
+        // moderation queue actually displays.
+        user: { select: { fullName: true, phone: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
   }
 
   async approve(id: string) {
