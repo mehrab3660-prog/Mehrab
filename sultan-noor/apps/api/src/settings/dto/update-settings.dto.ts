@@ -10,6 +10,10 @@ export class UpdateSettingsDto {
 
   @IsOptional()
   @IsString()
+  idpayApiKey?: string;
+
+  @IsOptional()
+  @IsString()
   smsApiKey?: string;
 
   @IsOptional()

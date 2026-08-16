@@ -41,7 +41,7 @@ export default function CheckoutPage() {
   });
   const [discountCode, setDiscountCode] = useState("");
   const [suggestedCode, setSuggestedCode] = useState<{ code: string; amount: number } | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<"ZARINPAL" | "CASH_ON_DELIVERY">("ZARINPAL");
+  const [paymentMethod, setPaymentMethod] = useState<"ZARINPAL" | "IDPAY" | "CASH_ON_DELIVERY">("ZARINPAL");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -228,6 +228,15 @@ export default function CheckoutPage() {
                   onChange={() => setPaymentMethod("ZARINPAL")}
                 />
                 پرداخت آنلاین (زرین‌پال)
+              </label>
+              <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border-color px-3 py-2.5 text-sm has-[:checked]:border-brand has-[:checked]:bg-brand/10">
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  checked={paymentMethod === "IDPAY"}
+                  onChange={() => setPaymentMethod("IDPAY")}
+                />
+                پرداخت آنلاین (آی‌دی‌پی)
               </label>
               <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border-color px-3 py-2.5 text-sm has-[:checked]:border-brand has-[:checked]:bg-brand/10">
                 <input

@@ -5,8 +5,8 @@ export class InitiatePaymentDto {
   orderId: string;
 
   @IsOptional()
-  @IsIn(['ZARINPAL', 'CASH_ON_DELIVERY'])
-  gateway?: 'ZARINPAL' | 'CASH_ON_DELIVERY';
+  @IsIn(['ZARINPAL', 'IDPAY', 'CASH_ON_DELIVERY'])
+  gateway?: 'ZARINPAL' | 'IDPAY' | 'CASH_ON_DELIVERY';
 }
 
 export class VerifyPaymentDto {

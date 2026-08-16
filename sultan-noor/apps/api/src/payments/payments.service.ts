@@ -7,6 +7,7 @@ import { SettingsService } from '../settings/settings.service';
 import { InitiatePaymentDto, VerifyPaymentDto } from './dto/payment.dto';
 
 const ZARINPAL_BASE = 'https://api.zarinpal.com/pg/v4/payment';
+const IDPAY_BASE = 'https://api.idpay.ir/v1.1/payment';
 
 @Injectable()
 export class PaymentsService {
@@ -25,6 +26,9 @@ export class PaymentsService {
 
     if (dto.gateway === 'CASH_ON_DELIVERY') {
       return this.initiateCashOnDelivery(order);
+    }
+    if (dto.gateway === 'IDPAY') {
+      return this.initiateIdpay(order);
     }
 
     const merchantId = await this.settings.resolve('zarinpalMerchantId');
@@ -88,6 +92,45 @@ export class PaymentsService {
     return { paymentUrl: null, codConfirmed: true, paymentId: payment.id };
   }
 
+  private async initiateIdpay(order: Order) {
+    const apiKey = await this.settings.resolve('idpayApiKey');
+    const siteUrl = (await this.settings.resolve('siteUrl'))?.split(',')[0] ?? 'http://localhost:3000';
+    const callbackUrl = `${siteUrl}/checkout/callback?orderId=${order.id}`;
+
+    let authority: string;
+    let paymentUrl: string;
+
+    if (!apiKey) {
+      // No API key configured — same dev/testing sandbox convention as the
+      // Zarinpal branch: a fake transaction id that resolves the callback
+      // straight through without ever calling the real IDPay API.
+      authority = `SANDBOX-IDPAY-${randomUUID()}`;
+      paymentUrl = `${callbackUrl}&id=${authority}`;
+      this.logger.warn(`[SANDBOX PAYMENT] order=${order.orderNumber} authority=${authority}`);
+    } else {
+      const res = await fetch(`${IDPAY_BASE}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-KEY': apiKey },
+        body: JSON.stringify({
+          order_id: order.id,
+          amount: Number(order.grandTotal) * 10, // تومان به ریال
+          callback: callbackUrl,
+          desc: `پرداخت سفارش ${order.orderNumber}`,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.id) throw new BadRequestException('خطا در ایجاد تراکنش پرداخت');
+      authority = data.id;
+      paymentUrl = data.link;
+    }
+
+    await this.prisma.payment.create({
+      data: { orderId: order.id, gateway: 'IDPAY', status: 'INITIATED', amount: order.grandTotal, authority },
+    });
+
+    return { paymentUrl, authority };
+  }
+
   async verify(userId: string, dto: VerifyPaymentDto) {
     const payment = await this.prisma.payment.findFirst({
       where: { orderId: dto.orderId, authority: dto.authority, order: { userId } },
@@ -102,27 +145,8 @@ export class PaymentsService {
       return { succeeded: payment.status === 'SUCCEEDED', refId: payment.refId ?? undefined, payment };
     }
 
-    const merchantId = await this.settings.resolve('zarinpalMerchantId');
-    let succeeded: boolean;
-    let refId: string | undefined;
-
-    if (!merchantId) {
-      succeeded = true;
-      refId = `SANDBOX-REF-${Date.now()}`;
-    } else {
-      const res = await fetch(`${ZARINPAL_BASE}/verify.json`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          merchant_id: merchantId,
-          amount: Number(payment.amount) * 10,
-          authority: dto.authority,
-        }),
-      });
-      const data = await res.json();
-      succeeded = data.data?.code === 100 || data.data?.code === 101;
-      refId = data.data?.ref_id ? String(data.data.ref_id) : undefined;
-    }
+    const { succeeded, refId } =
+      payment.gateway === 'IDPAY' ? await this.verifyIdpay(payment) : await this.verifyZarinpal(payment, dto.authority);
 
     const updated = await this.prisma.payment.update({
       where: { id: payment.id },
@@ -138,5 +162,44 @@ export class PaymentsService {
     }
 
     return { succeeded, refId, payment: updated };
+  }
+
+  private async verifyZarinpal(payment: { amount: unknown }, authority: string): Promise<{ succeeded: boolean; refId?: string }> {
+    const merchantId = await this.settings.resolve('zarinpalMerchantId');
+    if (!merchantId) {
+      return { succeeded: true, refId: `SANDBOX-REF-${Date.now()}` };
+    }
+
+    const res = await fetch(`${ZARINPAL_BASE}/verify.json`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        merchant_id: merchantId,
+        amount: Number(payment.amount) * 10,
+        authority,
+      }),
+    });
+    const data = await res.json();
+    const succeeded = data.data?.code === 100 || data.data?.code === 101;
+    const refId = data.data?.ref_id ? String(data.data.ref_id) : undefined;
+    return { succeeded, refId };
+  }
+
+  private async verifyIdpay(payment: { orderId: string; authority: string | null }): Promise<{ succeeded: boolean; refId?: string }> {
+    const apiKey = await this.settings.resolve('idpayApiKey');
+    if (!apiKey) {
+      return { succeeded: true, refId: `SANDBOX-REF-${Date.now()}` };
+    }
+
+    const res = await fetch(`${IDPAY_BASE}/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-KEY': apiKey },
+      body: JSON.stringify({ id: payment.authority, order_id: payment.orderId }),
+    });
+    const data = await res.json();
+    // 100 = verified successfully, 101 = already verified before.
+    const succeeded = data.status === 100 || data.status === 101;
+    const refId = data.track_id ? String(data.track_id) : undefined;
+    return { succeeded, refId };
   }
 }

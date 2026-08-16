@@ -715,6 +715,7 @@ model AiMessage {
 model AppSettings {
   id                   Int      @id @default(1)
   zarinpalMerchantId   String?
+  idpayApiKey          String?
   smsApiKey            String?
   kavenegarOtpTemplate String?
   melipayamakApiKey    String?

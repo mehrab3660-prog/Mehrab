@@ -4,6 +4,7 @@ import { UpdateSettingsDto } from './dto/update-settings.dto';
 
 type SettingKey =
   | 'zarinpalMerchantId'
+  | 'idpayApiKey'
   | 'smsApiKey'
   | 'kavenegarOtpTemplate'
   | 'melipayamakApiKey'
@@ -17,6 +18,7 @@ type SettingKey =
 // existing .env-based deployments keep working unchanged.
 const ENV_FALLBACK: Record<SettingKey, string> = {
   zarinpalMerchantId: 'ZARINPAL_MERCHANT_ID',
+  idpayApiKey: 'IDPAY_API_KEY',
   smsApiKey: 'SMS_API_KEY',
   kavenegarOtpTemplate: 'KAVENEGAR_OTP_TEMPLATE',
   melipayamakApiKey: 'MELIPAYAMAK_API_KEY',
@@ -27,7 +29,7 @@ const ENV_FALLBACK: Record<SettingKey, string> = {
   siteUrl: 'WEB_ORIGIN',
 };
 
-const SECRET_KEYS: SettingKey[] = ['zarinpalMerchantId', 'smsApiKey', 'melipayamakApiKey', 'anthropicApiKey', 'openaiApiKey'];
+const SECRET_KEYS: SettingKey[] = ['zarinpalMerchantId', 'idpayApiKey', 'smsApiKey', 'melipayamakApiKey', 'anthropicApiKey', 'openaiApiKey'];
 
 function mask(value: string): string {
   return value.length <= 4 ? '••••' : `••••${value.slice(-4)}`;

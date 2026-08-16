@@ -13,6 +13,7 @@ interface SettingStatus {
 
 type SettingsResponse = Record<
   | "zarinpalMerchantId"
+  | "idpayApiKey"
   | "smsApiKey"
   | "kavenegarOtpTemplate"
   | "melipayamakApiKey"
@@ -158,6 +159,17 @@ export default function AdminSettingsPage() {
             label="Merchant ID"
             helpText="تا وقتی این مقدار تنظیم نشده، پرداخت‌ها در حالت sandbox (شبیه‌سازی‌شده) انجام می‌شوند."
             status={settings.zarinpalMerchantId}
+            onSave={handleSave}
+          />
+        </section>
+
+        <section>
+          <h2 className="mb-3 text-lg font-bold">درگاه پرداخت آی‌دی‌پی</h2>
+          <SettingField
+            fieldKey="idpayApiKey"
+            label="API Key"
+            helpText="تا وقتی این مقدار تنظیم نشده، پرداخت‌ها در حالت sandbox (شبیه‌سازی‌شده) انجام می‌شوند."
+            status={settings.idpayApiKey}
             onSave={handleSave}
           />
         </section>

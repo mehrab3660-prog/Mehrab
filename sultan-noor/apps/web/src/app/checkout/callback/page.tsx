@@ -16,7 +16,10 @@ function CheckoutCallbackContent() {
     if (authLoading) return;
 
     const orderId = searchParams.get("orderId");
-    const authority = searchParams.get("Authority");
+    // Zarinpal's callback carries `Authority`; IDPay's carries `id` — either
+    // one is the gateway transaction reference our backend stores as
+    // Payment.authority, so either satisfies verification.
+    const authority = searchParams.get("Authority") ?? searchParams.get("id");
     if (!orderId || !authority) {
       setStatus("failed");
       setMessage("اطلاعات پرداخت ناقص است.");
