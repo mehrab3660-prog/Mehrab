@@ -210,6 +210,15 @@ export class OrdersService {
       await this.invoiceService.generateForOrder(id).catch(() => undefined);
     }
 
+    if (dto.status === 'DELIVERED') {
+      // Cash-on-delivery money only actually changes hands at the door —
+      // reaching DELIVERED is what "collected" means for that payment.
+      await this.prisma.payment.updateMany({
+        where: { orderId: id, gateway: 'CASH_ON_DELIVERY', status: 'INITIATED' },
+        data: { status: 'SUCCEEDED' },
+      });
+    }
+
     return updated;
   }
 

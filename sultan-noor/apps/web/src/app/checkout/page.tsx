@@ -41,6 +41,7 @@ export default function CheckoutPage() {
   });
   const [discountCode, setDiscountCode] = useState("");
   const [suggestedCode, setSuggestedCode] = useState<{ code: string; amount: number } | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<"ZARINPAL" | "CASH_ON_DELIVERY">("ZARINPAL");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -87,9 +88,18 @@ export default function CheckoutPage() {
         { addressId: finalAddressId, discountCode: discountCode || undefined },
         accessToken,
       );
-      const payment = await api.post<{ paymentUrl: string }>("/payments/initiate", { orderId: order.id }, accessToken);
+      const payment = await api.post<{ paymentUrl: string | null }>(
+        "/payments/initiate",
+        { orderId: order.id, gateway: paymentMethod },
+        accessToken,
+      );
       await refresh();
-      window.location.href = payment.paymentUrl;
+      if (payment.paymentUrl) {
+        window.location.href = payment.paymentUrl;
+      } else {
+        toast("سفارش با پرداخت در محل ثبت شد.", "success");
+        router.push(`/orders/${order.id}`);
+      }
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "خطا در ثبت سفارش";
       setError(msg);
@@ -207,6 +217,30 @@ export default function CheckoutPage() {
             />
           </section>
 
+          <section className="rounded-2xl surface-card p-4 sm:p-5">
+            <h2 className="mb-3 font-bold">روش پرداخت</h2>
+            <div className="space-y-2">
+              <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border-color px-3 py-2.5 text-sm has-[:checked]:border-brand has-[:checked]:bg-brand/10">
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  checked={paymentMethod === "ZARINPAL"}
+                  onChange={() => setPaymentMethod("ZARINPAL")}
+                />
+                پرداخت آنلاین (زرین‌پال)
+              </label>
+              <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border-color px-3 py-2.5 text-sm has-[:checked]:border-brand has-[:checked]:bg-brand/10">
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  checked={paymentMethod === "CASH_ON_DELIVERY"}
+                  onChange={() => setPaymentMethod("CASH_ON_DELIVERY")}
+                />
+                پرداخت در محل (نقدی)
+              </label>
+            </div>
+          </section>
+
           {/* order summary inline on mobile, hidden here on desktop where the sticky column handles it */}
           <div className="lg:hidden">{orderSummary}</div>
 
@@ -220,7 +254,13 @@ export default function CheckoutPage() {
               disabled={loading}
               className="w-full rounded-xl bg-brand py-3.5 font-bold text-[#0b0e14] shadow-lg shadow-brand/20 transition-shadow hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? "در حال انتقال به درگاه پرداخت..." : "پرداخت و ثبت سفارش"}
+              {loading
+                ? paymentMethod === "CASH_ON_DELIVERY"
+                  ? "در حال ثبت سفارش..."
+                  : "در حال انتقال به درگاه پرداخت..."
+                : paymentMethod === "CASH_ON_DELIVERY"
+                  ? "ثبت سفارش با پرداخت در محل"
+                  : "پرداخت و ثبت سفارش"}
             </button>
           </div>
         </form>

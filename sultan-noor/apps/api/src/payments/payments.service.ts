@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Order } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -21,6 +22,10 @@ export class PaymentsService {
     const order = await this.prisma.order.findFirst({ where: { id: dto.orderId, userId } });
     if (!order) throw new NotFoundException('سفارش یافت نشد');
     if (order.status !== 'PENDING_PAYMENT') throw new BadRequestException('این سفارش قابل پرداخت نیست');
+
+    if (dto.gateway === 'CASH_ON_DELIVERY') {
+      return this.initiateCashOnDelivery(order);
+    }
 
     const merchantId = await this.settings.resolve('zarinpalMerchantId');
     const siteUrl = (await this.settings.resolve('siteUrl'))?.split(',')[0] ?? 'http://localhost:3000';
@@ -57,6 +62,30 @@ export class PaymentsService {
     });
 
     return { paymentUrl, authority };
+  }
+
+  // No external gateway involved — the customer pays the courier when the
+  // order arrives, so there's nothing to redirect to or later verify. The
+  // order moves straight to PROCESSING; the Payment stays INITIATED (money
+  // hasn't actually changed hands yet) until an admin marks it collected.
+  private async initiateCashOnDelivery(order: Order) {
+    const payment = await this.prisma.payment.create({
+      data: { orderId: order.id, gateway: 'CASH_ON_DELIVERY', status: 'INITIATED', amount: order.grandTotal },
+    });
+
+    await this.prisma.order.update({
+      where: { id: order.id },
+      data: { status: 'PROCESSING', statusHistory: { create: { status: 'PROCESSING', note: 'سفارش با پرداخت در محل ثبت شد' } } },
+    });
+
+    await this.notifications.notify(
+      order.userId,
+      'ORDER_UPDATE',
+      'سفارش ثبت شد',
+      `سفارش ${order.orderNumber} با پرداخت در محل ثبت شد و در حال آماده‌سازی است.`,
+    );
+
+    return { paymentUrl: null, codConfirmed: true, paymentId: payment.id };
   }
 
   async verify(userId: string, dto: VerifyPaymentDto) {
