@@ -67,6 +67,9 @@ importers:
       pdfkit:
         specifier: ^0.15.1
         version: 0.15.2
+      prisma:
+        specifier: ^5.22.0
+        version: 5.22.0
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -107,9 +110,6 @@ importers:
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@22.20.1)(ts-node@10.9.2(@types/node@22.20.1)(typescript@5.9.3))
-      prisma:
-        specifier: ^5.22.0
-        version: 5.22.0
       ts-jest:
         specifier: ^29.4.12
         version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(babel-jest@30.4.1(@babel/core@7.29.7))(jest-util@30.4.1)(jest@30.4.2(@types/node@22.20.1)(ts-node@10.9.2(@types/node@22.20.1)(typescript@5.9.3)))(typescript@5.9.3)

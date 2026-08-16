@@ -1,0 +1,72 @@
+# Production stack: postgres + redis + api + web.
+#
+# Usage (from the repo root, on the VPS):
+#   cp .env.production.example .env
+#   nano .env                          # fill in real secrets/domain
+#   docker compose -f docker-compose.prod.yml build
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# api/web are bound to 127.0.0.1 only — a host-level Nginx (see deploy/nginx.conf)
+# terminates TLS and reverse-proxies the public domain to them. postgres/redis
+# are not published to the host at all; only api/web reach them, over the
+# internal Docker network.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379
+      PORT: 4000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - api_storage:/app/storage
+    ports:
+      - "127.0.0.1:4000:4000"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  postgres_data:
+  redis_data:
+  api_storage:

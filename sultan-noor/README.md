@@ -80,6 +80,33 @@ pnpm dev                      # http://localhost:3000
 
 > در محیط توسعه، کد OTP به‌جای پیامک واقعی در لاگ سرور NestJS چاپ می‌شود.
 
+## دیپلوی روی سرور واقعی (Production)
+
+بسته‌ی کامل Docker برای دیپلوی روی یک VPS در `docker-compose.prod.yml`، `apps/api/Dockerfile`،
+`apps/web/Dockerfile` و `deploy/` آماده است:
+
+```bash
+git clone <repo-url> sultan-noor && cd sultan-noor
+cp .env.production.example .env && nano .env      # دامنه، رمز دیتابیس، JWT secrets را پر کنید
+sudo LETSENCRYPT_EMAIL=you@example.com ./deploy/deploy.sh
+```
+
+اسکریپت Docker، Nginx و certbot را نصب می‌کند، در صورت نبود swap (برای VPSهای کم‌رم) یک فایل ۲
+گیگابایتی می‌سازد، گواهی SSL واقعی از Let's Encrypt می‌گیرد، ایمیج‌ها را می‌سازد، مایگریشن‌های
+دیتابیس را اجرا می‌کند و در نهایت API و وب را بالا می‌آورد. قبل از اجرا لازم است رکورد DNS دامنه به
+IP سرور اشاره کند و پورت‌های ۸۰/۴۴۳ آزاد باشند (مثلاً اگر sshd روی ۴۴۳ ست شده، آن را برگردانید).
+
+پس از بالا آمدن سایت، برای ساخت اولین حساب SUPER_ADMIN: از طریق سایت با شماره خودتان ثبت‌نام کنید،
+سپس نقش آن کاربر را مستقیم در دیتابیس ارتقا دهید (بسته دمو/seed در Production اجرا نمی‌شود):
+
+```bash
+docker compose -f docker-compose.prod.yml exec postgres \
+  psql -U sultan_noor -d sultan_noor -c "UPDATE \"User\" SET role='SUPER_ADMIN' WHERE phone='0912...';"
+```
+
+کلیدهای API (زرین‌پال، کاوه‌نگار، Anthropic، OpenAI) را می‌توانید بعداً مستقیم از داشبورد
+(`/admin/settings`) وارد کنید — نیازی به SSH یا ویرایش `.env` روی سرور نیست.
+
 ## تست end-to-end انجام‌شده
 
 جریان کامل زیر با درخواست‌های واقعی HTTP روی این کد تست شده است:
