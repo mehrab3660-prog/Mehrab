@@ -89,7 +89,7 @@ export interface Order {
 
 export interface LoyaltyTransaction {
   id: string;
-  type: "EARNED" | "REDEEMED" | "ADJUSTED";
+  type: "EARNED" | "REDEEMED" | "ADJUSTED" | "REFERRAL_BONUS";
   points: number;
   balanceAfter: number;
   note?: string | null;
@@ -107,6 +107,18 @@ export interface LoyaltySummary {
   referralBonusPoints: number;
   referralCount: number;
   referralRewardedCount: number;
+}
+
+export interface WholesaleLead {
+  id: string;
+  companyName: string;
+  contactName: string;
+  phone: string;
+  email?: string | null;
+  message: string;
+  status: "NEW" | "CONTACTED" | "CONVERTED" | "CLOSED";
+  adminNote?: string | null;
+  createdAt: string;
 }
 
 export interface ReturnRequest {

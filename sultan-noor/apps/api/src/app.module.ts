@@ -39,6 +39,7 @@ import { SettingsModule } from './settings/settings.module';
 import { StockSubscriptionsModule } from './stock-subscriptions/stock-subscriptions.module';
 import { ReturnsModule } from './returns/returns.module';
 import { LoyaltyModule } from './loyalty/loyalty.module';
+import { WholesaleLeadsModule } from './wholesale-leads/wholesale-leads.module';
 
 @Module({
   imports: [
@@ -80,6 +81,7 @@ import { LoyaltyModule } from './loyalty/loyalty.module';
     StockSubscriptionsModule,
     ReturnsModule,
     LoyaltyModule,
+    WholesaleLeadsModule,
   ],
   controllers: [AppController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

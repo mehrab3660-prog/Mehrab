@@ -698,6 +698,35 @@ model Answer {
   createdAt DateTime @default(now())
 }
 
+// ─────────────────────────────── Wholesale leads ────────────────────────────
+
+enum WholesaleLeadStatus {
+  NEW
+  CONTACTED
+  CONVERTED
+  CLOSED
+}
+
+// Public B2B "contact us" submissions from prospective wholesale buyers who
+// aren't customers yet — no User relation on purpose. Staff follow up and,
+// once converted, the existing WHOLESALE CustomerType/pricing-tier flow
+// takes over; this model only tracks the lead itself.
+model WholesaleLead {
+  id          String              @id @default(cuid())
+  companyName String
+  contactName String
+  phone       String
+  email       String?
+  message     String
+  status      WholesaleLeadStatus @default(NEW)
+  adminNote   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
 // ────────────────────────────── Notifications ──────────────────────────────
 
 enum NotificationType {
