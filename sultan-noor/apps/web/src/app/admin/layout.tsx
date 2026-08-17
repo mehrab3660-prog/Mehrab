@@ -8,6 +8,7 @@ const STAFF_ROLES = ["SUPER_ADMIN", "ADMIN", "STAFF", "WAREHOUSE_MANAGER"];
 
 const NAV = [
   { href: "/admin", label: "داشبورد" },
+  { href: "/admin/analytics", label: "گزارش پیشرفته فروش" },
   { href: "/admin/products", label: "محصولات" },
   { href: "/admin/orders", label: "سفارش‌ها" },
   { href: "/admin/returns", label: "مرجوعی‌ها" },

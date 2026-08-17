@@ -20,4 +20,9 @@ export class DashboardController {
   salesByDay(@Query('days') days?: string) {
     return this.dashboardService.salesByDay(days ? Number(days) : undefined);
   }
+
+  @Get('report')
+  report(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.dashboardService.report(from, to);
+  }
 }
