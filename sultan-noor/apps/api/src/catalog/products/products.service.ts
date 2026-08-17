@@ -10,6 +10,19 @@ import { CreateProductDto, ListProductsQueryDto, UpdateProductDto } from './dto/
 
 const IMAGE_DIR = process.env.PRODUCT_IMAGE_STORAGE_DIR ?? path.join(process.cwd(), 'storage', 'products');
 
+// Unicode-aware: keeps Persian letters/digits as-is (only replacing
+// whitespace/punctuation), so a Persian category or brand name imported
+// from a spreadsheet gets a readable, stable slug instead of an empty
+// string (which a Latin-only slugify would produce).
+function slugify(value: string): string {
+  const base = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '');
+  return base || `item-${Date.now()}`;
+}
+
 const productInclude = {
   brand: true,
   category: true,
@@ -303,28 +316,34 @@ export class ProductsService implements OnApplicationBootstrap {
       const name = get('name');
       const slug = get('slug');
       const sku = get('sku');
+      if (!name || !slug || !sku) {
+        errors.push({ row: rowNumber, message: 'ستون‌های name، slug و sku الزامی هستند' });
+        continue;
+      }
+      // A row with no real price yet (e.g. an accounting-system export that
+      // never had a sale price) is saved as a hidden draft with a 0 price
+      // instead of being rejected or accidentally published for sale at a
+      // fabricated price — staff can price and publish it later from the
+      // product edit form.
       const basePriceRaw = get('basePrice');
-      if (!name || !slug || !sku || !basePriceRaw) {
-        errors.push({ row: rowNumber, message: 'ستون‌های name، slug، sku و basePrice الزامی هستند' });
-        continue;
-      }
-      const basePrice = Number(basePriceRaw);
-      if (!Number.isFinite(basePrice) || basePrice <= 0) {
-        errors.push({ row: rowNumber, message: 'basePrice باید عددی مثبت باشد' });
-        continue;
-      }
+      const parsedBasePrice = Number(basePriceRaw);
+      const hasRealPrice = basePriceRaw !== '' && Number.isFinite(parsedBasePrice) && parsedBasePrice > 0;
+      const basePrice = hasRealPrice ? parsedBasePrice : 0;
+      const status: 'PUBLISHED' | 'DRAFT' = hasRealPrice ? 'PUBLISHED' : 'DRAFT';
 
       const brandName = get('brand');
-      const brandId = brandName ? brandByName.get(brandName.toLowerCase()) : undefined;
+      let brandId = brandName ? brandByName.get(brandName.toLowerCase()) : undefined;
       if (brandName && !brandId) {
-        errors.push({ row: rowNumber, message: `برند «${brandName}» یافت نشد` });
-        continue;
+        const brand = await this.prisma.brand.create({ data: { name: brandName, slug: slugify(brandName) } });
+        brandId = brand.id;
+        brandByName.set(brandName.toLowerCase(), brandId);
       }
       const categoryName = get('category');
-      const categoryId = categoryName ? categoryByName.get(categoryName.toLowerCase()) : undefined;
+      let categoryId = categoryName ? categoryByName.get(categoryName.toLowerCase()) : undefined;
       if (categoryName && !categoryId) {
-        errors.push({ row: rowNumber, message: `دسته‌بندی «${categoryName}» یافت نشد` });
-        continue;
+        const category = await this.prisma.category.create({ data: { name: categoryName, slug: slugify(categoryName) } });
+        categoryId = category.id;
+        categoryByName.set(categoryName.toLowerCase(), categoryId);
       }
 
       const compareAtPriceRaw = get('compareAtPrice');
@@ -337,10 +356,7 @@ export class ProductsService implements OnApplicationBootstrap {
           name,
           slug,
           description: get('description') || undefined,
-          // Matches the manual "add product" form's default — an imported
-          // row should actually go live and be orderable, not sit hidden
-          // as a draft the staff member has to remember to publish.
-          status: 'PUBLISHED',
+          status,
           brandId,
           categoryId,
           basePrice,

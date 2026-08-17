@@ -32,8 +32,8 @@ describe('ProductsService', () => {
       product: { findFirst: jest.fn(), findMany: jest.fn(), count: jest.fn(), create: jest.fn(), findUnique: jest.fn().mockResolvedValue(null) },
       review: { groupBy: jest.fn().mockResolvedValue([]) },
       stock: { findMany: jest.fn().mockResolvedValue([]), upsert: jest.fn().mockResolvedValue({}) },
-      brand: { findMany: jest.fn().mockResolvedValue([]) },
-      category: { findMany: jest.fn().mockResolvedValue([]) },
+      brand: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn() },
+      category: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn() },
       warehouse: { findUnique: jest.fn() },
     };
     search = { indexProduct: jest.fn().mockResolvedValue(undefined) };
@@ -133,7 +133,7 @@ describe('ProductsService', () => {
       );
       const file = buildXlsxFile([
         { name: 'لامپ ۱', slug: 'lamp-1', sku: 'SKU-1', basePrice: 10000 },
-        { name: 'لامپ بدون قیمت', slug: 'lamp-2', sku: 'SKU-2', basePrice: '' },
+        { name: '', slug: 'lamp-2', sku: 'SKU-2', basePrice: 10000 },
       ]);
 
       const result = await service.bulkImport(file);
@@ -141,6 +141,18 @@ describe('ProductsService', () => {
       expect(result.created).toBe(1);
       expect(result.failed).toBe(1);
       expect(result.errors[0]).toMatchObject({ row: 3, message: expect.stringContaining('الزامی') });
+    });
+
+    it('creates a row with no basePrice as a hidden draft at price 0 instead of rejecting it', async () => {
+      prisma.product.create.mockResolvedValue({ id: 'p1', variants: [{ id: 'v1' }] });
+      const file = buildXlsxFile([{ name: 'کالای بدون قیمت', slug: 'no-price', sku: 'SKU-NP', basePrice: '' }]);
+
+      const result = await service.bulkImport(file);
+
+      expect(result).toEqual({ totalRows: 1, created: 1, failed: 0, errors: [] });
+      expect(prisma.product.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'DRAFT', basePrice: 0 }) }),
+      );
     });
 
     it('resolves brand and category names case-insensitively', async () => {
@@ -158,17 +170,37 @@ describe('ProductsService', () => {
       );
     });
 
-    it('reports an unknown brand name as a row error', async () => {
+    it('auto-creates a brand and category named in the file that do not exist yet', async () => {
       prisma.brand.findMany.mockResolvedValue([{ id: 'b1', name: 'برند الف' }]);
+      prisma.brand.create.mockResolvedValue({ id: 'b2', name: 'برند جدید' });
+      prisma.category.findMany.mockResolvedValue([]);
+      prisma.category.create.mockResolvedValue({ id: 'c2', name: 'دسته جدید' });
+      prisma.product.create.mockResolvedValue({ id: 'p1', variants: [{ id: 'v1' }] });
       const file = buildXlsxFile([
-        { name: 'لامپ', slug: 'lamp-1', sku: 'SKU-1', basePrice: 10000, brand: 'برند ناشناخته' },
+        { name: 'لامپ', slug: 'lamp-1', sku: 'SKU-1', basePrice: 10000, brand: 'برند جدید', category: 'دسته جدید' },
       ]);
 
       const result = await service.bulkImport(file);
 
-      expect(result.created).toBe(0);
-      expect(result.errors[0].message).toContain('برند ناشناخته');
-      expect(prisma.product.create).not.toHaveBeenCalled();
+      expect(result).toEqual({ totalRows: 1, created: 1, failed: 0, errors: [] });
+      expect(prisma.brand.create).toHaveBeenCalledWith({ data: { name: 'برند جدید', slug: expect.any(String) } });
+      expect(prisma.category.create).toHaveBeenCalledWith({ data: { name: 'دسته جدید', slug: expect.any(String) } });
+      expect(prisma.product.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ brandId: 'b2', categoryId: 'c2' }) }),
+      );
+    });
+
+    it('reuses an auto-created brand across multiple rows instead of creating it twice', async () => {
+      prisma.brand.create.mockResolvedValue({ id: 'b-new', name: 'برند جدید' });
+      prisma.product.create.mockResolvedValue({ id: 'p1', variants: [{ id: 'v1' }] });
+      const file = buildXlsxFile([
+        { name: 'لامپ ۱', slug: 'lamp-1', sku: 'SKU-1', basePrice: 10000, brand: 'برند جدید' },
+        { name: 'لامپ ۲', slug: 'lamp-2', sku: 'SKU-2', basePrice: 20000, brand: 'برند جدید' },
+      ]);
+
+      await service.bulkImport(file);
+
+      expect(prisma.brand.create).toHaveBeenCalledTimes(1);
     });
 
     it('creates a stock row for the given warehouse when a quantity is provided', async () => {
