@@ -18,6 +18,14 @@ function escHtml(s) {
   div.textContent = s == null ? '' : String(s);
   return div.innerHTML;
 }
+// جستجو باید عدد فارسی/عربی و انگلیسی رو یکی بدونه (کاربر ممکنه با کیبورد فارسی
+// عدد فارسی تایپ کنه ولی توی برنامه اسم/بارکد با رقم انگلیسی ذخیره شده باشه یا برعکس)
+function normalizeSearchText(s) {
+  return String(s || '')
+    .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+    .toLowerCase();
+}
 
 // ===================== تبدیل تاریخ میلادی به شمسی (بدون کتابخانه خارجی) =====================
 const _FA_DIGITS = { '0': '۰', '1': '۱', '2': '۲', '3': '۳', '4': '۴', '5': '۵', '6': '۶', '7': '۷', '8': '۸', '9': '۹' };
@@ -146,9 +154,9 @@ function createSearchableSelect(containerId, options, { placeholder = 'جستج�
   const dropdown = container.querySelector('.ss-dropdown');
 
   function renderList(filterText) {
-    const q = (filterText || '').trim().toLowerCase();
+    const q = normalizeSearchText((filterText || '').trim());
     let list = options;
-    if (q) list = options.filter(o => o.label.toLowerCase().includes(q));
+    if (q) list = options.filter(o => normalizeSearchText(o.label).includes(q));
     list = list.slice(0, 60);
     let html = '';
     if (allowEmpty && !q) html += `<div class="ss-item" data-value="">${emptyLabel}</div>`;
@@ -200,6 +208,51 @@ function attachWordsPreview(input, wordsElId) {
   input.addEventListener('input', update);
   input.addEventListener('blur', update);
   update();
+}
+
+// نمایش زنده «معادل تومان» زیر یک فیلد قیمت که ورودیش به ریاله (فاکتور تامین‌کننده‌ها معمولاً ریالیه)
+// خودِ فیلد فقط برای نمایش/تایپ به ریاله؛ مقداری که در نهایت ذخیره می‌شه (readSaleRialAsToman) به تومان تبدیل می‌شه
+function attachRialToTomanPreview(input, tomanElId) {
+  if (!input) return;
+  const tomanEl = document.getElementById(tomanElId);
+  if (!tomanEl) return;
+  const update = () => {
+    const rial = readAmount(input);
+    const toman = Math.round(rial / 10);
+    tomanEl.textContent = rial ? `معادل: ${toman.toLocaleString('en-US')} تومان` : '';
+  };
+  input.addEventListener('input', update);
+  input.addEventListener('blur', update);
+  update();
+}
+// مقدار فیلد قیمت فروش (که به ریال تایپ می‌شه) رو به تومان برمی‌گردونه، برای ارسال به سرور
+function readSaleRialAsToman(input) {
+  return Math.round(readAmount(input) / 10);
+}
+// دکمه‌های پیشنهادی درصد سود؛ ۸/۱۵/۲۰ ثابت + درصد پیش‌فرض خودِ مغازه (اگه در تنظیمات ست شده و با این سه فرق داره)
+function marginSuggestPillsHtml() {
+  const fixed = [8, 15, 20];
+  let html = fixed.map(m => `<button type="button" class="btn btn-secondary btn-sm" data-margin="${m}">${m}٪ سود</button>`).join('');
+  const custom = state.defaultMarginPercent;
+  if (custom && !fixed.includes(custom)) {
+    html += `<button type="button" class="btn btn-secondary btn-sm" data-margin="${custom}">${custom}٪ سود (پیش‌فرض مغازه)</button>`;
+  }
+  return html;
+}
+// دکمه‌های «پیشنهاد قیمت فروش» بر اساس درصد سود روی قیمت خرید (که به تومانه)؛
+// عدد پیشنهادی در فیلد قیمت فروش به‌صورت ریال (ضربدر ۱۰) گذاشته می‌شه چون اون فیلد به ریاله
+function bindSalePriceSuggestions(wrapEl, purchaseInput, saleInput, tomanElId) {
+  if (!wrapEl) return;
+  wrapEl.querySelectorAll('[data-margin]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const purchaseToman = readAmount(purchaseInput);
+      if (!purchaseToman) { toast('اول قیمت خرید را وارد کن', 'danger'); return; }
+      const margin = parseFloat(btn.dataset.margin);
+      const suggestedToman = Math.round(purchaseToman * (1 + margin / 100));
+      saleInput.value = (suggestedToman * 10).toLocaleString('en-US');
+      saleInput.dispatchEvent(new Event('input', { bubbles: false }));
+    });
+  });
 }
 
 // فرمت‌بندی سه‌رقم‌سه‌رقم مبالغ داخل فیلدهای ورودی، هنگام تایپ خوانا بمونه
@@ -943,20 +996,20 @@ function bindGlobalSearch() {
 }
 
 async function runGlobalSearch(q) {
-  const ql = q.toLowerCase();
+  const ql = normalizeSearchText(q);
   const [items, parties, invoices] = await Promise.all([
     api('GET', `/items?role=${state.user.role}`),
     api('GET', '/parties'),
     api('GET', '/invoices'),
   ]);
   const itemMatches = (items || []).filter(it =>
-    (it.name || '').toLowerCase().includes(ql) || (it.barcode || '').toLowerCase().includes(ql)
+    normalizeSearchText(it.name).includes(ql) || normalizeSearchText(it.barcode).includes(ql)
   ).slice(0, 5);
   const partyMatches = (parties || []).filter(p =>
-    (p.name || '').toLowerCase().includes(ql) || (p.phone || '').includes(q)
+    normalizeSearchText(p.name).includes(ql) || normalizeSearchText(p.phone).includes(ql)
   ).slice(0, 5);
   const invoiceMatches = (invoices || []).filter(inv =>
-    String(inv.number || inv.id).includes(q) || (inv.party_name || '').toLowerCase().includes(ql)
+    normalizeSearchText(inv.number || inv.id).includes(ql) || normalizeSearchText(inv.party_name).includes(ql)
   ).slice(0, 5);
 
   const typeLabel = { sale: 'فروش', purchase: 'خرید', sale_return: 'مرجوعی فروش', purchase_return: 'مرجوعی خرید' };
@@ -1401,13 +1454,18 @@ function openEditItemModal(itemId) {
     <div class="form-row"><div><label>کد/بارکد</label><input id="ei-code" value="${escHtml(it.code || '')}"></div><div><label>نام کالا</label><input id="ei-name" value="${escHtml(it.name || '')}"></div></div>
     <div class="form-row"><div><label>برند</label><input id="ei-brand" value="${escHtml(it.brand || '')}"></div><div><label>واحد</label><input id="ei-unit" value="${escHtml(it.unit || 'عدد')}"></div></div>
     <div class="form-row"><div><label>دسته‌بندی *</label><select id="ei-cat"><option value="">— انتخاب کن —</option>${catOptions}</select></div></div>
-    <div class="form-row"><div${state.user.role !== 'admin' ? ' style="display:none"' : ''}><label>قیمت خرید</label><input type="text" inputmode="decimal" id="ei-purchase" value="${it.purchase_price ? Number(it.purchase_price).toLocaleString('en-US') : ''}"><div class="words-hint" id="ei-purchase-words"></div></div><div><label>قیمت فروش</label><input type="text" inputmode="decimal" id="ei-sale" value="${it.sale_price ? Number(it.sale_price).toLocaleString('en-US') : ''}"><div class="words-hint" id="ei-sale-words"></div></div></div>
+    <div class="form-row"><div${state.user.role !== 'admin' ? ' style="display:none"' : ''}><label>قیمت خرید (تومان)</label><input type="text" inputmode="decimal" id="ei-purchase" value="${it.purchase_price ? Number(it.purchase_price).toLocaleString('en-US') : ''}"><div class="words-hint" id="ei-purchase-words"></div></div><div><label>قیمت فروش (ریال)</label><input type="text" inputmode="decimal" id="ei-sale" value="${it.sale_price ? Number(it.sale_price * 10).toLocaleString('en-US') : ''}"><div class="words-hint" id="ei-sale-toman"></div></div></div>
+    <div class="field" id="ei-suggest-wrap"${state.user.role !== 'admin' ? ' style="display:none"' : ''}>
+      <label>پیشنهاد قیمت فروش (بر اساس قیمت خرید)</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${marginSuggestPillsHtml()}</div>
+    </div>
     <div class="form-row"><div><label>موجودی</label><input type="number" id="ei-stock" value="${it.stock_qty}"></div><div><label>حداقل موجودی</label><input type="number" id="ei-min" value="${it.min_stock}"></div></div>
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-edit-item-btn">ذخیره</button></div>`);
   attachThousandsFormatting($('#ei-purchase'));
   attachThousandsFormatting($('#ei-sale'));
   attachWordsPreview($('#ei-purchase'), 'ei-purchase-words');
-  attachWordsPreview($('#ei-sale'), 'ei-sale-words');
+  attachRialToTomanPreview($('#ei-sale'), 'ei-sale-toman');
+  bindSalePriceSuggestions($('#ei-suggest-wrap'), $('#ei-purchase'), $('#ei-sale'), 'ei-sale-toman');
   $('#save-edit-item-btn').addEventListener('click', async () => {
     const name = $('#ei-name').value.trim();
     if (!name) { toast('نام کالا الزامی است', 'danger'); return; }
@@ -1416,7 +1474,7 @@ function openEditItemModal(itemId) {
     const payload = {
       code: $('#ei-code').value, name, brand: $('#ei-brand').value, unit: $('#ei-unit').value || 'عدد',
       category_id: categoryId,
-      purchase_price: readAmount($('#ei-purchase')), sale_price: readAmount($('#ei-sale')),
+      purchase_price: readAmount($('#ei-purchase')), sale_price: readSaleRialAsToman($('#ei-sale')),
       stock_qty: parseFloat($('#ei-stock').value || 0), min_stock: parseFloat($('#ei-min').value || 0),
     };
     const res = await api('PUT', `/items/${itemId}`, payload);
@@ -1463,10 +1521,10 @@ $('#btn-print-labels').addEventListener('click', () => {
   openAuthedInNewTab(`/items/labels/print?ids=${ids.join(',')}`, 'text/html');
 });
 function applyItemsFilters() {
-  const q = $('#items-filter').value.trim();
+  const q = normalizeSearchText($('#items-filter').value.trim());
   const catId = $('#items-category-filter').value;
   $$('#items-tbody tr').forEach(row => {
-    const matchesText = !q || row.textContent.includes(q);
+    const matchesText = !q || normalizeSearchText(row.textContent).includes(q);
     const matchesCat = !catId || row.dataset.categoryId === catId;
     row.style.display = matchesText && matchesCat ? '' : 'none';
   });
@@ -1533,24 +1591,18 @@ $('#btn-new-item').addEventListener('click', () => {
     <div class="form-row"><div><label>کد/بارکد</label><input id="ni-code"></div><div><label>نام کالا</label><input id="ni-name"></div></div>
     <div class="form-row"><div><label>برند</label><input id="ni-brand"></div><div><label>واحد</label><input id="ni-unit" value="عدد"></div></div>
     <div class="form-row"><div><label>دسته‌بندی *</label><select id="ni-cat"><option value="">— انتخاب کن —</option>${catOptions}</select></div></div>
-    <div class="form-row"><div${state.user.role !== 'admin' ? ' style="display:none"' : ''}><label>قیمت خرید</label><input type="text" inputmode="decimal" id="ni-purchase"><div class="words-hint" id="ni-purchase-words"></div></div><div><label>قیمت فروش</label><input type="text" inputmode="decimal" id="ni-sale"><div class="words-hint" id="ni-sale-words"></div></div></div>
+    <div class="form-row"><div${state.user.role !== 'admin' ? ' style="display:none"' : ''}><label>قیمت خرید (تومان)</label><input type="text" inputmode="decimal" id="ni-purchase"><div class="words-hint" id="ni-purchase-words"></div></div><div><label>قیمت فروش (ریال)</label><input type="text" inputmode="decimal" id="ni-sale" placeholder="مثلاً 1,500,000"><div class="words-hint" id="ni-sale-toman"></div></div></div>
+    <div class="field" id="ni-suggest-wrap"${state.user.role !== 'admin' ? ' style="display:none"' : ''}>
+      <label>پیشنهاد قیمت فروش (بر اساس قیمت خرید)</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${marginSuggestPillsHtml()}</div>
+    </div>
     <div class="form-row"><div><label>موجودی</label><input type="number" id="ni-stock" value="0"></div><div><label>حداقل موجودی</label><input type="number" id="ni-min" value="0"></div></div>
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-item-btn">ذخیره</button></div>`);
   attachThousandsFormatting($('#ni-purchase'));
   attachThousandsFormatting($('#ni-sale'));
   attachWordsPreview($('#ni-purchase'), 'ni-purchase-words');
-  attachWordsPreview($('#ni-sale'), 'ni-sale-words');
-  let saleTouchedByUser = false;
-  $('#ni-sale').addEventListener('input', () => { saleTouchedByUser = true; });
-  $('#ni-purchase').addEventListener('input', () => {
-    if (saleTouchedByUser || !state.defaultMarginPercent) return;
-    const purchasePrice = readAmount($('#ni-purchase'));
-    if (!purchasePrice) return;
-    const suggestedSale = Math.round(purchasePrice * (1 + state.defaultMarginPercent / 100));
-    $('#ni-sale').value = suggestedSale.toLocaleString('en-US');
-    $('#ni-sale').dispatchEvent(new Event('input', { bubbles: false }));
-    saleTouchedByUser = false;
-  });
+  attachRialToTomanPreview($('#ni-sale'), 'ni-sale-toman');
+  bindSalePriceSuggestions($('#ni-suggest-wrap'), $('#ni-purchase'), $('#ni-sale'), 'ni-sale-toman');
   $('#save-item-btn').addEventListener('click', async () => {
     const name = $('#ni-name').value.trim();
     if (!name) { toast('نام کالا الزامی است', 'danger'); return; }
@@ -1559,7 +1611,7 @@ $('#btn-new-item').addEventListener('click', () => {
     const payload = {
       code: $('#ni-code').value, name, brand: $('#ni-brand').value, unit: $('#ni-unit').value || 'عدد',
       category_id: categoryId,
-      purchase_price: readAmount($('#ni-purchase')), sale_price: readAmount($('#ni-sale')),
+      purchase_price: readAmount($('#ni-purchase')), sale_price: readSaleRialAsToman($('#ni-sale')),
       stock_qty: parseFloat($('#ni-stock').value || 0), min_stock: parseFloat($('#ni-min').value || 0),
     };
     const res = await api('POST', '/items', payload);
@@ -1752,7 +1804,7 @@ function loadInvoiceForm(type) {
     const code = barcodeInput.value.trim();
     barcodeInput.value = '';
     if (!code) return;
-    const itemObj = state.items.find(it => it.code && it.code.toLowerCase() === code.toLowerCase());
+    const itemObj = state.items.find(it => it.code && normalizeSearchText(it.code) === normalizeSearchText(code));
     if (!itemObj) {
       barcodeStatus.textContent = `❌ کالایی با کد «${code}» پیدا نشد`;
       barcodeStatus.style.color = 'var(--danger)';
@@ -2335,7 +2387,7 @@ function settlePayment(partyId, partyName) {
 
 // ===================== چک‌ها =====================
 function normalizeDigitsForCompare(s) {
-  return String(s || '').replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
+  return normalizeSearchText(s);
 }
 async function loadChecks() {
   const checks = await api('GET', '/checks');
@@ -2529,7 +2581,7 @@ $('#stocktake-barcode').addEventListener('keydown', (e) => {
   const code = input.value.trim();
   input.value = '';
   if (!code) return;
-  const it = (state.items || []).find(x => x.code && x.code.toLowerCase() === code.toLowerCase());
+  const it = (state.items || []).find(x => x.code && normalizeSearchText(x.code) === normalizeSearchText(code));
   if (!it) {
     $('#stocktake-status').textContent = `❌ کالایی با کد «${code}» پیدا نشد`;
     $('#stocktake-status').style.color = 'var(--danger)';
@@ -2978,9 +3030,9 @@ async function loadAiScanPage() {
 
 function findMatchingItem(name) {
   if (!name) return null;
-  const n = name.trim().toLowerCase();
-  return state.items.find(it => it.name.toLowerCase() === n) ||
-         state.items.find(it => it.name.toLowerCase().includes(n) || n.includes(it.name.toLowerCase())) ||
+  const n = normalizeSearchText(name.trim());
+  return state.items.find(it => normalizeSearchText(it.name) === n) ||
+         state.items.find(it => normalizeSearchText(it.name).includes(n) || n.includes(normalizeSearchText(it.name))) ||
          null;
 }
 
@@ -3410,10 +3462,11 @@ $('#qs-search').addEventListener('keydown', (e) => {
   if (!q) return;
 
   // ابتدا تطابق دقیق با کد/بارکد (برای اسکنر بارکد که خودش Enter می‌فرستد)
-  const exactCode = state.items.find(it => it.code && it.code === q);
+  const qNorm = normalizeSearchText(q);
+  const exactCode = state.items.find(it => it.code && normalizeSearchText(it.code) === qNorm);
   if (exactCode) { qsAddItem(exactCode); return; }
 
-  const matches = state.items.filter(it => it.name.toLowerCase().includes(q.toLowerCase()));
+  const matches = state.items.filter(it => normalizeSearchText(it.name).includes(qNorm));
   if (matches.length === 1) { qsAddItem(matches[0]); return; }
   if (matches.length === 0) { toast('کالایی با این نام/کد پیدا نشد', 'danger'); return; }
 
