@@ -143,6 +143,13 @@ export default function ProductDetailClient() {
     ? Math.round((1 - Number(product.basePrice) / Number(product.compareAtPrice)) * 100)
     : 0;
   const isWishlisted = itemIds.has(product.id);
+
+  function handleShareWhatsApp() {
+    if (!product) return;
+    const text = `${product.name} — ${formatToman(product.basePrice)}\n${window.location.href}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+  }
+
   const totalStock = product.totalStock ?? undefined;
   const outOfStock = totalStock !== undefined && totalStock <= 0;
   const lowStock = totalStock !== undefined && totalStock > 0 && totalStock <= 5;
@@ -271,15 +278,26 @@ export default function ProductDetailClient() {
               {product.brand && <p className="text-sm text-foreground/50">{product.brand.name}</p>}
               <h1 className="mt-1 text-2xl font-bold">{product.name}</h1>
             </div>
-            <button
-              onClick={handleWishlist}
-              aria-label="افزودن به علاقه‌مندی‌ها"
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full surface-card text-foreground/70 transition-colors hover:text-brand"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill={isWishlisted ? "#F5B82E" : "none"} stroke="currentColor" strokeWidth="1.8">
-                <path d="M12 20.5s-7.5-4.6-9.9-9.2C.5 7.9 2 4.5 5.4 3.7c2-.5 3.9.3 5 1.9a.7.7 0 0 0 1.2 0c1.1-1.6 3-2.4 5-1.9 3.4.8 4.9 4.2 3.3 7.6-2.4 4.6-9.9 9.2-9.9 9.2Z" />
-              </svg>
-            </button>
+            <div className="flex flex-shrink-0 items-center gap-2">
+              <button
+                onClick={handleShareWhatsApp}
+                aria-label="اشتراک‌گذاری در واتساپ"
+                className="flex h-10 w-10 items-center justify-center rounded-full surface-card text-foreground/70 transition-colors hover:text-[#25D366]"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12.04 2c-5.52 0-10 4.48-10 10 0 1.77.46 3.45 1.28 4.9L2 22l5.25-1.38a9.94 9.94 0 0 0 4.79 1.22h.01c5.52 0 10-4.48 10-10s-4.48-9.84-10.01-9.84Zm0 18.13a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.37c0-4.54 3.7-8.24 8.25-8.24 2.2 0 4.27.86 5.83 2.42a8.18 8.18 0 0 1 2.41 5.83c0 4.55-3.7 8.24-8.25 8.24Zm4.52-6.17c-.25-.12-1.47-.72-1.7-.81-.23-.08-.39-.12-.56.13-.16.24-.64.81-.79.98-.14.16-.29.18-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.24-.02-.38.11-.5.11-.11.25-.29.37-.43.12-.15.16-.25.24-.41.08-.16.04-.31-.02-.43-.06-.12-.56-1.36-.77-1.86-.2-.49-.41-.42-.56-.43-.14-.01-.31-.01-.47-.01a.9.9 0 0 0-.65.31c-.22.24-.85.84-.85 2.04 0 1.2.87 2.36 1 2.52.12.16 1.7 2.6 4.13 3.65.58.25 1.03.4 1.38.51.58.18 1.11.16 1.53.1.47-.07 1.47-.6 1.67-1.18.21-.58.21-1.08.15-1.18-.07-.11-.23-.17-.48-.29Z" />
+                </svg>
+              </button>
+              <button
+                onClick={handleWishlist}
+                aria-label="افزودن به علاقه‌مندی‌ها"
+                className="flex h-10 w-10 items-center justify-center rounded-full surface-card text-foreground/70 transition-colors hover:text-brand"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill={isWishlisted ? "#F5B82E" : "none"} stroke="currentColor" strokeWidth="1.8">
+                  <path d="M12 20.5s-7.5-4.6-9.9-9.2C.5 7.9 2 4.5 5.4 3.7c2-.5 3.9.3 5 1.9a.7.7 0 0 0 1.2 0c1.1-1.6 3-2.4 5-1.9 3.4.8 4.9 4.2 3.3 7.6-2.4 4.6-9.9 9.2-9.9 9.2Z" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-3">
