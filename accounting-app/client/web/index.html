@@ -432,7 +432,7 @@
           <div class="form-row">
             <div><label>از</label><select id="transfer-from"></select></div>
             <div><label>به</label><select id="transfer-to"></select></div>
-            <div><label>مبلغ</label><input type="text" inputmode="decimal" id="transfer-amount"></div>
+            <div><label>مبلغ (ریال)</label><input type="text" inputmode="decimal" id="transfer-amount"><div class="words-hint" id="transfer-amount-words"></div></div>
           </div>
           <div class="form-row"><div><label>توضیحات (اختیاری)</label><input type="text" id="transfer-desc"></div></div>
           <button class="btn btn-primary" id="btn-do-transfer">ثبت انتقال</button>
@@ -443,7 +443,7 @@
           <div class="form-row">
             <div><label>حساب</label><select id="bank-tx-account"></select></div>
             <div><label>نوع</label><select id="bank-tx-type"><option value="deposit">واریز</option><option value="withdrawal">برداشت</option></select></div>
-            <div><label>مبلغ</label><input type="text" inputmode="decimal" id="bank-tx-amount"></div>
+            <div><label>مبلغ (ریال)</label><input type="text" inputmode="decimal" id="bank-tx-amount"><div class="words-hint" id="bank-tx-amount-words"></div></div>
           </div>
           <div class="form-row">
             <div><label id="bank-tx-category-label">منبع واریز</label><select id="bank-tx-category"></select></div>
@@ -469,7 +469,7 @@
         <div class="card">
           <div class="table-toolbar">
             <select id="cash-type"><option value="in">دریافت</option><option value="out">پرداخت</option></select>
-            <input type="text" inputmode="decimal" id="cash-amount" placeholder="مبلغ">
+            <input type="text" inputmode="decimal" id="cash-amount" placeholder="مبلغ (ریال)">
             <div class="words-hint" id="cash-amount-words"></div>
             <select id="cash-expense-category" style="display:none">
               <option value="">— دسته هزینه —</option>
@@ -493,7 +493,7 @@
           <div class="card-title">بستن روزانه صندوق</div>
           <p class="page-sub">موجودی فعلی صندوق طبق سیستم را با پول واقعی داخل صندوق مقایسه و ثبت کن.</p>
           <div class="table-toolbar">
-            <input type="text" inputmode="decimal" id="cash-closing-counted" placeholder="مبلغ شمارش‌شده واقعی">
+            <input type="text" inputmode="decimal" id="cash-closing-counted" placeholder="مبلغ شمارش‌شده واقعی (ریال)">
             <div class="words-hint" id="cash-closing-counted-words"></div>
             <input type="text" id="cash-closing-note" placeholder="یادداشت (اختیاری)">
             <button class="btn btn-primary" id="btn-close-cash">ثبت بستن صندوق</button>

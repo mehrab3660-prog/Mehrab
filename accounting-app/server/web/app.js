@@ -210,23 +210,23 @@ function attachWordsPreview(input, wordsElId) {
   update();
 }
 
-// نمایش زنده «معادل تومان» زیر یک فیلد قیمت که ورودیش به ریاله (فاکتور تامین‌کننده‌ها معمولاً ریالیه)
-// خودِ فیلد فقط برای نمایش/تایپ به ریاله؛ مقداری که در نهایت ذخیره می‌شه (readSaleRialAsToman) به تومان تبدیل می‌شه
-function attachRialToTomanPreview(input, tomanElId) {
+// نمایش زنده «معادل تومان به حروف» زیر هر فیلد مبلغی که ورودیش به ریاله (فاکتور/چک/فیش بانکی
+// معمولاً به ریال نوشته می‌شن)؛ خودِ فیلد فقط برای نمایش/تایپ به ریاله، ذخیره‌سازی همچنان به تومانه (readRialAsToman)
+function attachRialWordsPreview(input, wordsElId) {
   if (!input) return;
-  const tomanEl = document.getElementById(tomanElId);
-  if (!tomanEl) return;
+  const wordsEl = document.getElementById(wordsElId);
+  if (!wordsEl) return;
   const update = () => {
     const rial = readAmount(input);
     const toman = Math.round(rial / 10);
-    tomanEl.textContent = rial ? `معادل: ${toman.toLocaleString('en-US')} تومان` : '';
+    wordsEl.textContent = rial ? `معادل: ${toman.toLocaleString('en-US')} تومان — به حروف: ${numberToPersianWords(toman)} تومان` : '';
   };
   input.addEventListener('input', update);
   input.addEventListener('blur', update);
   update();
 }
-// مقدار فیلد قیمت فروش (که به ریال تایپ می‌شه) رو به تومان برمی‌گردونه، برای ارسال به سرور
-function readSaleRialAsToman(input) {
+// مقدار یک فیلد مبلغ که به ریال تایپ می‌شه رو به تومان برمی‌گردونه، برای ارسال/ذخیره در سرور
+function readRialAsToman(input) {
   return Math.round(readAmount(input) / 10);
 }
 // دکمه‌های پیشنهادی درصد سود؛ ۸/۱۵/۲۰ ثابت + درصد پیش‌فرض خودِ مغازه (اگه در تنظیمات ست شده و با این سه فرق داره)
@@ -1464,7 +1464,7 @@ function openEditItemModal(itemId) {
   attachThousandsFormatting($('#ei-purchase'));
   attachThousandsFormatting($('#ei-sale'));
   attachWordsPreview($('#ei-purchase'), 'ei-purchase-words');
-  attachRialToTomanPreview($('#ei-sale'), 'ei-sale-toman');
+  attachRialWordsPreview($('#ei-sale'), 'ei-sale-toman');
   bindSalePriceSuggestions($('#ei-suggest-wrap'), $('#ei-purchase'), $('#ei-sale'), 'ei-sale-toman');
   $('#save-edit-item-btn').addEventListener('click', async () => {
     const name = $('#ei-name').value.trim();
@@ -1474,7 +1474,7 @@ function openEditItemModal(itemId) {
     const payload = {
       code: $('#ei-code').value, name, brand: $('#ei-brand').value, unit: $('#ei-unit').value || 'عدد',
       category_id: categoryId,
-      purchase_price: readAmount($('#ei-purchase')), sale_price: readSaleRialAsToman($('#ei-sale')),
+      purchase_price: readAmount($('#ei-purchase')), sale_price: readRialAsToman($('#ei-sale')),
       stock_qty: parseFloat($('#ei-stock').value || 0), min_stock: parseFloat($('#ei-min').value || 0),
     };
     const res = await api('PUT', `/items/${itemId}`, payload);
@@ -1601,7 +1601,7 @@ $('#btn-new-item').addEventListener('click', () => {
   attachThousandsFormatting($('#ni-purchase'));
   attachThousandsFormatting($('#ni-sale'));
   attachWordsPreview($('#ni-purchase'), 'ni-purchase-words');
-  attachRialToTomanPreview($('#ni-sale'), 'ni-sale-toman');
+  attachRialWordsPreview($('#ni-sale'), 'ni-sale-toman');
   bindSalePriceSuggestions($('#ni-suggest-wrap'), $('#ni-purchase'), $('#ni-sale'), 'ni-sale-toman');
   $('#save-item-btn').addEventListener('click', async () => {
     const name = $('#ni-name').value.trim();
@@ -1611,7 +1611,7 @@ $('#btn-new-item').addEventListener('click', () => {
     const payload = {
       code: $('#ni-code').value, name, brand: $('#ni-brand').value, unit: $('#ni-unit').value || 'عدد',
       category_id: categoryId,
-      purchase_price: readAmount($('#ni-purchase')), sale_price: readSaleRialAsToman($('#ni-sale')),
+      purchase_price: readAmount($('#ni-purchase')), sale_price: readRialAsToman($('#ni-sale')),
       stock_qty: parseFloat($('#ni-stock').value || 0), min_stock: parseFloat($('#ni-min').value || 0),
     };
     const res = await api('POST', '/items', payload);
@@ -1654,7 +1654,7 @@ function loadInvoiceForm(type) {
         <div class="card-title">افزودن کالا</div>
         <div class="form-row"><div><label>کالا</label><div id="${type}-item"></div></div>
           <div><label>تعداد</label><input type="number" step="any" id="${type}-qty"></div>
-          <div><label>قیمت واحد</label><input type="text" inputmode="decimal" id="${type}-price"><div class="words-hint" id="${type}-price-words"></div></div></div>
+          <div><label>قیمت واحد (ریال)</label><input type="text" inputmode="decimal" id="${type}-price"><div class="words-hint" id="${type}-price-words"></div></div></div>
         <div class="ai-summary-box hidden" id="${type}-item-info"></div>
         ${type === 'sale' ? `
         <div class="form-row"><div><label>شماره سریال (اختیاری)</label><input type="text" id="${type}-serial" placeholder="مثلاً SN-12345"></div>
@@ -1664,7 +1664,7 @@ function loadInvoiceForm(type) {
         <div class="cart-total" id="${type}-cart-total">جمع کل: ۰ تومان</div>
         <div class="words-hint" id="${type}-cart-total-words"></div>
         <div class="form-row" style="margin-top:14px">
-          <div><label>تخفیف کل فاکتور (تومان)</label><input type="text" inputmode="decimal" id="${type}-discount" value="0"><div class="words-hint" id="${type}-discount-words"></div></div>
+          <div><label>تخفیف کل فاکتور (ریال)</label><input type="text" inputmode="decimal" id="${type}-discount" value="0"><div class="words-hint" id="${type}-discount-words"></div></div>
           <div><label>یادداشت سفارش (اختیاری)</label><input type="text" id="${type}-note" placeholder="مثلاً: تحویل جمعه، رنگ خاص سفارش داده شده و..."></div>
         </div>
         <button class="btn btn-primary btn-block" id="${type}-submit" style="margin-top:14px">ثبت فاکتور</button>
@@ -1698,7 +1698,8 @@ function loadInvoiceForm(type) {
       {
         placeholder: 'جستجوی کالا (نام یا کد)...', allowEmpty: false,
         onSelect: (val, found) => {
-          $(`#${type}-price`).value = found && found.price ? Number(found.price).toLocaleString('en-US') : '';
+          $(`#${type}-price`).value = found && found.price ? Number(found.price * 10).toLocaleString('en-US') : '';
+          $(`#${type}-price`).dispatchEvent(new Event('input', { bubbles: false }));
           const itemObj = state.items.find(it => it.id === parseInt(val));
           const infoBox = $(`#${type}-item-info`);
           if (!itemObj) { infoBox.classList.add('hidden'); return; }
@@ -1718,8 +1719,8 @@ function loadInvoiceForm(type) {
     }
     attachThousandsFormatting($(`#${type}-price`));
     attachThousandsFormatting($(`#${type}-discount`));
-    attachWordsPreview($(`#${type}-price`), `${type}-price-words`);
-    attachWordsPreview($(`#${type}-discount`), `${type}-discount-words`);
+    attachRialWordsPreview($(`#${type}-price`), `${type}-price-words`);
+    attachRialWordsPreview($(`#${type}-discount`), `${type}-discount-words`);
 
     if (type === 'purchase' && state.pendingPurchaseDraft && state.pendingPurchaseDraft.length) {
       let addedCount = 0;
@@ -1772,7 +1773,7 @@ function loadInvoiceForm(type) {
     const itemId = parseInt(ui.itemSS.getValue());
     const itemObj = state.items.find(it => it.id === itemId);
     const qty = parseFloat($(`#${type}-qty`).value);
-    const price = readAmount($(`#${type}-price`));
+    const price = readRialAsToman($(`#${type}-price`));
     if (!itemId || !qty || !price) { toast('کالا، تعداد و قیمت را وارد کنید', 'danger'); return; }
     if (type === 'sale' && itemObj) {
       const alreadyInCart = state[cartKey].filter(c => c.item_id === itemId).reduce((s, c) => s + c.qty, 0);
@@ -1842,7 +1843,7 @@ function loadInvoiceForm(type) {
     const partyObj = state.parties.find(p => String(p.id) === String(partyVal));
     const payType = $(`#${type}-pay`).value;
     const payLabel = { cash: 'نقدی', credit: 'نسیه', check: 'چک' }[payType];
-    const discount = readAmount($(`#${type}-discount`));
+    const discount = readRialAsToman($(`#${type}-discount`));
     const isReturn = $(`#${type}-return`).checked;
     const note = $(`#${type}-note`).value.trim();
     const cart = state[cartKey];
@@ -1919,7 +1920,7 @@ function applyAutoDiscount(type) {
   const cart = state[type + 'Cart'] || [];
   const subtotal = cart.reduce((s, c) => s + c.qty * c.unit_price, 0);
   const suggested = Math.round(subtotal * percent / 100);
-  $(`#${type}-discount`).value = suggested.toLocaleString('en-US');
+  $(`#${type}-discount`).value = (suggested * 10).toLocaleString('en-US');
   $(`#${type}-discount`).dispatchEvent(new Event('input'));
 }
 function renderCart(type) {
@@ -2074,7 +2075,7 @@ async function openEditInvoiceModal(invoiceId) {
       </select></div>
     </div>
     <div class="form-row">
-      <div><label>تخفیف کل فاکتور (تومان)</label><input type="text" inputmode="decimal" id="edit-inv-discount"></div>
+      <div><label>تخفیف کل فاکتور (ریال)</label><input type="text" inputmode="decimal" id="edit-inv-discount"><div class="words-hint" id="edit-inv-discount-words"></div></div>
       <div><label>توضیحات</label><input id="edit-inv-description"></div>
     </div>
     <div class="card" style="margin-top:10px">
@@ -2082,7 +2083,7 @@ async function openEditInvoiceModal(invoiceId) {
       <div class="form-row">
         <div><label>کالا</label><div id="edit-inv-item"></div></div>
         <div><label>تعداد</label><input type="number" step="any" id="edit-inv-qty"></div>
-        <div><label>قیمت واحد</label><input type="text" inputmode="decimal" id="edit-inv-price"></div>
+        <div><label>قیمت واحد (ریال)</label><input type="text" inputmode="decimal" id="edit-inv-price"><div class="words-hint" id="edit-inv-price-words"></div></div>
       </div>
       <button class="btn btn-secondary" type="button" id="edit-inv-add-line">+ افزودن قلم</button>
       <table class="data-table" style="margin-top:10px"><thead><tr><th>کالا</th><th>تعداد</th><th>قیمت</th><th>جمع</th><th></th></tr></thead><tbody id="edit-inv-cart-tbody"></tbody></table>
@@ -2103,15 +2104,19 @@ async function openEditInvoiceModal(invoiceId) {
     {
       placeholder: 'جستجوی کالا (نام یا کد)...', allowEmpty: false,
       onSelect: (val, found) => {
-        $('#edit-inv-price').value = found && found.price ? Number(found.price).toLocaleString('en-US') : '';
+        $('#edit-inv-price').value = found && found.price ? Number(found.price * 10).toLocaleString('en-US') : '';
+        $('#edit-inv-price').dispatchEvent(new Event('input', { bubbles: false }));
       },
     });
 
   $('#edit-inv-pay').value = inv.payment_type;
   attachThousandsFormatting($('#edit-inv-discount'));
-  $('#edit-inv-discount').value = Number(inv.discount || 0).toLocaleString('en-US');
+  attachRialWordsPreview($('#edit-inv-discount'), 'edit-inv-discount-words');
+  $('#edit-inv-discount').value = Number((inv.discount || 0) * 10).toLocaleString('en-US');
+  $('#edit-inv-discount').dispatchEvent(new Event('input'));
   $('#edit-inv-description').value = inv.description || '';
   attachThousandsFormatting($('#edit-inv-price'));
+  attachRialWordsPreview($('#edit-inv-price'), 'edit-inv-price-words');
 
   renderEditInvoiceCart();
 
@@ -2119,7 +2124,7 @@ async function openEditInvoiceModal(invoiceId) {
     const itemId = parseInt(itemSS.getValue());
     const itemObj = state.items.find(it => it.id === itemId);
     const qty = parseFloat($('#edit-inv-qty').value);
-    const price = readAmount($('#edit-inv-price'));
+    const price = readRialAsToman($('#edit-inv-price'));
     if (!itemId || !qty || !price) { toast('کالا، تعداد و قیمت را وارد کنید', 'danger'); return; }
     editInvoiceCart.push({ item_id: itemId, item_name: itemObj?.name, qty, unit_price: price });
     $('#edit-inv-qty').value = '';
@@ -2152,7 +2157,7 @@ async function saveFullInvoiceEdit(invoiceId, partySS) {
   const payload = {
     party_id: partySS.getValue() || null,
     payment_type: $('#edit-inv-pay').value,
-    discount: readAmount($('#edit-inv-discount')),
+    discount: readRialAsToman($('#edit-inv-discount')),
     description: $('#edit-inv-description').value,
     username: state.user.username,
     items: editInvoiceCart.map(c => ({ item_id: c.item_id, qty: c.qty, unit_price: c.unit_price })),
@@ -2277,7 +2282,7 @@ $('#btn-new-party').addEventListener('click', () => {
     <div class="field"><label>شماره تماس (۱۱ رقم، مثلاً 09123456789)</label><input id="np-phone" maxlength="13"></div>
     <div class="field"><label>آدرس محل کار یا سکونت</label><input id="np-address"></div>
     <div class="field"><label>نوع</label><select id="np-type"><option value="customer">مشتری</option><option value="supplier">تامین‌کننده</option></select></div>
-    <div class="field"><label>سقف اعتبار نسیه (تومان — صفر یعنی بدون محدودیت)</label><input type="text" inputmode="decimal" id="np-credit-limit" value="0"></div>
+    <div class="field"><label>سقف اعتبار نسیه (ریال — صفر یعنی بدون محدودیت)</label><input type="text" inputmode="decimal" id="np-credit-limit" value="0"><div class="words-hint" id="np-credit-limit-words"></div></div>
     <div class="field"><label>یادداشت (اختیاری)</label><input id="np-note" placeholder="مثلاً: همیشه سروقت پول می‌ده"></div>
     <div class="field"><label>تخفیف ویژه دائمی (٪ — اختیاری)</label><input type="number" min="0" max="100" step="0.5" id="np-discount-percent" value="0"></div>
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:6px">
@@ -2285,6 +2290,7 @@ $('#btn-new-party').addEventListener('click', () => {
     </label>
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-party-btn">ذخیره</button></div>`);
   attachThousandsFormatting($('#np-credit-limit'));
+  attachRialWordsPreview($('#np-credit-limit'), 'np-credit-limit-words');
   $('#save-party-btn').addEventListener('click', async () => {
     const name = $('#np-name').value.trim();
     const phoneRaw = $('#np-phone').value.trim();
@@ -2299,7 +2305,7 @@ $('#btn-new-party').addEventListener('click', () => {
     if (!address) { toast('آدرس محل کار یا سکونت الزامی است', 'danger'); return; }
     const res = await api('POST', '/parties', {
       name, phone: phoneDigits, address, type: $('#np-type').value,
-      credit_limit: readAmount($('#np-credit-limit')), note: $('#np-note').value.trim(),
+      credit_limit: readRialAsToman($('#np-credit-limit')), note: $('#np-note').value.trim(),
       is_vip: $('#np-vip').checked ? 1 : 0,
       special_discount_percent: parseFloat($('#np-discount-percent').value) || 0,
     });
@@ -2315,7 +2321,7 @@ function openEditPartyModal(partyId) {
     <div class="field"><label>نام</label><input id="ep-name" value="${escHtml(p.name)}"></div>
     <div class="field"><label>شماره تماس</label><input id="ep-phone" value="${escHtml(p.phone) || ''}"></div>
     <div class="field"><label>آدرس</label><input id="ep-address" value="${escHtml(p.address) || ''}"></div>
-    <div class="field"><label>سقف اعتبار نسیه (تومان — صفر یعنی بدون محدودیت)</label><input type="text" inputmode="decimal" id="ep-credit-limit" value="${p.credit_limit || 0}"></div>
+    <div class="field"><label>سقف اعتبار نسیه (ریال — صفر یعنی بدون محدودیت)</label><input type="text" inputmode="decimal" id="ep-credit-limit" value="${(p.credit_limit || 0) * 10}"><div class="words-hint" id="ep-credit-limit-words"></div></div>
     <div class="field"><label>یادداشت</label><input id="ep-note" value="${escHtml(p.note) || ''}"></div>
     <div class="field"><label>تخفیف ویژه دائمی (٪)</label><input type="number" min="0" max="100" step="0.5" id="ep-discount-percent" value="${p.special_discount_percent || 0}"></div>
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:6px">
@@ -2323,12 +2329,13 @@ function openEditPartyModal(partyId) {
     </label>
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-edit-party-btn">ذخیره</button></div>`);
   attachThousandsFormatting($('#ep-credit-limit'));
+  attachRialWordsPreview($('#ep-credit-limit'), 'ep-credit-limit-words');
   $('#save-edit-party-btn').addEventListener('click', async () => {
     const name = $('#ep-name').value.trim();
     if (!name) { toast('نام الزامی است', 'danger'); return; }
     const res = await api('PUT', `/parties/${partyId}`, {
       name, phone: $('#ep-phone').value.trim(), address: $('#ep-address').value.trim(),
-      credit_limit: readAmount($('#ep-credit-limit')), note: $('#ep-note').value.trim(),
+      credit_limit: readRialAsToman($('#ep-credit-limit')), note: $('#ep-note').value.trim(),
       is_vip: $('#ep-vip').checked ? 1 : 0,
       special_discount_percent: parseFloat($('#ep-discount-percent').value) || 0,
     });
@@ -2373,12 +2380,12 @@ async function showLedger(partyId) {
 function settlePayment(partyId, partyName) {
   openModal(`
     <h3>تسویه حساب با ${partyName}</h3>
-    <div class="field"><label>مبلغ (تومان)</label><input type="text" inputmode="decimal" id="settle-amount"><div class="words-hint" id="settle-amount-words"></div></div>
+    <div class="field"><label>مبلغ (ریال)</label><input type="text" inputmode="decimal" id="settle-amount"><div class="words-hint" id="settle-amount-words"></div></div>
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="settle-btn">ثبت</button></div>`);
   attachThousandsFormatting($('#settle-amount'));
-  attachWordsPreview($('#settle-amount'), 'settle-amount-words');
+  attachRialWordsPreview($('#settle-amount'), 'settle-amount-words');
   $('#settle-btn').addEventListener('click', async () => {
-    const amount = readAmount($('#settle-amount'));
+    const amount = readRialAsToman($('#settle-amount'));
     if (!amount) return;
     const res = await api('POST', `/parties/${partyId}/payment`, { amount });
     if (res && res.ok) { toast(`ثبت شد. مانده جدید: ${fmt(res.new_balance)} تومان`, 'success'); closeModal(); loadParties(); }
@@ -2428,14 +2435,14 @@ async function deleteCheckRow(id) {
   else if (res) toast(res.message || 'خطا در حذف', 'danger');
 }
 function checkFormFields(prefix, ch) {
-  const amountVal = ch ? Number(ch.amount).toLocaleString('en-US') : '';
+  const amountVal = ch ? Number(ch.amount * 10).toLocaleString('en-US') : '';
   return `
     <div class="field"><label>نوع</label><select id="${prefix}-direction">
       <option value="received"${!ch || ch.direction === 'received' ? ' selected' : ''}>دریافتی (از کسی چک گرفتی)</option>
       <option value="issued"${ch && ch.direction === 'issued' ? ' selected' : ''}>صادرشده (به کسی چک دادی)</option>
     </select></div>
     <div class="field"><label>طرف حساب (اختیاری)</label><div id="${prefix}-party"></div></div>
-    <div class="field"><label>مبلغ (تومان)</label><input type="text" inputmode="decimal" id="${prefix}-amount" value="${amountVal}"></div>
+    <div class="field"><label>مبلغ (ریال)</label><input type="text" inputmode="decimal" id="${prefix}-amount" value="${amountVal}"><div class="words-hint" id="${prefix}-amount-words"></div></div>
     <div class="field"><label>تاریخ سررسید</label><input type="text" id="${prefix}-due-date" placeholder="1404-07-01" value="${ch ? escHtml(ch.due_date) : ''}"></div>
     <div class="field"><label>توضیحات (اختیاری)</label><input type="text" id="${prefix}-desc" value="${ch ? escHtml(ch.description || '') : ''}"></div>`;
 }
@@ -2446,9 +2453,10 @@ async function openNewCheckModal() {
     ${checkFormFields('nc', null)}
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-new-check-btn">ثبت چک</button></div>`);
   attachThousandsFormatting($('#nc-amount'));
+  attachRialWordsPreview($('#nc-amount'), 'nc-amount-words');
   const partySS = createSearchableSelect('nc-party', state.parties.map(p => ({ value: p.id, label: p.name })), { emptyLabel: '— بدون طرف حساب —' });
   $('#save-new-check-btn').addEventListener('click', async () => {
-    const amount = readAmount($('#nc-amount'));
+    const amount = readRialAsToman($('#nc-amount'));
     const due_date = $('#nc-due-date').value.trim();
     if (!amount || !due_date) { toast('مبلغ و تاریخ سررسید الزامی است', 'danger'); return; }
     const res = await api('POST', '/checks', {
@@ -2468,10 +2476,11 @@ async function openEditCheckModal(id) {
     ${checkFormFields('ec', ch)}
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-edit-check-btn">ذخیره</button></div>`);
   attachThousandsFormatting($('#ec-amount'));
+  attachRialWordsPreview($('#ec-amount'), 'ec-amount-words');
   const partySS = createSearchableSelect('ec-party', state.parties.map(p => ({ value: p.id, label: p.name })), { emptyLabel: '— بدون طرف حساب —' });
   if (ch.party_id) partySS.setValue(ch.party_id);
   $('#save-edit-check-btn').addEventListener('click', async () => {
-    const amount = readAmount($('#ec-amount'));
+    const amount = readRialAsToman($('#ec-amount'));
     const due_date = $('#ec-due-date').value.trim();
     if (!amount || !due_date) { toast('مبلغ و تاریخ سررسید الزامی است', 'danger'); return; }
     const res = await api('PUT', `/checks/${id}`, {
@@ -2632,7 +2641,9 @@ async function loadBankPage() {
   $('#statement-account').innerHTML = state.bankAccounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
 
   attachThousandsFormatting($('#transfer-amount'));
+  attachRialWordsPreview($('#transfer-amount'), 'transfer-amount-words');
   attachThousandsFormatting($('#bank-tx-amount'));
+  attachRialWordsPreview($('#bank-tx-amount'), 'bank-tx-amount-words');
 
   if (state.bankAccounts.length) loadBankStatement();
 }
@@ -2644,15 +2655,16 @@ $('#btn-new-bank-account').addEventListener('click', () => {
     <div class="field"><label>نام بانک</label><input id="nba-bank"></div>
     <div class="field"><label>شماره حساب/کارت</label><input id="nba-number" dir="ltr"></div>
     <div class="field"><label>شماره شبا (اختیاری)</label><input id="nba-iban" dir="ltr" placeholder="IR..."></div>
-    <div class="field"><label>موجودی اولیه</label><input type="text" inputmode="decimal" id="nba-balance" value="0"></div>
+    <div class="field"><label>موجودی اولیه (ریال)</label><input type="text" inputmode="decimal" id="nba-balance" value="0"><div class="words-hint" id="nba-balance-words"></div></div>
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-bank-account-btn">ذخیره</button></div>`);
   attachThousandsFormatting($('#nba-balance'));
+  attachRialWordsPreview($('#nba-balance'), 'nba-balance-words');
   $('#save-bank-account-btn').addEventListener('click', async () => {
     const name = $('#nba-name').value.trim();
     if (!name) { toast('نام حساب الزامی است', 'danger'); return; }
     const res = await api('POST', '/bank-accounts', {
       name, bank_name: $('#nba-bank').value.trim(), account_number: $('#nba-number').value.trim(),
-      iban: $('#nba-iban').value.trim(), balance: readAmount($('#nba-balance')), username: state.user.username,
+      iban: $('#nba-iban').value.trim(), balance: readRialAsToman($('#nba-balance')), username: state.user.username,
     });
     if (res && res.ok) { toast('حساب اضافه شد', 'success'); closeModal(); loadBankPage(); }
     else toast((res && res.message) || 'خطا', 'danger');
@@ -2685,7 +2697,7 @@ function openEditBankAccountModal(accountId) {
 $('#btn-do-transfer').addEventListener('click', async () => {
   const [fromType, fromId] = $('#transfer-from').value.split(':');
   const [toType, toId] = $('#transfer-to').value.split(':');
-  const amount = readAmount($('#transfer-amount'));
+  const amount = readRialAsToman($('#transfer-amount'));
   if (!amount) { toast('مبلغ را وارد کن', 'danger'); return; }
   if (fromType === toType && fromId === toId) { toast('مبدأ و مقصد نمی‌تواند یکی باشد', 'danger'); return; }
   const res = await api('POST', '/bank-transfer', {
@@ -2727,7 +2739,7 @@ refreshBankTxCategoryOptions();
 
 $('#btn-bank-tx-submit').addEventListener('click', async () => {
   const accountId = $('#bank-tx-account').value;
-  const amount = readAmount($('#bank-tx-amount'));
+  const amount = readRialAsToman($('#bank-tx-amount'));
   if (!accountId || !amount) { toast('حساب و مبلغ را وارد کن', 'danger'); return; }
   const res = await api('POST', `/bank-accounts/${accountId}/transaction`, {
     tx_type: $('#bank-tx-type').value, amount, category: $('#bank-tx-category').value,
@@ -2759,9 +2771,9 @@ const EXPENSE_CATEGORY_LABELS = {
 };
 async function loadCash() {
   attachThousandsFormatting($('#cash-amount'));
-  attachWordsPreview($('#cash-amount'), 'cash-amount-words');
+  attachRialWordsPreview($('#cash-amount'), 'cash-amount-words');
   attachThousandsFormatting($('#cash-closing-counted'));
-  attachWordsPreview($('#cash-closing-counted'), 'cash-closing-counted-words');
+  attachRialWordsPreview($('#cash-closing-counted'), 'cash-closing-counted-words');
   const data = await api('GET', '/cash');
   if (!data) return;
   $('#cash-stat').innerHTML = `<div class="stat-card accent" title="${wordsTitle(data.balance)}"><div class="stat-label">موجودی صندوق</div><div class="stat-value">${fmt(data.balance)} تومان</div></div>`;
@@ -2775,7 +2787,7 @@ $('#cash-type').addEventListener('change', () => {
   $('#cash-expense-category').style.display = $('#cash-type').value === 'out' ? '' : 'none';
 });
 $('#btn-add-cash').addEventListener('click', async () => {
-  const amount = readAmount($('#cash-amount'));
+  const amount = readRialAsToman($('#cash-amount'));
   if (!amount) { toast('مبلغ را وارد کنید', 'danger'); return; }
   const txType = $('#cash-type').value;
   const res = await api('POST', '/cash', {
@@ -2795,7 +2807,7 @@ async function loadCashClosings() {
 }
 $('#btn-close-cash').addEventListener('click', async () => {
   if (!$('#cash-closing-counted').value.trim()) { toast('مبلغ شمارش‌شده را وارد کنید', 'danger'); return; }
-  const counted = readAmount($('#cash-closing-counted'));
+  const counted = readRialAsToman($('#cash-closing-counted'));
   const res = await api('POST', '/cash/closings', {
     counted_balance: counted, note: $('#cash-closing-note').value.trim(), username: state.user.username,
   });
