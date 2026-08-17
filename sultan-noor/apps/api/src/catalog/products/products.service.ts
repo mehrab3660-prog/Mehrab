@@ -1,6 +1,7 @@
-import { Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import * as path from 'path';
+import * as XLSX from 'xlsx';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SearchService } from '../../search/search.service';
 import { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
@@ -248,6 +249,136 @@ export class ProductsService implements OnApplicationBootstrap {
 
     await this.reindex(product.id);
     return product;
+  }
+
+  // Bulk product import from a CSV or Excel (.xlsx) spreadsheet. Each row is
+  // one product with a single variant — a real, honest boundary: a
+  // spreadsheet row can't cleanly express a product's full variant matrix,
+  // so multi-variant products still need the normal admin UI afterward.
+  // Rows are processed independently so one bad row (duplicate slug/sku,
+  // missing required field, unknown brand/category name) doesn't abort the
+  // whole batch — the caller gets a per-row report instead.
+  async bulkImport(file: Express.Multer.File, warehouseId?: string) {
+    if (warehouseId) {
+      const warehouse = await this.prisma.warehouse.findUnique({ where: { id: warehouseId } });
+      if (!warehouse) throw new BadRequestException('انبار انتخاب‌شده یافت نشد');
+    }
+
+    let rows: Record<string, unknown>[];
+    try {
+      // A real .xlsx is a ZIP archive (starts with the "PK" magic bytes) and
+      // declares its own encoding internally, so reading it as a buffer is
+      // correct. A .csv is plain text with no such declaration — reading it
+      // as a raw buffer makes SheetJS guess the codepage and mangle any
+      // non-ASCII (Persian) text, so it must be decoded as UTF-8 first and
+      // handed over as a string instead.
+      const isZipBased = file.buffer.length > 2 && file.buffer[0] === 0x50 && file.buffer[1] === 0x4b;
+      const workbook = isZipBased
+        ? XLSX.read(file.buffer, { type: 'buffer' })
+        : XLSX.read(file.buffer.toString('utf-8').replace(/^\uFEFF/, ''), { type: 'string' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    } catch {
+      throw new BadRequestException('فایل قابل خواندن نیست؛ باید یک فایل CSV یا Excel معتبر باشد');
+    }
+    if (rows.length === 0) throw new BadRequestException('فایل هیچ ردیف داده‌ای ندارد');
+
+    const [brands, categories] = await Promise.all([
+      this.prisma.brand.findMany({ select: { id: true, name: true } }),
+      this.prisma.category.findMany({ select: { id: true, name: true } }),
+    ]);
+    const brandByName = new Map(brands.map((b) => [b.name.trim().toLowerCase(), b.id]));
+    const categoryByName = new Map(categories.map((c) => [c.name.trim().toLowerCase(), c.id]));
+
+    const errors: { row: number; message: string }[] = [];
+    let created = 0;
+
+    for (let i = 0; i < rows.length; i++) {
+      // +2: 1 to move from 0-index to 1-index, +1 for the header row —
+      // matches the row number the staff member actually sees in Excel.
+      const rowNumber = i + 2;
+      const row = rows[i];
+      const get = (key: string) => String(row[key] ?? '').trim();
+
+      const name = get('name');
+      const slug = get('slug');
+      const sku = get('sku');
+      const basePriceRaw = get('basePrice');
+      if (!name || !slug || !sku || !basePriceRaw) {
+        errors.push({ row: rowNumber, message: 'ستون‌های name، slug، sku و basePrice الزامی هستند' });
+        continue;
+      }
+      const basePrice = Number(basePriceRaw);
+      if (!Number.isFinite(basePrice) || basePrice <= 0) {
+        errors.push({ row: rowNumber, message: 'basePrice باید عددی مثبت باشد' });
+        continue;
+      }
+
+      const brandName = get('brand');
+      const brandId = brandName ? brandByName.get(brandName.toLowerCase()) : undefined;
+      if (brandName && !brandId) {
+        errors.push({ row: rowNumber, message: `برند «${brandName}» یافت نشد` });
+        continue;
+      }
+      const categoryName = get('category');
+      const categoryId = categoryName ? categoryByName.get(categoryName.toLowerCase()) : undefined;
+      if (categoryName && !categoryId) {
+        errors.push({ row: rowNumber, message: `دسته‌بندی «${categoryName}» یافت نشد` });
+        continue;
+      }
+
+      const compareAtPriceRaw = get('compareAtPrice');
+      const priceRaw = get('price');
+      const weightGramsRaw = get('weightGrams');
+      const quantityRaw = get('quantity');
+
+      try {
+        const product = await this.create({
+          name,
+          slug,
+          description: get('description') || undefined,
+          // Matches the manual "add product" form's default — an imported
+          // row should actually go live and be orderable, not sit hidden
+          // as a draft the staff member has to remember to publish.
+          status: 'PUBLISHED',
+          brandId,
+          categoryId,
+          basePrice,
+          compareAtPrice: compareAtPriceRaw ? Number(compareAtPriceRaw) : undefined,
+          variants: [
+            {
+              sku,
+              attributes: {},
+              price: priceRaw ? Number(priceRaw) : basePrice,
+              weightGrams: weightGramsRaw ? Number(weightGramsRaw) : undefined,
+            },
+          ],
+        });
+
+        const quantity = quantityRaw ? Number(quantityRaw) : 0;
+        if (warehouseId && quantity > 0) {
+          const variant = product.variants[0];
+          await this.prisma.stock.upsert({
+            where: { warehouseId_productVariantId: { warehouseId, productVariantId: variant.id } },
+            create: { warehouseId, productVariantId: variant.id, quantity },
+            update: { quantity: { increment: quantity } },
+          });
+        }
+
+        created++;
+      } catch (err) {
+        // Prisma's unique-constraint error (duplicate slug/sku) is the
+        // expected failure mode here — surface it as a row-level message
+        // rather than a raw Prisma error code.
+        const message =
+          err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002'
+            ? 'اسلاگ یا کد کالا (SKU) تکراری است'
+            : 'خطای غیرمنتظره در ثبت این ردیف';
+        errors.push({ row: rowNumber, message });
+      }
+    }
+
+    return { totalRows: rows.length, created, failed: errors.length, errors };
   }
 
   async update(id: string, dto: UpdateProductDto) {

@@ -62,6 +62,15 @@ export class ProductsController {
     return this.productsService.remove(id);
   }
 
+  @Post('bulk-import')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.STAFF)
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  bulkImport(@UploadedFile() file: Express.Multer.File | undefined, @Body('warehouseId') warehouseId?: string) {
+    if (!file) throw new BadRequestException('فایل ارسال نشده است');
+    return this.productsService.bulkImport(file, warehouseId || undefined);
+  }
+
   @Post(':id/images')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.STAFF)

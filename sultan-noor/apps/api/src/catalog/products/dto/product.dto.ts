@@ -4,6 +4,7 @@ import {
   IsEnum,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   Min,
@@ -15,6 +16,7 @@ export class ProductVariantInputDto {
   @IsString()
   sku: string;
 
+  @IsObject()
   attributes: Record<string, string>;
 
   @IsNumber()

@@ -5,11 +5,43 @@ import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Product } from "@/lib/types";
 
+interface Warehouse {
+  id: string;
+  name: string;
+}
+
+interface BulkImportResult {
+  totalRows: number;
+  created: number;
+  failed: number;
+  errors: { row: number; message: string }[];
+}
+
+const BULK_IMPORT_TEMPLATE =
+  "name,slug,sku,basePrice,compareAtPrice,brand,category,price,weightGrams,quantity\n" +
+  "لامپ نمونه ۹ وات,sample-led-9w,SKU-SAMPLE-1,150000,,,,,,10\n";
+
+function downloadBulkImportTemplate() {
+  const blob = new Blob(["﻿" + BULK_IMPORT_TEMPLATE], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "قالب-ورود-گروهی-محصولات.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function AdminProductsPage() {
   const { accessToken } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [form, setForm] = useState({ name: "", slug: "", basePrice: "" });
   const [error, setError] = useState<string | null>(null);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [importWarehouseId, setImportWarehouseId] = useState("");
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<BulkImportResult | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
 
   async function load() {
     if (!accessToken) return;
@@ -22,7 +54,32 @@ export default function AdminProductsPage() {
 
   useEffect(() => {
     load();
+    if (accessToken) api.get<Warehouse[]>("/warehouses", accessToken).then(setWarehouses).catch(() => {});
   }, [accessToken]);
+
+  async function handleBulkImport(e: React.FormEvent) {
+    e.preventDefault();
+    if (!importFile) return;
+    setImporting(true);
+    setImportError(null);
+    setImportResult(null);
+    try {
+      const result = await api.upload<BulkImportResult>(
+        "/products/bulk-import",
+        importFile,
+        "file",
+        accessToken,
+        importWarehouseId ? { warehouseId: importWarehouseId } : undefined,
+      );
+      setImportResult(result);
+      setImportFile(null);
+      load();
+    } catch (err) {
+      setImportError(err instanceof ApiError ? err.message : "خطا در وارد کردن فایل");
+    } finally {
+      setImporting(false);
+    }
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -89,6 +146,72 @@ export default function AdminProductsPage() {
         />
         <button className="rounded-lg bg-brand px-3 py-1 text-sm text-[#0b0e14]">افزودن محصول</button>
         {error && <p className="col-span-4 text-sm text-red-500">{error}</p>}
+      </form>
+
+      <form onSubmit={handleBulkImport} className="mb-8 space-y-3 rounded-lg border border-border-color p-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-bold">ورود گروهی محصولات از فایل CSV یا Excel</h2>
+          <button type="button" onClick={downloadBulkImportTemplate} className="text-xs text-brand hover:underline">
+            دانلود قالب نمونه
+          </button>
+        </div>
+        <p className="text-xs text-foreground/50">
+          ستون‌های name، slug، sku و basePrice الزامی هستند. هر ردیف یک محصول با یک گزینه (variant) می‌سازد؛ برای
+          افزودن گزینه‌های بیشتر بعداً از همین صفحه استفاده کنید.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+            className="text-sm"
+          />
+          <select
+            value={importWarehouseId}
+            onChange={(e) => setImportWarehouseId(e.target.value)}
+            className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
+          >
+            <option value="">بدون ثبت موجودی اولیه</option>
+            {warehouses.map((w) => (
+              <option key={w.id} value={w.id}>
+                موجودی اولیه در: {w.name}
+              </option>
+            ))}
+          </select>
+          <button
+            disabled={!importFile || importing}
+            className="rounded-lg bg-brand px-3 py-1 text-sm font-bold text-[#0b0e14] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {importing ? "در حال وارد کردن..." : "وارد کردن"}
+          </button>
+        </div>
+        {importError && <p className="text-sm text-red-500">{importError}</p>}
+        {importResult && (
+          <div className="rounded-lg bg-background p-3 text-sm">
+            <p>
+              از {importResult.totalRows.toLocaleString("fa-IR")} ردیف،{" "}
+              <span className="font-bold text-emerald-400">{importResult.created.toLocaleString("fa-IR")}</span> محصول
+              ثبت شد
+              {importResult.failed > 0 && (
+                <>
+                  {" و "}
+                  <span className="font-bold text-red-400">{importResult.failed.toLocaleString("fa-IR")}</span> ردیف
+                  با خطا مواجه شد.
+                </>
+              )}
+              {importResult.failed === 0 && "."}
+            </p>
+            {importResult.errors.length > 0 && (
+              <ul className="mt-2 space-y-1 text-xs text-foreground/60">
+                {importResult.errors.map((e, i) => (
+                  <li key={i}>
+                    ردیف {e.row.toLocaleString("fa-IR")}: {e.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </form>
 
       <table className="w-full text-sm">

@@ -49,9 +49,10 @@ export const api = {
   patch: <T>(path: string, body?: unknown, token?: string | null) =>
     apiFetch<T>(path, { method: "PATCH", body: body ? JSON.stringify(body) : undefined, token }),
   delete: <T>(path: string, token?: string | null) => apiFetch<T>(path, { method: "DELETE", token }),
-  upload: <T>(path: string, file: File, fieldName: string, token?: string | null) => {
+  upload: <T>(path: string, file: File, fieldName: string, token?: string | null, extraFields?: Record<string, string>) => {
     const form = new FormData();
     form.append(fieldName, file);
+    if (extraFields) Object.entries(extraFields).forEach(([key, value]) => form.append(key, value));
     return apiFetch<T>(path, { method: "POST", body: form, token });
   },
 };
