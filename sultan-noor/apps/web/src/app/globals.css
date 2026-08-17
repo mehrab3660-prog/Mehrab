@@ -3,38 +3,34 @@
 /* Dark Premium is the site's committed identity (not a light/dark toggle) —
    a deep navy-black base with gold as the single accent, per brand spec. */
 :root {
-  --background: #050a12;
-  --foreground: #f3f1ea;
-  --muted: #9aa3b5;
-  --brand: #f5b82e;
-  --brand-light: #ffd873;
-  --brand-dark: #c9910f;
-  --surface: #0b1220;
-  --surface-2: #101b2e;
-  --border-color: #1c2740;
   --glow: 245 184 46;
   --shadow-color: 0 0 0;
-  --accent-cyan: #35d0e0;
-  --accent-purple: #8b6bf0;
+}
+
+/* Literal (non-indirected) color values: Tailwind v4 needs the raw value at
+   build time to generate color-mix()-based opacity variants (bg-brand/10,
+   text-brand/60, etc). A var(--brand)-style indirection here silently
+   collapses every opacity variant to the fully opaque color instead. */
+@theme {
+  --color-background: #050a12;
+  --color-foreground: #f3f1ea;
+  --color-muted: #9aa3b5;
+  --color-brand: #f5b82e;
+  --color-brand-light: #ffd873;
+  --color-brand-dark: #c9910f;
+  --color-surface: #0b1220;
+  --color-surface-2: #101b2e;
+  --color-border-color: #1c2740;
+  --color-accent-cyan: #35d0e0;
+  --color-accent-purple: #8b6bf0;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-muted: var(--muted);
-  --color-brand: var(--brand);
-  --color-brand-light: var(--brand-light);
-  --color-brand-dark: var(--brand-dark);
-  --color-surface: var(--surface);
-  --color-surface-2: var(--surface-2);
-  --color-border-color: var(--border-color);
-  --color-accent-cyan: var(--accent-cyan);
-  --color-accent-purple: var(--accent-purple);
   --font-sans: var(--font-vazirmatn);
 }
 
 * {
-  border-color: var(--border-color);
+  border-color: var(--color-border-color);
 }
 
 html {
@@ -43,8 +39,8 @@ html {
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-background);
+  color: var(--color-foreground);
   font-family: var(--font-vazirmatn), Tahoma, sans-serif;
   position: relative;
 }
@@ -67,15 +63,15 @@ body::before {
 }
 
 .gradient-text {
-  background: linear-gradient(90deg, var(--brand-light), var(--brand));
+  background: linear-gradient(90deg, var(--color-brand-light), var(--color-brand));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
 .surface-card {
-  background: var(--surface);
-  border: 1px solid var(--border-color);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-color);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
@@ -104,7 +100,7 @@ input:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid var(--brand);
+  outline: 2px solid var(--color-brand);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -113,7 +109,7 @@ select:focus-visible,
 .skeleton {
   position: relative;
   overflow: hidden;
-  background: var(--surface-2);
+  background: var(--color-surface-2);
 }
 .skeleton::after {
   content: "";

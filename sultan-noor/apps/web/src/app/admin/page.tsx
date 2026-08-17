@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import AdminHelp from "@/components/admin/AdminHelp";
 
 interface Summary {
   totalOrders: number;
@@ -37,6 +38,11 @@ export default function AdminDashboardPage() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">داشبورد فروش</h1>
+      <AdminHelp storageKey="dashboard">
+        <p>این صفحه یک نگاه کلی و سریع به وضعیت فروشگاه می‌دهد و نیازی به هیچ کاری در آن نیست.</p>
+        <p>کارت‌های بالا تعداد سفارش‌ها، درآمد کل، تعداد کاربران و محصولات، موجودی رو به اتمام و نظرات در انتظار تایید را نشان می‌دهند.</p>
+        <p>اگر «موجودی رو به اتمام» زیاد بود، به بخش «انبارها» سر بزنید. اگر «نظرات در انتظار تایید» داشت، به بخش «نظرات» بروید.</p>
+      </AdminHelp>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         {cards.map((c) => (
           <div key={c.label} className="rounded-lg border border-border-color bg-surface p-4">

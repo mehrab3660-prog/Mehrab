@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Banner } from "@/lib/types";
+import AdminHelp from "@/components/admin/AdminHelp";
 
 const PLACEMENTS = ["HOME_HERO", "HOME_SECONDARY", "CATEGORY_TOP", "SIDEBAR"];
 
@@ -34,6 +35,11 @@ export default function AdminBannersPage() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">بنرهای تبلیغاتی</h1>
+      <AdminHelp storageKey="banners">
+        <p>بنرها همان تصاویر تبلیغاتی‌ای هستند که در صفحه اصلی یا بالای دسته‌بندی‌ها نمایش داده می‌شوند.</p>
+        <p>در «آدرس تصویر» باید لینک مستقیم یک عکس را وارد کنید (عکس باید از قبل جایی آپلود شده باشد و لینک آن را داشته باشید).</p>
+        <p>در «محل نمایش»: HOME_HERO یعنی اسلایدر بزرگ بالای صفحه اصلی، HOME_SECONDARY یعنی بنرهای کوچک‌تر صفحه اصلی، CATEGORY_TOP یعنی بالای صفحه‌ی یک دسته‌بندی، و SIDEBAR یعنی نوار کناری.</p>
+      </AdminHelp>
       <form onSubmit={handleCreate} className="mb-6 grid grid-cols-3 gap-2">
         <input
           required

@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { Warehouse, StockLevel } from "@/lib/types";
+import AdminHelp from "@/components/admin/AdminHelp";
 
 export default function AdminWarehousesPage() {
   const { accessToken } = useAuth();
@@ -78,6 +79,12 @@ export default function AdminWarehousesPage() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">انبارها و موجودی</h1>
+
+      <AdminHelp storageKey="warehouses">
+        <p>هر انبار یک مکان فیزیکی نگهداری کالاست. با فرم بالا انبار جدید بسازید و با «فعال کردن / غیرفعال کردن» تعیین کنید که سفارش‌ها به آن انبار هدایت شوند یا نه.</p>
+        <p>با کلیک روی نام یک انبار، موجودی همان انبار پایین صفحه نمایش داده می‌شود.</p>
+        <p>برای تغییر موجودی، ستون SKU جدول را برای پیدا کردن محصول موردنظر ببینید و «شناسه تنوع محصول» (Variant ID) آن را در فرم «ثبت تغییر موجودی» وارد کنید. برای افزایش موجودی عدد مثبت و برای کم کردن عدد منفی بنویسید. اگر شناسه‌ی تنوع محصول را نمی‌دانید، از توسعه‌دهنده‌ی سایت بپرسید.</p>
+      </AdminHelp>
 
       <form onSubmit={handleCreate} className="mb-6 flex flex-wrap gap-2">
         <input

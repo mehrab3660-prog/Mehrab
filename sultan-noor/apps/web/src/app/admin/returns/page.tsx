@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { ReturnRequest } from "@/lib/types";
+import AdminHelp from "@/components/admin/AdminHelp";
 
 const STATUS_LABEL: Record<ReturnRequest["status"], string> = {
   PENDING: "در انتظار بررسی",
@@ -39,6 +40,12 @@ export default function AdminReturnsPage() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">درخواست‌های مرجوعی</h1>
+
+      <AdminHelp storageKey="returns">
+        <p>وقتی مشتری درخواست مرجوعی کالا می‌دهد، این درخواست اینجا با وضعیت «در انتظار بررسی» نمایش داده می‌شود.</p>
+        <p>بعد از بررسی کالا، اگر مرجوعی قابل قبول است روی «تایید» بزنید، در غیر این صورت روی «رد» بزنید. می‌توانید قبل از تصمیم‌گیری یک یادداشت هم بنویسید.</p>
+        <p>بعد از تایید و دریافت فیزیکی کالا، دکمه‌ی «ثبت بازگشت وجه» را بزنید تا مرحله نهایی (برگرداندن پول به مشتری) ثبت شود.</p>
+      </AdminHelp>
 
       {requests === null ? (
         <p className="text-sm text-foreground/50">در حال بارگذاری...</p>

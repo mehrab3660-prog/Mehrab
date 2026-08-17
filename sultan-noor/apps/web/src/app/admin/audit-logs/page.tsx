@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { AuditLogEntry } from "@/lib/types";
+import AdminHelp from "@/components/admin/AdminHelp";
 
 export default function AdminAuditLogsPage() {
   const { accessToken, user } = useAuth();
@@ -25,6 +26,10 @@ export default function AdminAuditLogsPage() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">لاگ فعالیت و حسابرسی</h1>
+      <AdminHelp storageKey="audit-logs">
+        <p>این صفحه سابقه‌ی کارهای مهمی است که مدیران و کارمندان در سایت انجام داده‌اند (مثلاً تغییر موجودی، تغییر نقش کاربر، تغییر وضعیت سفارش). هیچ‌کدام از این موارد قابل تغییر یا حذف نیستند و فقط برای پیگیری و شفافیت است.</p>
+        <p>با نوشتن یک کلمه در کادر فیلتر (مثلاً Stock، User یا Order) می‌توانید فقط رویدادهای مربوط به همان بخش را ببینید.</p>
+      </AdminHelp>
       <div className="mb-4">
         <input
           placeholder="فیلتر نوع موجودیت (مثلاً Stock، User، Order)"

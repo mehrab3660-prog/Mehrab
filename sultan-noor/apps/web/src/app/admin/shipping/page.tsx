@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { ShippingRate } from "@/lib/types";
+import AdminHelp from "@/components/admin/AdminHelp";
 
 function formatToman(value: string | number) {
   return `${Number(value).toLocaleString("fa-IR")} تومان`;
@@ -56,11 +57,13 @@ export default function AdminShippingPage() {
 
   return (
     <div>
-      <h1 className="mb-2 text-2xl font-bold">نرخ‌های ارسال</h1>
-      <p className="mb-6 text-sm text-foreground/50">
-        برای هر استان، سقف وزن (گرم) و هزینه‌ی متناظر را تعریف کنید. سطر بدون استان به‌عنوان نرخ پیش‌فرض برای سایر استان‌ها
-        استفاده می‌شود. در صورت نبود هیچ نرخی، هزینه‌ی ثابت پیش‌فرض اعمال می‌شود.
-      </p>
+      <h1 className="mb-6 text-2xl font-bold">نرخ‌های ارسال</h1>
+
+      <AdminHelp storageKey="shipping">
+        <p>برای هر استان می‌توانید سقف وزن بسته (بر حسب گرم) و هزینه‌ی ارسال متناظر آن را تعریف کنید. مثلاً «تهران، تا ۲۰۰۰ گرم، ۵۰٬۰۰۰ تومان».</p>
+        <p>سطری که فیلد «استان» را خالی بگذارید، به‌عنوان نرخ پیش‌فرض برای همه‌ی استان‌های دیگر استفاده می‌شود.</p>
+        <p>اگر اصلاً هیچ نرخی ثبت نکنید، سیستم یک هزینه‌ی ثابت پیش‌فرض برای همه‌ی سفارش‌ها حساب می‌کند.</p>
+      </AdminHelp>
 
       <form onSubmit={handleCreate} className="mb-6 flex flex-wrap gap-2">
         <input

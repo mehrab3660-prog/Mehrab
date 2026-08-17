@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Brand } from "@/lib/types";
+import AdminHelp from "@/components/admin/AdminHelp";
 
 export default function AdminBrandsPage() {
   const { accessToken } = useAuth();
@@ -31,6 +32,10 @@ export default function AdminBrandsPage() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">برندها</h1>
+      <AdminHelp storageKey="brands">
+        <p>این بخش برای ثبت برند سازنده‌ی محصولات است (مثلاً «فیلیپس» یا «پارس شعاع توس»). بعد از ساخت برند، می‌توانید هنگام ویرایش یک محصول آن را به این برند وصل کنید.</p>
+        <p>«نام برند» را به فارسی و «اسلاگ» را انگلیسی و بدون فاصله وارد کنید (مثلاً philips).</p>
+      </AdminHelp>
       <form onSubmit={handleCreate} className="mb-6 flex gap-2">
         <input
           required

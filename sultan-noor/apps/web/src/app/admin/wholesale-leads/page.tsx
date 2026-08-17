@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { WholesaleLead } from "@/lib/types";
+import AdminHelp from "@/components/admin/AdminHelp";
 
 const STATUS_LABEL: Record<WholesaleLead["status"], string> = {
   NEW: "جدید",
@@ -41,6 +42,12 @@ export default function AdminWholesaleLeadsPage() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">درخواست‌های همکاری عمده‌فروشی</h1>
+
+      <AdminHelp storageKey="wholesale-leads">
+        <p>وقتی یک شرکت یا فروشگاه از فرم «تماس با ما» درخواست همکاری عمده می‌فرستد، اینجا با وضعیت «جدید» نمایش داده می‌شود.</p>
+        <p>بعد از تماس با مشتری، وضعیت را از منوی کشویی به «تماس گرفته شد» تغییر دهید. اگر همکاری نهایی شد به «تبدیل به مشتری شد» و اگر منتفی شد به «بسته شد» تغییر دهید.</p>
+        <p>می‌توانید قبل از تغییر وضعیت یک یادداشت برای خودتان یا همکاران ثبت کنید.</p>
+      </AdminHelp>
 
       {leads === null ? (
         <p className="text-sm text-foreground/50">در حال بارگذاری...</p>

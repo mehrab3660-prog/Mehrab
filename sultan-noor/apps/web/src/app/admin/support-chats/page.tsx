@@ -90,7 +90,7 @@ export default function AdminSupportChatsPage() {
                     <div
                       key={m.id}
                       className={`max-w-[85%] rounded-lg px-3 py-1.5 text-xs ${
-                        m.role === "USER" ? "mr-auto bg-surface-2" : m.role === "STAFF" ? "ml-auto bg-brand/20" : "ml-auto bg-surface-2 text-foreground/60"
+                        m.role === "USER" ? "mr-auto bg-surface-2" : m.role === "STAFF" ? "ml-auto border border-brand/40 bg-surface" : "ml-auto bg-surface-2 text-foreground/60"
                       }`}
                     >
                       <p className="mb-0.5 font-bold text-foreground/40">{ROLE_LABEL[m.role]}</p>

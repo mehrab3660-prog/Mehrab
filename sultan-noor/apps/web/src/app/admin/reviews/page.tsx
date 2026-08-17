@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { PendingReview } from "@/lib/types";
+import AdminHelp from "@/components/admin/AdminHelp";
 
 export default function AdminReviewsPage() {
   const { accessToken } = useAuth();
@@ -41,6 +42,11 @@ export default function AdminReviewsPage() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">نظرات در انتظار تایید</h1>
+
+      <AdminHelp storageKey="reviews">
+        <p>وقتی مشتری برای یک محصول نظر و امتیاز ثبت می‌کند، تا زمانی که شما آن را تایید نکنید، در صفحه‌ی محصول به بقیه نمایش داده نمی‌شود.</p>
+        <p>نظر را بخوانید و در صورت مناسب بودن «تایید» را بزنید تا برای همه نمایش داده شود. اگر نامناسب یا اسپم بود، «حذف» را بزنید.</p>
+      </AdminHelp>
 
       {reviews === null ? (
         <p className="text-sm text-foreground/50">در حال بارگذاری...</p>

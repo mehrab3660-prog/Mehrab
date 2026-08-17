@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Order } from "@/lib/types";
+import AdminHelp from "@/components/admin/AdminHelp";
 
 const STATUSES = ["PENDING_PAYMENT", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED", "REFUNDED"];
 
@@ -32,6 +33,11 @@ export default function AdminOrdersPage() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">مدیریت سفارش‌ها</h1>
+      <AdminHelp storageKey="orders">
+        <p>هر ردیف یک سفارش مشتری است. با تغییر دادن گزینه‌ی ستون «وضعیت»، وضعیت همان سفارش فوراً به‌روزرسانی و برای مشتری پیامک اطلاع‌رسانی می‌شود.</p>
+        <p>معنی وضعیت‌ها: PENDING_PAYMENT یعنی هنوز پرداخت نشده، PROCESSING یعنی در حال آماده‌سازی، SHIPPED یعنی ارسال شده، DELIVERED یعنی تحویل مشتری شده، CANCELLED یعنی لغو شده و REFUNDED یعنی وجه آن بازگشت داده شده است.</p>
+        <p>فقط سفارش‌هایی که به PROCESSING، SHIPPED یا DELIVERED می‌رسند در گزارش‌های فروش به‌عنوان درآمد واقعی حساب می‌شوند.</p>
+      </AdminHelp>
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border-color text-right">

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Product } from "@/lib/types";
+import AdminHelp from "@/components/admin/AdminHelp";
 
 interface Warehouse {
   id: string;
@@ -120,6 +121,13 @@ export default function AdminProductsPage() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">مدیریت محصولات</h1>
+
+      <AdminHelp storageKey="products">
+        <p>برای افزودن یک محصول تکی، فرم بالای جدول را پر کنید و «افزودن محصول» را بزنید. بعد از ساختن محصول می‌توانید از ستون «عکس‌ها» برای آن عکس اضافه کنید (روی «+» کلیک کنید).</p>
+        <p>اگر تعداد محصولات زیاد است، به‌جای وارد کردن یک‌به‌یک، از بخش «ورود گروهی محصولات» استفاده کنید: اول «دانلود قالب نمونه» را بزنید، فایل اکسل/CSV خودتان را طبق همان قالب پر کنید، سپس آن را انتخاب و «وارد کردن» را بزنید.</p>
+        <p>ستون‌های name (نام)، slug (آدرس انگلیسی صفحه)، sku (کد محصول) و basePrice (قیمت پایه) در فایل ورود گروهی الزامی هستند.</p>
+        <p>برای حذف یک محصول، روی «حذف» در انتهای همان ردیف بزنید. این کار قابل بازگشت نیست.</p>
+      </AdminHelp>
 
       <form onSubmit={handleCreate} className="mb-8 grid grid-cols-4 gap-2 rounded-lg border border-border-color p-4">
         <input

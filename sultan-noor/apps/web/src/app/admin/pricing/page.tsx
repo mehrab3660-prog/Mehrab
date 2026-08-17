@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { CustomerGroup, DiscountCode, PriceTier } from "@/lib/types";
+import AdminHelp from "@/components/admin/AdminHelp";
 
 function formatToman(value: string | number) {
   return `${Number(value).toLocaleString("fa-IR")} تومان`;
@@ -99,6 +100,12 @@ export default function AdminPricingPage() {
   return (
     <div className="space-y-10">
       <h1 className="text-2xl font-bold">قیمت‌گذاری و تخفیف‌ها</h1>
+
+      <AdminHelp storageKey="pricing">
+        <p>«گروه‌های مشتری» برای مشتریان عمده (B2B) است؛ مثلاً می‌توانید گروه «پیمانکاران» بسازید و برای آن‌ها قیمت ویژه تعریف کنید.</p>
+        <p>«کدهای تخفیف» همان کدهایی هستند که مشتری هنگام خرید در سبد خرید وارد می‌کند. نوع «درصدی» یعنی مثلاً ۱۰٪ از مبلغ کم می‌شود و «مبلغ ثابت» یعنی یک عدد مشخص (مثلاً ۵۰٬۰۰۰ تومان) کم می‌شود. برای غیرفعال کردن یک کد کافیست دکمه‌ی «غیرفعال کردن» را بزنید؛ کد حذف نمی‌شود، فقط دیگر قابل استفاده نیست.</p>
+        <p>«پلن‌های قیمت‌گذاری پلکانی» یعنی تعریف قیمت ویژه برای یک محصول بر اساس تعداد خرید و گروه مشتری (مثلاً اگر گروه پیمانکاران ۱۰ عدد یا بیشتر بخرند، قیمت واحد کمتر شود). ابتدا «شناسه محصول» را وارد و «جستجو» را بزنید، سپس فرم پلن قیمت را پر کنید.</p>
+      </AdminHelp>
 
       <section>
         <h2 className="mb-3 text-lg font-bold">گروه‌های مشتری (B2B)</h2>

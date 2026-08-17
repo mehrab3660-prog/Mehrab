@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import AdminHelp from "@/components/admin/AdminHelp";
 
 interface Report {
   range: { from: string; to: string };
@@ -121,9 +122,11 @@ export default function AdminAnalyticsPage() {
         </div>
       </div>
 
-      <p className="mb-4 text-xs text-foreground/40">
-        فقط سفارش‌های واقعاً پردازش‌شده (در حال پردازش، ارسال‌شده، تحویل‌داده‌شده) در محاسبه‌ی درآمد لحاظ می‌شوند.
-      </p>
+      <AdminHelp storageKey="analytics">
+        <p>با تاریخ «از» و «تا» بازه‌ی زمانی گزارش را انتخاب کنید و روی «اعمال» بزنید تا گزارش همان بازه نمایش داده شود.</p>
+        <p>فقط سفارش‌هایی که واقعاً در حال پردازش، ارسال یا تحویل داده شده‌اند در درآمد حساب می‌شوند؛ سفارش‌های پرداخت‌نشده یا لغوشده حساب نمی‌شوند.</p>
+        <p>با دکمه‌ی «خروجی CSV» می‌توانید کل گزارش را به‌صورت یک فایل اکسل/CSV دانلود کنید تا در جای دیگری (مثلاً اکسل) بررسی کنید.</p>
+      </AdminHelp>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {cards.map((c) => (

@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { AdminQuestion } from "@/lib/types";
+import AdminHelp from "@/components/admin/AdminHelp";
 
 export default function AdminQaPage() {
   const { accessToken } = useAuth();
@@ -45,6 +46,12 @@ export default function AdminQaPage() {
           فقط پاسخ‌داده‌نشده‌ها
         </label>
       </div>
+
+      <AdminHelp storageKey="qa">
+        <p>مشتریان می‌توانند از صفحه‌ی هر محصول سوال بپرسند. سوال‌های بدون پاسخ اینجا با برچسب زرد «پاسخ‌داده‌نشده» مشخص می‌شوند.</p>
+        <p>برای پاسخ دادن، متن خود را در کادر وارد کنید و «ارسال پاسخ» را بزنید؛ پاسخ شما با برچسب «فروشگاه» زیر همان سوال نمایش داده می‌شود و همه‌ی بازدیدکنندگان آن را می‌بینند.</p>
+        <p>با تیک «فقط پاسخ‌داده‌نشده‌ها» می‌توانید فقط سوال‌هایی را ببینید که هنوز پاسخی نگرفته‌اند.</p>
+      </AdminHelp>
 
       {questions === null ? (
         <p className="text-sm text-foreground/50">در حال بارگذاری...</p>

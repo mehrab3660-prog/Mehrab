@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
+import AdminHelp from "@/components/admin/AdminHelp";
 
 interface SettingStatus {
   configured: boolean;
@@ -145,11 +146,14 @@ export default function AdminSettingsPage() {
 
   return (
     <div>
-      <h1 className="mb-2 text-2xl font-bold">تنظیمات و کلیدهای API</h1>
-      <p className="mb-6 text-sm text-foreground/60">
-        این مقادیر مستقیماً در پایگاه‌داده ذخیره می‌شوند و نیازی به دسترسی سرور یا ویرایش فایل .env ندارند. مقادیر قبلی هرگز
-        نمایش داده نمی‌شوند — فقط چند رقم آخر آن‌ها.
-      </p>
+      <h1 className="mb-6 text-2xl font-bold">تنظیمات و کلیدهای API</h1>
+
+      <AdminHelp storageKey="settings">
+        <p>این بخش برای وصل کردن سرویس‌های خارجی به سایت است: درگاه پرداخت، پیامک، دستیار هوشمند و جستجوی صوتی. تا زمانی که هر کدام را تنظیم نکنید، همان بخش در حالت آزمایشی/محدود کار می‌کند (مثلاً پرداخت واقعی انجام نمی‌شود یا پیامک واقعی ارسال نمی‌شود).</p>
+        <p>برای هر مقدار، فقط کلید/کد مربوطه را از پنل همان سرویس (مثلاً پنل زرین‌پال یا ملی‌پیامک) کپی کرده و در کادر بچسبانید، سپس «ذخیره» را بزنید. مقدار قبلی هرگز به‌طور کامل نمایش داده نمی‌شود (فقط چند رقم آخر) تا امنیت حفظ شود.</p>
+        <p>این مقادیر مستقیماً در پایگاه‌داده ذخیره می‌شوند؛ نیازی به دسترسی به سرور یا ویرایش فایل نیست. اگر یک مقدار را با دکمه‌ی «پاک کردن» حذف کنید، همان بخش به تنظیمات سرور (env) برمی‌گردد.</p>
+        <p>این بخش فقط برای مدیر ارشد قابل مشاهده است، چون مقادیر آن حساس هستند.</p>
+      </AdminHelp>
 
       <div className="space-y-6">
         <section>

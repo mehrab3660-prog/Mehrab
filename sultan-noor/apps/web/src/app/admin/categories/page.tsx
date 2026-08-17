@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Category } from "@/lib/types";
+import AdminHelp from "@/components/admin/AdminHelp";
 
 export default function AdminCategoriesPage() {
   const { accessToken } = useAuth();
@@ -31,6 +32,11 @@ export default function AdminCategoriesPage() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">دسته‌بندی‌ها</h1>
+      <AdminHelp storageKey="categories">
+        <p>دسته‌بندی‌ها همان بخش‌هایی هستند که محصولات فروشگاه در آن‌ها قرار می‌گیرند (مثلاً «لامپ»، «کلید و پریز»). این‌ها در منوی سایت هم به مشتری نشان داده می‌شوند.</p>
+        <p>برای افزودن دسته‌ی جدید، «نام دسته» (مثلاً روشنایی) و «اسلاگ» (نسخه‌ی انگلیسی و بدون فاصله‌ی همان نام، مثلاً roshanaei یا lighting) را وارد و «افزودن» را بزنید.</p>
+        <p>قبل از حذف یک دسته، بهتر است مطمئن شوید محصولی در آن دسته باقی نمانده باشد.</p>
+      </AdminHelp>
       <form onSubmit={handleCreate} className="mb-6 flex gap-2">
         <input
           required

@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { BlogPost } from "@/lib/types";
+import AdminHelp from "@/components/admin/AdminHelp";
 
 interface AdminBlogPost extends BlogPost {
   isPublished: boolean;
@@ -54,6 +55,12 @@ export default function AdminBlogPage() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">مدیریت وبلاگ</h1>
+
+      <AdminHelp storageKey="blog">
+        <p>مقاله‌های این بخش در صفحه‌ی وبلاگ سایت نمایش داده می‌شوند و می‌توانند برای سئو و جذب مشتری از گوگل مفید باشند.</p>
+        <p>وقتی مقاله‌ای می‌سازید، به‌صورت «پیش‌نویس» ذخیره می‌شود و هنوز برای بازدیدکنندگان قابل دیدن نیست. برای نمایش عمومی آن، روی «انتشار» در پایین همان مقاله بزنید. هر زمان هم می‌توانید آن را به پیش‌نویس برگردانید تا موقتاً از سایت پنهان شود.</p>
+        <p>«اسلاگ» یعنی نسخه‌ی انگلیسی و بدون فاصله‌ی عنوان که در آدرس اینترنتی مقاله استفاده می‌شود.</p>
+      </AdminHelp>
 
       <form onSubmit={handleCreate} className="mb-6 grid grid-cols-1 gap-2 rounded-lg border border-border-color p-3 sm:grid-cols-2">
         <input

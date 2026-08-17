@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { AdminUser } from "@/lib/types";
+import AdminHelp from "@/components/admin/AdminHelp";
 
 const ROLES = ["CUSTOMER", "B2B_CUSTOMER", "WAREHOUSE_MANAGER", "STAFF", "ADMIN", "SUPER_ADMIN"] as const;
 
@@ -45,6 +46,11 @@ export default function AdminUsersPage() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">کاربران و نقش‌ها</h1>
+      <AdminHelp storageKey="users">
+        <p>این لیست همه‌ی کسانی است که در سایت ثبت‌نام کرده‌اند. با تغییر «نقش» یک کاربر، سطح دسترسی او را تعیین می‌کنید.</p>
+        <p>«مشتری عادی» و «مشتری عمده» دسترسی به پنل مدیریت ندارند. «مدیر انبار» فقط به بخش انبارها دسترسی دارد. «کارمند» و «مدیر» به بخش‌های مختلف پنل مدیریت دسترسی دارند. «مدیر ارشد» بالاترین دسترسی را دارد و تنها کسی است که می‌تواند نقش مدیر یا مدیر ارشد بدهد.</p>
+        <p>در تغییر نقش افراد دقت کنید؛ به کسی که نمی‌شناسید نقش «مدیر» یا «مدیر ارشد» ندهید.</p>
+      </AdminHelp>
       {!isSuperAdmin && (
         <p className="mb-4 rounded-lg border border-border-color p-3 text-sm text-foreground/60">
           فقط مدیر ارشد می‌تواند نقش‌های مدیریتی (مدیر / مدیر ارشد) را تغییر دهد.

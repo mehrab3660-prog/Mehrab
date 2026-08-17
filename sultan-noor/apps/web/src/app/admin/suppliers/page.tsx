@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { Supplier } from "@/lib/types";
+import AdminHelp from "@/components/admin/AdminHelp";
 
 export default function AdminSuppliersPage() {
   const { accessToken } = useAuth();
@@ -48,6 +49,12 @@ export default function AdminSuppliersPage() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">تامین‌کنندگان</h1>
+
+      <AdminHelp storageKey="suppliers">
+        <p>این بخش فقط برای نگهداری اطلاعات تماس شرکت‌ها یا افرادی است که از آن‌ها کالا خرید می‌کنید (عمده‌فروشان و کارخانه‌ها). این لیست به مشتریان نمایش داده نمی‌شود.</p>
+        <p>«نام تامین‌کننده» الزامی است؛ بقیه‌ی فیلدها (نام رابط، تلفن، ایمیل، آدرس) اختیاری هستند و فقط برای یادداشت شماست.</p>
+        <p>اگر دیگر با یک تامین‌کننده همکاری ندارید، لازم نیست حذفش کنید؛ کافی است «غیرفعال کردن» را بزنید تا در لیست بماند ولی به‌عنوان همکار فعال حساب نشود.</p>
+      </AdminHelp>
 
       <form onSubmit={handleCreate} className="mb-6 flex flex-wrap gap-2">
         <input
