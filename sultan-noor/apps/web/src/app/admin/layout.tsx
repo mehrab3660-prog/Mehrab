@@ -12,6 +12,7 @@ const NAV = [
   { href: "/admin/orders", label: "سفارش‌ها" },
   { href: "/admin/returns", label: "مرجوعی‌ها" },
   { href: "/admin/wholesale-leads", label: "درخواست‌های عمده‌فروشی" },
+  { href: "/admin/support-chats", label: "پشتیبانی زنده" },
   { href: "/admin/categories", label: "دسته‌بندی‌ها" },
   { href: "/admin/brands", label: "برندها" },
   { href: "/admin/banners", label: "بنرها" },

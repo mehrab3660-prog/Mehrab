@@ -8,3 +8,8 @@ export class AskAdvisorDto {
   @IsString()
   message: string;
 }
+
+export class StaffReplyDto {
+  @IsString()
+  message: string;
+}

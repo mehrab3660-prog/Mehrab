@@ -5,6 +5,21 @@ export interface AuthUser {
   customerType: "RETAIL" | "WHOLESALE";
 }
 
+export interface AiMessage {
+  id: string;
+  role: "USER" | "ASSISTANT" | "SYSTEM" | "STAFF";
+  content: string;
+  createdAt: string;
+}
+
+export interface AiConversation {
+  id: string;
+  escalatedAt?: string | null;
+  resolvedAt?: string | null;
+  messages: AiMessage[];
+  user?: { id: string; fullName: string | null; phone: string } | null;
+}
+
 export interface ProductImage {
   id: string;
   url: string;

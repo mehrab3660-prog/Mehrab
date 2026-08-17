@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SearchService } from '../search/search.service';
 import { SettingsService } from '../settings/settings.service';
-import { AskAdvisorDto } from './dto/ai-advisor.dto';
+import { NotificationsService } from '../notifications/notifications.service';
+import { AskAdvisorDto, StaffReplyDto } from './dto/ai-advisor.dto';
 
 const SYSTEM_PROMPT = `شما دستیار خرید فروشگاه اینترنتی «سلطان نور» هستید. بر اساس نیاز مشتری و فهرست
 محصولات مرتبطی که در ادامه آمده، بهترین گزینه‌ها را به فارسی و به‌صورت خلاصه پیشنهاد دهید.
@@ -19,6 +20,7 @@ export class AiAdvisorService {
     private prisma: PrismaService,
     private search: SearchService,
     private settings: SettingsService,
+    private notifications: NotificationsService,
   ) {}
 
   async ask(userId: string | undefined, dto: AskAdvisorDto) {
@@ -28,13 +30,87 @@ export class AiAdvisorService {
 
     await this.prisma.aiMessage.create({ data: { conversationId: conversation.id, role: 'USER', content: dto.message } });
 
+    // Once a human has taken over, the bot stays quiet — the customer is
+    // now talking to staff, and an auto-reply here would talk over them.
+    if (conversation.escalatedAt && !conversation.resolvedAt) {
+      return { conversationId: conversation.id, reply: null, suggestedProducts: [], awaitingStaff: true };
+    }
+
     const { hits } = await this.search.searchProducts(dto.message, { limit: 5 });
 
     const reply = await this.generateReply(dto.message, hits);
 
     await this.prisma.aiMessage.create({ data: { conversationId: conversation.id, role: 'ASSISTANT', content: reply } });
 
-    return { conversationId: conversation.id, reply, suggestedProducts: hits };
+    return { conversationId: conversation.id, reply, suggestedProducts: hits, awaitingStaff: false };
+  }
+
+  async getConversation(conversationId: string) {
+    const conversation = await this.prisma.aiConversation.findUnique({
+      where: { id: conversationId },
+      include: { messages: { orderBy: { createdAt: 'asc' } } },
+    });
+    if (!conversation) throw new NotFoundException('گفتگو یافت نشد');
+    return conversation;
+  }
+
+  // Idempotent while a request is still pending (re-requesting on an
+  // already-escalated, unresolved conversation just returns its current
+  // state instead of re-notifying staff every time). A conversation that
+  // was previously resolved can be escalated again — that's a customer
+  // reopening the thread for a new issue, not a duplicate of the old one.
+  async escalate(conversationId: string) {
+    const conversation = await this.prisma.aiConversation.findUnique({ where: { id: conversationId } });
+    if (!conversation) throw new NotFoundException('گفتگو یافت نشد');
+
+    if (!conversation.escalatedAt || conversation.resolvedAt) {
+      await this.prisma.aiConversation.update({
+        where: { id: conversationId },
+        data: { escalatedAt: new Date(), resolvedAt: null },
+      });
+      await this.prisma.aiMessage.create({
+        data: { conversationId, role: 'SYSTEM', content: 'کاربر درخواست صحبت با پشتیبان انسانی را ثبت کرد.' },
+      });
+      await this.notifyStaffOfEscalation();
+    }
+
+    return this.getConversation(conversationId);
+  }
+
+  async listEscalated() {
+    return this.prisma.aiConversation.findMany({
+      where: { escalatedAt: { not: null }, resolvedAt: null },
+      include: {
+        messages: { orderBy: { createdAt: 'asc' } },
+        user: { select: { id: true, fullName: true, phone: true } },
+      },
+      orderBy: { escalatedAt: 'asc' },
+    });
+  }
+
+  async staffReply(conversationId: string, dto: StaffReplyDto) {
+    const conversation = await this.prisma.aiConversation.findUnique({ where: { id: conversationId } });
+    if (!conversation) throw new NotFoundException('گفتگو یافت نشد');
+    await this.prisma.aiMessage.create({ data: { conversationId, role: 'STAFF', content: dto.message } });
+    return this.getConversation(conversationId);
+  }
+
+  async resolve(conversationId: string) {
+    const conversation = await this.prisma.aiConversation.findUnique({ where: { id: conversationId } });
+    if (!conversation) throw new NotFoundException('گفتگو یافت نشد');
+    return this.prisma.aiConversation.update({ where: { id: conversationId }, data: { resolvedAt: new Date() } });
+  }
+
+  private async notifyStaffOfEscalation() {
+    const staff = await this.prisma.user.findMany({
+      where: { role: { in: ['SUPER_ADMIN', 'ADMIN', 'STAFF'] } },
+      select: { id: true },
+    });
+    await Promise.all(
+      staff.map((s) =>
+        this.notifications.notify(s.id, 'SYSTEM', 'درخواست پشتیبانی انسانی', 'یک مشتری در گفتگوی هوشمند درخواست صحبت با پشتیبان کرده است.'),
+      ),
+    );
   }
 
   private async generateReply(userMessage: string, products: unknown[]): Promise<string> {

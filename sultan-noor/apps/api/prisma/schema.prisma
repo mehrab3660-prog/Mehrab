@@ -832,13 +832,23 @@ model AiConversation {
   userId    String?
   user      User?       @relation(fields: [userId], references: [id])
   messages  AiMessage[]
+
+  // Set when the customer asks to talk to a human — staff then see this
+  // conversation in their queue and can reply as AiMessageRole.STAFF.
+  // resolvedAt clears it back off the queue once handled.
+  escalatedAt DateTime?
+  resolvedAt  DateTime?
+
   createdAt DateTime    @default(now())
+
+  @@index([escalatedAt])
 }
 
 enum AiMessageRole {
   USER
   ASSISTANT
   SYSTEM
+  STAFF
 }
 
 model AiMessage {
