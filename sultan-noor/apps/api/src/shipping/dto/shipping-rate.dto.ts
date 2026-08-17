@@ -13,3 +13,19 @@ export class CreateShippingRateDto {
   @IsPositive()
   price: number;
 }
+
+export class UpdateShippingRateDto {
+  @IsOptional()
+  @IsString()
+  province?: string;
+
+  @IsOptional()
+  @IsInt()
+  @IsPositive()
+  maxWeightGrams?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  price?: number;
+}

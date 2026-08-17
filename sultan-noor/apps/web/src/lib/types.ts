@@ -60,6 +60,7 @@ export interface Product {
   minWholesaleQty?: number | null;
   brand?: Brand | null;
   category?: Category | null;
+  supplierId?: string | null;
   images: ProductImage[];
   variants: ProductVariant[];
   avgRating?: number | null;

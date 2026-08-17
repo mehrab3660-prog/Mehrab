@@ -104,7 +104,7 @@ export default function AdminPricingPage() {
       <AdminHelp storageKey="pricing">
         <p>«گروه‌های مشتری» برای مشتریان عمده (B2B) است؛ مثلاً می‌توانید گروه «پیمانکاران» بسازید و برای آن‌ها قیمت ویژه تعریف کنید.</p>
         <p>«کدهای تخفیف» همان کدهایی هستند که مشتری هنگام خرید در سبد خرید وارد می‌کند. نوع «درصدی» یعنی مثلاً ۱۰٪ از مبلغ کم می‌شود و «مبلغ ثابت» یعنی یک عدد مشخص (مثلاً ۵۰٬۰۰۰ تومان) کم می‌شود. برای غیرفعال کردن یک کد کافیست دکمه‌ی «غیرفعال کردن» را بزنید؛ کد حذف نمی‌شود، فقط دیگر قابل استفاده نیست.</p>
-        <p>«پلن‌های قیمت‌گذاری پلکانی» یعنی تعریف قیمت ویژه برای یک محصول بر اساس تعداد خرید و گروه مشتری (مثلاً اگر گروه پیمانکاران ۱۰ عدد یا بیشتر بخرند، قیمت واحد کمتر شود). ابتدا «شناسه محصول» را وارد و «جستجو» را بزنید، سپس فرم پلن قیمت را پر کنید.</p>
+        <p>«پلن‌های قیمت‌گذاری پلکانی» یعنی تعریف قیمت ویژه برای یک محصول بر اساس تعداد خرید و گروه مشتری (مثلاً اگر گروه پیمانکاران ۱۰ عدد یا بیشتر بخرند، قیمت واحد کمتر شود). ابتدا «شناسه محصول» را وارد و «جستجو» را بزنید، سپس فرم پلن قیمت را پر کنید. برای تغییر قیمت یک پلن موجود، روی «ویرایش» همان ردیف بزنید تا فرم با مقادیرش پر شود، سپس قیمت را عوض کرده و دوباره ثبت کنید.</p>
       </AdminHelp>
 
       <section>
@@ -238,7 +238,11 @@ export default function AdminPricingPage() {
                 onChange={(e) => setTierForm({ ...tierForm, unitPrice: e.target.value })}
                 className="w-36 rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
               />
-              <button className="rounded-lg bg-brand px-3 py-1 text-sm text-[#0b0e14]">ثبت پلن</button>
+              <button className="rounded-lg bg-brand px-3 py-1 text-sm text-[#0b0e14]">
+                {tierForm.customerGroupId && tiers.some((t) => t.customerGroupId === tierForm.customerGroupId && String(t.minQuantity) === tierForm.minQuantity)
+                  ? "ذخیره تغییر قیمت"
+                  : "ثبت پلن"}
+              </button>
             </form>
 
             <table className="w-full text-sm">
@@ -257,9 +261,23 @@ export default function AdminPricingPage() {
                     <td className="p-2">{t.minQuantity.toLocaleString("fa-IR")}</td>
                     <td className="p-2">{formatToman(t.unitPrice)}</td>
                     <td className="p-2">
-                      <button onClick={() => handleRemoveTier(t.id)} className="text-red-500">
-                        حذف
-                      </button>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() =>
+                            setTierForm({
+                              customerGroupId: t.customerGroupId,
+                              minQuantity: String(t.minQuantity),
+                              unitPrice: String(t.unitPrice),
+                            })
+                          }
+                          className="text-brand"
+                        >
+                          ویرایش
+                        </button>
+                        <button onClick={() => handleRemoveTier(t.id)} className="text-red-500">
+                          حذف
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

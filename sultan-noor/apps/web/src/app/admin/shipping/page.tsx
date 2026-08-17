@@ -17,6 +17,8 @@ export default function AdminShippingPage() {
 
   const [rates, setRates] = useState<ShippingRate[] | null>(null);
   const [form, setForm] = useState({ province: "", maxWeightGrams: "", price: "" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ province: "", maxWeightGrams: "", price: "" });
 
   function load() {
     if (!accessToken) return;
@@ -42,6 +44,32 @@ export default function AdminShippingPage() {
       load();
     } catch {
       toast("ثبت نرخ ارسال با خطا مواجه شد.", "error");
+    }
+  }
+
+  function startEdit(r: ShippingRate) {
+    setEditingId(r.id);
+    setEditForm({ province: r.province ?? "", maxWeightGrams: String(r.maxWeightGrams), price: String(r.price) });
+  }
+
+  async function handleEditSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingId) return;
+    try {
+      await api.patch(
+        `/shipping/rates/${editingId}`,
+        {
+          province: editForm.province.trim() || undefined,
+          maxWeightGrams: Number(editForm.maxWeightGrams),
+          price: Number(editForm.price),
+        },
+        accessToken,
+      );
+      setEditingId(null);
+      toast("نرخ ارسال ذخیره شد.", "success");
+      load();
+    } catch {
+      toast("ذخیره‌ی نرخ ارسال با خطا مواجه شد.", "error");
     }
   }
 
@@ -97,17 +125,55 @@ export default function AdminShippingPage() {
         <p className="text-sm text-foreground/50">هنوز نرخ ارسالی ثبت نشده — هزینه‌ی ثابت پیش‌فرض اعمال می‌شود.</p>
       ) : (
         <ul className="space-y-1">
-          {rates.map((r) => (
-            <li key={r.id} className="flex items-center justify-between rounded-lg border border-border-color p-2 text-sm">
-              <span>
-                {r.province ?? "پیش‌فرض (سایر استان‌ها)"} — تا {r.maxWeightGrams.toLocaleString("fa-IR")} گرم —{" "}
-                {formatToman(r.price)}
-              </span>
-              <button onClick={() => handleRemove(r.id)} className="text-xs text-red-500">
-                حذف
-              </button>
-            </li>
-          ))}
+          {rates.map((r) =>
+            editingId === r.id ? (
+              <li key={r.id} className="rounded-lg border border-border-color bg-surface p-2 text-sm">
+                <form onSubmit={handleEditSave} className="flex flex-wrap items-center gap-2">
+                  <input
+                    placeholder="استان (خالی = پیش‌فرض)"
+                    value={editForm.province}
+                    onChange={(e) => setEditForm({ ...editForm, province: e.target.value })}
+                    className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
+                  />
+                  <input
+                    required
+                    type="number"
+                    placeholder="سقف وزن (گرم)"
+                    value={editForm.maxWeightGrams}
+                    onChange={(e) => setEditForm({ ...editForm, maxWeightGrams: e.target.value })}
+                    className="w-36 rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
+                  />
+                  <input
+                    required
+                    type="number"
+                    placeholder="هزینه (تومان)"
+                    value={editForm.price}
+                    onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
+                    className="w-36 rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
+                  />
+                  <button className="rounded-lg bg-brand px-3 py-1 text-xs font-bold text-[#0b0e14]">ذخیره</button>
+                  <button type="button" onClick={() => setEditingId(null)} className="text-xs text-foreground/60">
+                    انصراف
+                  </button>
+                </form>
+              </li>
+            ) : (
+              <li key={r.id} className="flex items-center justify-between rounded-lg border border-border-color p-2 text-sm">
+                <span>
+                  {r.province ?? "پیش‌فرض (سایر استان‌ها)"} — تا {r.maxWeightGrams.toLocaleString("fa-IR")} گرم —{" "}
+                  {formatToman(r.price)}
+                </span>
+                <span className="flex gap-3">
+                  <button onClick={() => startEdit(r)} className="text-xs text-brand">
+                    ویرایش
+                  </button>
+                  <button onClick={() => handleRemove(r.id)} className="text-xs text-red-500">
+                    حذف
+                  </button>
+                </span>
+              </li>
+            ),
+          )}
         </ul>
       )}
     </div>

@@ -1,14 +1,48 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Product } from "@/lib/types";
+import { Product, Brand, Category, Supplier } from "@/lib/types";
 import AdminHelp from "@/components/admin/AdminHelp";
 
 interface Warehouse {
   id: string;
   name: string;
+}
+
+const STATUS_LABEL: Record<Product["status"], string> = {
+  DRAFT: "پیش‌نویس",
+  PUBLISHED: "منتشرشده",
+  ARCHIVED: "بایگانی‌شده",
+};
+
+interface EditForm {
+  name: string;
+  slug: string;
+  description: string;
+  status: Product["status"];
+  brandId: string;
+  categoryId: string;
+  supplierId: string;
+  basePrice: string;
+  compareAtPrice: string;
+  minWholesaleQty: string;
+}
+
+function editFormFromProduct(p: Product): EditForm {
+  return {
+    name: p.name,
+    slug: p.slug,
+    description: p.description ?? "",
+    status: p.status,
+    brandId: p.brand?.id ?? "",
+    categoryId: p.category?.id ?? "",
+    supplierId: p.supplierId ?? "",
+    basePrice: String(p.basePrice),
+    compareAtPrice: p.compareAtPrice != null ? String(p.compareAtPrice) : "",
+    minWholesaleQty: p.minWholesaleQty != null ? String(p.minWholesaleQty) : "",
+  };
 }
 
 interface BulkImportResult {
@@ -38,11 +72,18 @@ export default function AdminProductsPage() {
   const [form, setForm] = useState({ name: "", slug: "", basePrice: "" });
   const [error, setError] = useState<string | null>(null);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [importWarehouseId, setImportWarehouseId] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<BulkImportResult | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<EditForm | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
 
   async function load() {
     if (!accessToken) return;
@@ -55,8 +96,57 @@ export default function AdminProductsPage() {
 
   useEffect(() => {
     load();
-    if (accessToken) api.get<Warehouse[]>("/warehouses", accessToken).then(setWarehouses).catch(() => {});
+    if (accessToken) {
+      api.get<Warehouse[]>("/warehouses", accessToken).then(setWarehouses).catch(() => {});
+      api.get<Brand[]>("/brands").then(setBrands).catch(() => {});
+      api.get<Category[]>("/categories").then(setCategories).catch(() => {});
+      api.get<Supplier[]>("/suppliers", accessToken).then(setSuppliers).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken]);
+
+  function startEdit(p: Product) {
+    setEditingId(p.id);
+    setEditForm(editFormFromProduct(p));
+    setEditError(null);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditForm(null);
+    setEditError(null);
+  }
+
+  async function handleEditSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingId || !editForm) return;
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      await api.patch(
+        `/products/${editingId}`,
+        {
+          name: editForm.name,
+          slug: editForm.slug,
+          description: editForm.description || undefined,
+          status: editForm.status,
+          brandId: editForm.brandId || undefined,
+          categoryId: editForm.categoryId || undefined,
+          supplierId: editForm.supplierId || undefined,
+          basePrice: Number(editForm.basePrice),
+          compareAtPrice: editForm.compareAtPrice ? Number(editForm.compareAtPrice) : undefined,
+          minWholesaleQty: editForm.minWholesaleQty ? Number(editForm.minWholesaleQty) : undefined,
+        },
+        accessToken,
+      );
+      cancelEdit();
+      load();
+    } catch (err) {
+      setEditError(err instanceof ApiError ? err.message : "خطا در ذخیره‌ی تغییرات");
+    } finally {
+      setEditSaving(false);
+    }
+  }
 
   async function handleBulkImport(e: React.FormEvent) {
     e.preventDefault();
@@ -126,6 +216,7 @@ export default function AdminProductsPage() {
         <p>برای افزودن یک محصول تکی، فرم بالای جدول را پر کنید و «افزودن محصول» را بزنید. بعد از ساختن محصول می‌توانید از ستون «عکس‌ها» برای آن عکس اضافه کنید (روی «+» کلیک کنید).</p>
         <p>اگر تعداد محصولات زیاد است، به‌جای وارد کردن یک‌به‌یک، از بخش «ورود گروهی محصولات» استفاده کنید: اول «دانلود قالب نمونه» را بزنید، فایل اکسل/CSV خودتان را طبق همان قالب پر کنید، سپس آن را انتخاب و «وارد کردن» را بزنید.</p>
         <p>ستون‌های name (نام)، slug (آدرس انگلیسی صفحه)، sku (کد محصول) و basePrice (قیمت پایه) در فایل ورود گروهی الزامی هستند.</p>
+        <p>برای تغییر مشخصات یک محصول (نام، قیمت، برند، دسته‌بندی، توضیحات و غیره)، روی «ویرایش» در انتهای همان ردیف بزنید.</p>
         <p>برای حذف یک محصول، روی «حذف» در انتهای همان ردیف بزنید. این کار قابل بازگشت نیست.</p>
       </AdminHelp>
 
@@ -234,45 +325,159 @@ export default function AdminProductsPage() {
         </thead>
         <tbody>
           {products.map((p) => (
-            <tr key={p.id} className="border-b border-border-color">
-              <td className="p-2">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {p.images.map((img) => (
-                    <div key={img.id} className="group relative h-10 w-10 shrink-0 overflow-hidden rounded-md border border-border-color">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={img.url} alt="" className="h-full w-full object-cover" />
-                      <button
-                        onClick={() => handleDeleteImage(img.id)}
-                        className="absolute inset-0 hidden items-center justify-center bg-black/60 text-xs text-white group-hover:flex"
+            <Fragment key={p.id}>
+              <tr className="border-b border-border-color">
+                <td className="p-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {p.images.map((img) => (
+                      <div key={img.id} className="group relative h-10 w-10 shrink-0 overflow-hidden rounded-md border border-border-color">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={img.url} alt="" className="h-full w-full object-cover" />
+                        <button
+                          onClick={() => handleDeleteImage(img.id)}
+                          className="absolute inset-0 hidden items-center justify-center bg-black/60 text-xs text-white group-hover:flex"
+                        >
+                          حذف
+                        </button>
+                      </div>
+                    ))}
+                    <label className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed border-border-color text-xs text-foreground/50 hover:border-brand hover:text-brand">
+                      +
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleUploadImage(p.id, file);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  </div>
+                </td>
+                <td className="p-2">{p.name}</td>
+                <td className="p-2">{STATUS_LABEL[p.status]}</td>
+                <td className="p-2">{Number(p.basePrice).toLocaleString("fa-IR")} تومان</td>
+                <td className="p-2">
+                  <div className="flex gap-3">
+                    <button onClick={() => (editingId === p.id ? cancelEdit() : startEdit(p))} className="text-brand">
+                      {editingId === p.id ? "انصراف" : "ویرایش"}
+                    </button>
+                    <button onClick={() => handleDelete(p.id)} className="text-red-500">
+                      حذف
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              {editingId === p.id && editForm && (
+                <tr className="border-b border-border-color bg-surface">
+                  <td colSpan={5} className="p-3">
+                    <form onSubmit={handleEditSave} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      <input
+                        required
+                        placeholder="نام محصول"
+                        value={editForm.name}
+                        onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                        className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
+                      />
+                      <input
+                        required
+                        placeholder="اسلاگ (انگلیسی)"
+                        value={editForm.slug}
+                        onChange={(e) => setEditForm({ ...editForm, slug: e.target.value })}
+                        className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
+                      />
+                      <input
+                        required
+                        type="number"
+                        placeholder="قیمت پایه (تومان)"
+                        value={editForm.basePrice}
+                        onChange={(e) => setEditForm({ ...editForm, basePrice: e.target.value })}
+                        className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
+                      />
+                      <input
+                        type="number"
+                        placeholder="قیمت قبل از تخفیف (اختیاری)"
+                        value={editForm.compareAtPrice}
+                        onChange={(e) => setEditForm({ ...editForm, compareAtPrice: e.target.value })}
+                        className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
+                      />
+                      <select
+                        value={editForm.status}
+                        onChange={(e) => setEditForm({ ...editForm, status: e.target.value as Product["status"] })}
+                        className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
                       >
-                        حذف
-                      </button>
-                    </div>
-                  ))}
-                  <label className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed border-border-color text-xs text-foreground/50 hover:border-brand hover:text-brand">
-                    +
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleUploadImage(p.id, file);
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
-                </div>
-              </td>
-              <td className="p-2">{p.name}</td>
-              <td className="p-2">{p.status}</td>
-              <td className="p-2">{Number(p.basePrice).toLocaleString("fa-IR")} تومان</td>
-              <td className="p-2">
-                <button onClick={() => handleDelete(p.id)} className="text-red-500">
-                  حذف
-                </button>
-              </td>
-            </tr>
+                        {(Object.keys(STATUS_LABEL) as Product["status"][]).map((s) => (
+                          <option key={s} value={s}>
+                            {STATUS_LABEL[s]}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={editForm.brandId}
+                        onChange={(e) => setEditForm({ ...editForm, brandId: e.target.value })}
+                        className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
+                      >
+                        <option value="">بدون برند</option>
+                        {brands.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.name}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={editForm.categoryId}
+                        onChange={(e) => setEditForm({ ...editForm, categoryId: e.target.value })}
+                        className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
+                      >
+                        <option value="">بدون دسته‌بندی</option>
+                        {categories.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={editForm.supplierId}
+                        onChange={(e) => setEditForm({ ...editForm, supplierId: e.target.value })}
+                        className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
+                      >
+                        <option value="">بدون تامین‌کننده</option>
+                        {suppliers.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        placeholder="حداقل تعداد خرید عمده (اختیاری)"
+                        value={editForm.minWholesaleQty}
+                        onChange={(e) => setEditForm({ ...editForm, minWholesaleQty: e.target.value })}
+                        className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
+                      />
+                      <textarea
+                        placeholder="توضیحات محصول (اختیاری)"
+                        value={editForm.description}
+                        onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                        rows={2}
+                        className="col-span-2 rounded-lg border border-border-color bg-background px-2 py-1 text-sm sm:col-span-4"
+                      />
+                      <div className="col-span-2 flex gap-2 sm:col-span-4">
+                        <button disabled={editSaving} className="rounded-lg bg-brand px-3 py-1.5 text-sm font-bold text-[#0b0e14] disabled:opacity-50">
+                          {editSaving ? "در حال ذخیره..." : "ذخیره تغییرات"}
+                        </button>
+                        <button type="button" onClick={cancelEdit} className="rounded-lg border border-border-color px-3 py-1.5 text-sm">
+                          انصراف
+                        </button>
+                      </div>
+                      {editError && <p className="col-span-2 text-sm text-red-500 sm:col-span-4">{editError}</p>}
+                    </form>
+                  </td>
+                </tr>
+              )}
+            </Fragment>
           ))}
         </tbody>
       </table>

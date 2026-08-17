@@ -1,10 +1,10 @@
-import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { ShippingService } from './shipping.service';
-import { CreateShippingRateDto } from './dto/shipping-rate.dto';
+import { CreateShippingRateDto, UpdateShippingRateDto } from './dto/shipping-rate.dto';
 
 @Controller('shipping/rates')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -21,6 +21,12 @@ export class ShippingController {
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   create(@Body() dto: CreateShippingRateDto) {
     return this.shippingService.create(dto);
+  }
+
+  @Patch(':id')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  update(@Param('id') id: string, @Body() dto: UpdateShippingRateDto) {
+    return this.shippingService.update(id, dto);
   }
 
   @Delete(':id')

@@ -15,6 +15,8 @@ export default function AdminWarehousesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [stock, setStock] = useState<StockLevel[] | null>(null);
   const [adjustForm, setAdjustForm] = useState({ productVariantId: "", quantityDelta: "" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", address: "" });
 
   function load() {
     if (!accessToken) return;
@@ -43,6 +45,19 @@ export default function AdminWarehousesPage() {
 
   async function toggleActive(w: Warehouse) {
     await api.patch(`/warehouses/${w.id}`, { isActive: !w.isActive }, accessToken);
+    load();
+  }
+
+  function startEdit(w: Warehouse) {
+    setEditingId(w.id);
+    setEditForm({ name: w.name, address: w.address ?? "" });
+  }
+
+  async function handleEditSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingId) return;
+    await api.patch(`/warehouses/${editingId}`, { name: editForm.name, address: editForm.address || undefined }, accessToken);
+    setEditingId(null);
     load();
   }
 
@@ -104,23 +119,49 @@ export default function AdminWarehousesPage() {
       </form>
 
       <ul className="mb-8 space-y-1">
-        {warehouses.map((w) => (
-          <li key={w.id} className="flex items-center justify-between rounded-lg border border-border-color p-2 text-sm">
-            <button onClick={() => loadStock(w.id)} className={`text-right ${selectedId === w.id ? "font-bold text-brand" : ""}`}>
-              {w.name}
-              {w.address && <span className="text-foreground/50"> — {w.address}</span>}
-              {!w.isActive && <span className="mr-2 text-xs text-red-400">(غیرفعال)</span>}
-            </button>
-            <span className="flex gap-3">
-              <button onClick={() => toggleActive(w)} className="text-foreground/60 hover:text-brand">
-                {w.isActive ? "غیرفعال کردن" : "فعال کردن"}
+        {warehouses.map((w) =>
+          editingId === w.id ? (
+            <li key={w.id} className="rounded-lg border border-border-color bg-surface p-2 text-sm">
+              <form onSubmit={handleEditSave} className="flex flex-wrap items-center gap-2">
+                <input
+                  required
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
+                />
+                <input
+                  placeholder="آدرس (اختیاری)"
+                  value={editForm.address}
+                  onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                  className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
+                />
+                <button className="rounded-lg bg-brand px-3 py-1 text-xs font-bold text-[#0b0e14]">ذخیره</button>
+                <button type="button" onClick={() => setEditingId(null)} className="text-xs text-foreground/60">
+                  انصراف
+                </button>
+              </form>
+            </li>
+          ) : (
+            <li key={w.id} className="flex items-center justify-between rounded-lg border border-border-color p-2 text-sm">
+              <button onClick={() => loadStock(w.id)} className={`text-right ${selectedId === w.id ? "font-bold text-brand" : ""}`}>
+                {w.name}
+                {w.address && <span className="text-foreground/50"> — {w.address}</span>}
+                {!w.isActive && <span className="mr-2 text-xs text-red-400">(غیرفعال)</span>}
               </button>
-              <button onClick={() => handleDelete(w.id)} className="text-red-500">
-                حذف
-              </button>
-            </span>
-          </li>
-        ))}
+              <span className="flex gap-3">
+                <button onClick={() => startEdit(w)} className="text-brand">
+                  ویرایش
+                </button>
+                <button onClick={() => toggleActive(w)} className="text-foreground/60 hover:text-brand">
+                  {w.isActive ? "غیرفعال کردن" : "فعال کردن"}
+                </button>
+                <button onClick={() => handleDelete(w.id)} className="text-red-500">
+                  حذف
+                </button>
+              </span>
+            </li>
+          ),
+        )}
         {warehouses.length === 0 && <p className="text-sm text-foreground/50">هنوز انباری ثبت نشده است.</p>}
       </ul>
 

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateShippingRateDto } from './dto/shipping-rate.dto';
+import { CreateShippingRateDto, UpdateShippingRateDto } from './dto/shipping-rate.dto';
 
 // No product weight recorded yet (legacy/un-weighed variants) — assume an
 // average parcel rather than letting an unweighted item default to 0g and
@@ -49,6 +49,12 @@ export class ShippingService {
     return this.prisma.shippingRate.create({
       data: { province: dto.province, maxWeightGrams: dto.maxWeightGrams, price: dto.price },
     });
+  }
+
+  async update(id: string, dto: UpdateShippingRateDto) {
+    const rate = await this.prisma.shippingRate.findUnique({ where: { id } });
+    if (!rate) throw new NotFoundException('نرخ ارسال یافت نشد');
+    return this.prisma.shippingRate.update({ where: { id }, data: dto });
   }
 
   async remove(id: string) {

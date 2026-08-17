@@ -12,6 +12,8 @@ export default function AdminSuppliersPage() {
   const { toast } = useToast();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [form, setForm] = useState({ name: "", contactName: "", phone: "", email: "", address: "" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", contactName: "", phone: "", email: "", address: "" });
 
   function load() {
     if (!accessToken) return;
@@ -34,6 +36,35 @@ export default function AdminSuppliersPage() {
 
   async function toggleActive(s: Supplier) {
     await api.patch(`/suppliers/${s.id}`, { isActive: !s.isActive }, accessToken);
+    load();
+  }
+
+  function startEdit(s: Supplier) {
+    setEditingId(s.id);
+    setEditForm({
+      name: s.name,
+      contactName: s.contactName ?? "",
+      phone: s.phone ?? "",
+      email: s.email ?? "",
+      address: s.address ?? "",
+    });
+  }
+
+  async function handleEditSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingId) return;
+    await api.patch(
+      `/suppliers/${editingId}`,
+      {
+        name: editForm.name,
+        contactName: editForm.contactName || undefined,
+        phone: editForm.phone || undefined,
+        email: editForm.email || undefined,
+        address: editForm.address || undefined,
+      },
+      accessToken,
+    );
+    setEditingId(null);
     load();
   }
 
@@ -102,22 +133,71 @@ export default function AdminSuppliersPage() {
           </tr>
         </thead>
         <tbody>
-          {suppliers.map((s) => (
-            <tr key={s.id} className="border-b border-border-color">
-              <td className="p-2">{s.name}</td>
-              <td className="p-2 text-foreground/60">{s.contactName ?? "—"}</td>
-              <td className="p-2 text-foreground/60">{s.phone ?? s.email ?? "—"}</td>
-              <td className="p-2">{s.isActive ? "فعال" : "غیرفعال"}</td>
-              <td className="flex gap-3 p-2">
-                <button onClick={() => toggleActive(s)} className="text-foreground/60 hover:text-brand">
-                  {s.isActive ? "غیرفعال کردن" : "فعال کردن"}
-                </button>
-                <button onClick={() => handleDelete(s.id)} className="text-red-500">
-                  حذف
-                </button>
-              </td>
-            </tr>
-          ))}
+          {suppliers.map((s) =>
+            editingId === s.id ? (
+              <tr key={s.id} className="border-b border-border-color bg-surface">
+                <td colSpan={5} className="p-3">
+                  <form onSubmit={handleEditSave} className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                    <input
+                      required
+                      placeholder="نام تامین‌کننده"
+                      value={editForm.name}
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                      className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
+                    />
+                    <input
+                      placeholder="نام رابط"
+                      value={editForm.contactName}
+                      onChange={(e) => setEditForm({ ...editForm, contactName: e.target.value })}
+                      className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
+                    />
+                    <input
+                      placeholder="تلفن"
+                      value={editForm.phone}
+                      onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                      className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
+                    />
+                    <input
+                      placeholder="ایمیل"
+                      value={editForm.email}
+                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                      className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
+                    />
+                    <input
+                      placeholder="آدرس"
+                      value={editForm.address}
+                      onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                      className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
+                    />
+                    <div className="col-span-2 flex gap-2 sm:col-span-5">
+                      <button className="rounded-lg bg-brand px-3 py-1 text-xs font-bold text-[#0b0e14]">ذخیره</button>
+                      <button type="button" onClick={() => setEditingId(null)} className="text-xs text-foreground/60">
+                        انصراف
+                      </button>
+                    </div>
+                  </form>
+                </td>
+              </tr>
+            ) : (
+              <tr key={s.id} className="border-b border-border-color">
+                <td className="p-2">{s.name}</td>
+                <td className="p-2 text-foreground/60">{s.contactName ?? "—"}</td>
+                <td className="p-2 text-foreground/60">{s.phone ?? s.email ?? "—"}</td>
+                <td className="p-2">{s.isActive ? "فعال" : "غیرفعال"}</td>
+                <td className="flex gap-3 p-2">
+                  <button onClick={() => startEdit(s)} className="text-brand">
+                    ویرایش
+                  </button>
+                  <button onClick={() => toggleActive(s)} className="text-foreground/60 hover:text-brand">
+                    {s.isActive ? "غیرفعال کردن" : "فعال کردن"}
+                  </button>
+                  <button onClick={() => handleDelete(s.id)} className="text-red-500">
+                    حذف
+                  </button>
+                </td>
+              </tr>
+            ),
+          )}
         </tbody>
       </table>
       {suppliers.length === 0 && <p className="mt-2 text-sm text-foreground/50">هنوز تامین‌کننده‌ای ثبت نشده است.</p>}
