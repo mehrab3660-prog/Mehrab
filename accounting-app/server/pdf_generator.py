@@ -62,6 +62,15 @@ def rtl(text):
     return text
 
 
+def _fmt_rial(n):
+    """مبلغ (که داخلی به تومان ذخیره می‌شه) رو با جداکننده هزارگان به ریال (ضربدر ۱۰) نشون می‌ده"""
+    try:
+        n = float(n or 0)
+    except (TypeError, ValueError):
+        n = 0
+    return f'{n * 10:,.0f}'
+
+
 def print_pdf_direct(pdf_path, printer_name=None):
     """
     ارسال مستقیم فایل PDF به چاپگر (بدون نیاز به باز شدن نرم‌افزار نمایش PDF).
@@ -195,8 +204,8 @@ def generate_invoice_pdf(output_path, invoice, items, party_name=None, shop_name
     else:
         c.drawRightString(width - margin, y, rtl("کالا"))
         c.drawRightString(width - 150, y, rtl("تعداد"))
-        c.drawRightString(width - 220, y, rtl("قیمت واحد"))
-        c.drawRightString(width - 300, y, rtl("جمع"))
+        c.drawRightString(width - 220, y, rtl("قیمت واحد (ریال)"))
+        c.drawRightString(width - 300, y, rtl("جمع (ریال)"))
     y -= (12 if is_thermal else 15)
     c.line(margin, y, width - margin, y)
     y -= (12 if is_thermal else 15)
@@ -206,13 +215,13 @@ def generate_invoice_pdf(output_path, invoice, items, party_name=None, shop_name
             c.drawRightString(width - margin, y, rtl(it["item_name"]))
             y -= 11
             c.drawRightString(width - margin, y,
-                               rtl(f'{it["qty"]} × {it["unit_price"]:,.0f} = {it["total"]:,.0f}'))
+                               rtl(f'{it["qty"]} × {_fmt_rial(it["unit_price"])} = {_fmt_rial(it["total"])}'))
             y -= 13
         else:
             c.drawRightString(width - margin, y, rtl(it["item_name"]))
             c.drawRightString(width - 150, y, rtl(str(it["qty"])))
-            c.drawRightString(width - 220, y, rtl(f'{it["unit_price"]:,.0f}'))
-            c.drawRightString(width - 300, y, rtl(f'{it["total"]:,.0f}'))
+            c.drawRightString(width - 220, y, rtl(_fmt_rial(it["unit_price"])))
+            c.drawRightString(width - 300, y, rtl(_fmt_rial(it["total"])))
             y -= 16
         if y < 60:
             c.showPage()
@@ -223,13 +232,13 @@ def generate_invoice_pdf(output_path, invoice, items, party_name=None, shop_name
     c.line(margin, y, width - margin, y)
     y -= (16 if is_thermal else 20)
     c.setFont(font, base_font_size + 2)
-    c.drawRightString(width - margin, y, rtl(f'جمع کل: {invoice["total"]:,.0f} تومان'))
+    c.drawRightString(width - margin, y, rtl(f'جمع کل: {_fmt_rial(invoice["total"])} ریال'))
     y -= (13 if is_thermal else 18)
-    c.drawRightString(width - margin, y, rtl(f'پرداخت‌شده: {invoice["paid"]:,.0f} تومان'))
+    c.drawRightString(width - margin, y, rtl(f'پرداخت‌شده: {_fmt_rial(invoice["paid"])} ریال'))
     y -= (13 if is_thermal else 18)
     remaining = invoice["total"] - invoice["paid"]
     if remaining > 0:
-        c.drawRightString(width - margin, y, rtl(f'مانده: {remaining:,.0f} تومان'))
+        c.drawRightString(width - margin, y, rtl(f'مانده: {_fmt_rial(remaining)} ریال'))
         y -= (13 if is_thermal else 18)
 
     # مبلغ به حروف - همیشه در انتهای فاکتور
@@ -237,7 +246,7 @@ def generate_invoice_pdf(output_path, invoice, items, party_name=None, shop_name
     c.line(margin, y, width - margin, y)
     y -= (14 if is_thermal else 20)
     c.setFont(font, base_font_size - (1 if is_thermal else 0))
-    words_text = f'مبلغ به حروف: {number_to_persian_words(invoice["total"])} تومان'
+    words_text = f'مبلغ به حروف: {number_to_persian_words(invoice["total"] * 10)} ریال'
     if is_thermal:
         # روی کاغذ باریک رسید، متن به حروف را می‌شکنیم تا از عرض کاغذ رد نشود
         max_chars = 34
@@ -290,9 +299,9 @@ def generate_statement_pdf(output_path, party, invoices, shop_name="مغازه �
         c.drawRightString(width - margin, y, rtl("تاریخ"))
         c.drawRightString(width - 150, y, rtl("شماره فاکتور"))
         c.drawRightString(width - 260, y, rtl("نوع"))
-        c.drawRightString(width - 340, y, rtl("جمع کل"))
-        c.drawRightString(width - 420, y, rtl("پرداخت‌شده"))
-        c.drawRightString(width - 500, y, rtl("مانده"))
+        c.drawRightString(width - 340, y, rtl("جمع کل (ریال)"))
+        c.drawRightString(width - 420, y, rtl("پرداخت‌شده (ریال)"))
+        c.drawRightString(width - 500, y, rtl("مانده (ریال)"))
         y -= 12
         c.line(margin, y, width - margin, y)
         y -= 15
@@ -305,9 +314,9 @@ def generate_statement_pdf(output_path, party, invoices, shop_name="مغازه �
         c.drawRightString(width - margin, y, rtl(str(inv.get("date", ""))[:10]))
         c.drawRightString(width - 150, y, rtl(str(inv.get("number") or inv.get("id"))))
         c.drawRightString(width - 260, y, rtl(type_titles.get(inv.get("invoice_type"), inv.get("invoice_type"))))
-        c.drawRightString(width - 340, y, rtl(f'{inv.get("total", 0):,.0f}'))
-        c.drawRightString(width - 420, y, rtl(f'{inv.get("paid", 0):,.0f}'))
-        c.drawRightString(width - 500, y, rtl(f'{remaining:,.0f}'))
+        c.drawRightString(width - 340, y, rtl(_fmt_rial(inv.get("total", 0))))
+        c.drawRightString(width - 420, y, rtl(_fmt_rial(inv.get("paid", 0))))
+        c.drawRightString(width - 500, y, rtl(_fmt_rial(remaining)))
         y -= 16
         if y < 60:
             c.showPage()
@@ -321,7 +330,7 @@ def generate_statement_pdf(output_path, party, invoices, shop_name="مغازه �
     balance = party.get("balance") or 0
     label = "بدهکار به ما" if balance > 0 else ("بستانکار از ما" if balance < 0 else "تسویه")
     c.setFont(font, base_font_size + 3)
-    c.drawRightString(width - margin, y, rtl(f'مانده فعلی: {abs(balance):,.0f} تومان ({label})'))
+    c.drawRightString(width - margin, y, rtl(f'مانده فعلی: {_fmt_rial(abs(balance))} ریال ({label})'))
 
     c.save()
     return output_path

@@ -13,6 +13,10 @@ const state = {
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 function fmt(n) { return Number(n || 0).toLocaleString('en-US'); }
+// نمایش مبلغ به ریال (مقدار داخلی/ذخیره‌شده همیشه تومانه؛ این فقط برای نمایشه، ضربدر ۱۰).
+// تولتیپ‌های «به حروف» (wordsTitle) عمداً دست‌نخورده و به تومان می‌مونن — چون فقط با هاور دیده
+// می‌شن، یعنی خودشون همون کمکِ خصوصیِ «فقط خودم ببینم» رو برای اطمینان از عدد فراهم می‌کنن.
+function fmtRial(tomanValue) { return Number((tomanValue || 0) * 10).toLocaleString('en-US'); }
 function escHtml(s) {
   const div = document.createElement('div');
   div.textContent = s == null ? '' : String(s);
@@ -657,7 +661,7 @@ async function loadNotifications() {
   (checks || []).filter(c => c.due_date && c.due_date <= today).forEach(c => {
     items.push({
       icon: '💳',
-      text: `چک ${fmt(c.amount)} تومانی ${c.party_name || ''} — سررسید ${toFaDigits(c.due_date)}`,
+      text: `چک ${fmtRial(c.amount)} ریالی ${c.party_name || ''} — سررسید ${toFaDigits(c.due_date)}`,
       page: 'checks',
     });
   });
@@ -1225,7 +1229,7 @@ function drawDonutChart(canvas, values, colors) {
   ctx.fillStyle = styles.getPropertyValue('--text');
   ctx.font = 'bold 14px Vazirmatn, Tahoma';
   ctx.textAlign = 'center';
-  ctx.fillText(fmt(total), cx, cy + 5);
+  ctx.fillText(fmtRial(total), cx, cy + 5);
 }
 
 // ===================== نمودار خطی چندسری (بدون کتابخانه خارجی) =====================
@@ -1393,14 +1397,14 @@ async function loadDashboard() {
 
   // ---- کارت‌های KPI ----
   const cards = [
-    { label: 'موجودی کل کالا', value: fmt(inventoryValue) + ' تومان', cls: 'primary', icon: ICONS.inventory, raw: inventoryValue },
-    { label: 'فروش امروز', value: fmt(todaySalesTotal) + ' تومان', cls: 'accent', icon: ICONS.sales, raw: todaySalesTotal },
+    { label: 'موجودی کل کالا', value: fmtRial(inventoryValue) + ' ریال', cls: 'primary', icon: ICONS.inventory, raw: inventoryValue },
+    { label: 'فروش امروز', value: fmtRial(todaySalesTotal) + ' ریال', cls: 'accent', icon: ICONS.sales, raw: todaySalesTotal },
   ];
   if (isAdmin && data.estimated_profit !== null) {
-    cards.push({ label: 'سود تقریبی (کل)', value: fmt(data.estimated_profit) + ' تومان', cls: data.estimated_profit >= 0 ? 'accent' : 'danger', icon: ICONS.profit, raw: data.estimated_profit });
+    cards.push({ label: 'سود تقریبی (کل)', value: fmtRial(data.estimated_profit) + ' ریال', cls: data.estimated_profit >= 0 ? 'accent' : 'danger', icon: ICONS.profit, raw: data.estimated_profit });
   }
   cards.push(
-    { label: 'موجودی صندوق', value: fmt(cash ? cash.balance : 0) + ' تومان', cls: 'accent', icon: ICONS.cash, raw: cash ? cash.balance : 0 },
+    { label: 'موجودی صندوق', value: fmtRial(cash ? cash.balance : 0) + ' ریال', cls: 'accent', icon: ICONS.cash, raw: cash ? cash.balance : 0 },
     { label: 'تعداد مشتریان', value: String((customers || []).length), cls: 'primary', icon: ICONS.customers },
     { label: 'فاکتورهای امروز', value: String(todaysInvoices.length), cls: 'primary', icon: ICONS.invoices },
     { label: 'چک‌های در انتظار', value: String(pendingChecks.length), cls: 'warning', icon: ICONS.checks },
@@ -1409,7 +1413,7 @@ async function loadDashboard() {
     <div class="kpi-card ${c.cls}" title="${c.raw ? 'به حروف: ' + numberToPersianWords(c.raw) + ' تومان' : ''}">
       <div class="kpi-icon">${c.icon}</div>
       <div class="kpi-label">${c.label}</div>
-      <div class="kpi-value" data-count-target="${c.raw !== undefined ? c.raw : (parseInt(c.value) || 0)}" data-count-suffix="${c.raw !== undefined ? ' تومان' : ''}">0</div>
+      <div class="kpi-value" data-count-target="${c.raw !== undefined ? c.raw * 10 : (parseInt(c.value) || 0)}" data-count-suffix="${c.raw !== undefined ? ' ریال' : ''}">0</div>
     </div>`).join('');
   animateKpiCounters();
 
@@ -1431,7 +1435,7 @@ async function loadDashboard() {
   ];
   drawDonutChart($('#finance-donut'), financeSlices.map(s => s.value), financeSlices.map(s => s.color));
   $('#finance-legend').innerHTML = financeSlices.map(s =>
-    `<li><span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${s.color};margin-left:6px"></span>${s.label}</span><strong>${fmt(s.value)}</strong></li>`
+    `<li><span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${s.color};margin-left:6px"></span>${s.label}</span><strong>${fmtRial(s.value)}</strong></li>`
   ).join('');
 
   // ---- بنر هشدار موجودی کم (پررنگ و واضح، بالای داشبورد) ----
@@ -1469,7 +1473,7 @@ async function loadDashboard() {
     reminders.push({ text: `${it.name} — ${it.stock_qty <= 0 ? 'تمام شده' : 'موجودی کم: ' + fmt(it.stock_qty)}`, color: it.stock_qty <= 0 ? 'danger' : 'warning' });
   });
   pendingChecks.slice(0, 5).forEach(c => {
-    reminders.push({ text: `چک ${fmt(c.amount)} تومانی ${c.party_name || ''} — سررسید ${toFaDigits(c.due_date)}`, color: 'warning' });
+    reminders.push({ text: `چک ${fmtRial(c.amount)} ریالی ${c.party_name || ''} — سررسید ${toFaDigits(c.due_date)}`, color: 'warning' });
   });
   $('#reminders-list').innerHTML = reminders.length
     ? reminders.slice(0, 8).map(r => `<li><span>${r.text}</span><span class="badge badge-${r.color === 'danger' ? 'red' : 'orange'}">!</span></li>`).join('')
@@ -1482,7 +1486,7 @@ async function loadDashboard() {
       <td>${inv.number || inv.id}</td>
       <td>${toJalaliDate(inv.date)}</td>
       <td>${inv.party_name || '—'}</td>
-      <td title="${wordsTitle(inv.total)}">${fmt(inv.total)} <span class="muted" style="font-size:11px">(${typeLabelShort[inv.invoice_type] || ''})</span></td>
+      <td title="${wordsTitle(inv.total)}">${fmtRial(inv.total)} <span class="muted" style="font-size:11px">(${typeLabelShort[inv.invoice_type] || ''})</span></td>
     </tr>`).join('') || '<tr><td colspan="4" class="muted">فاکتوری ثبت نشده</td></tr>';
 
   // ---- موجودی کالاها / پرفروش‌ترین‌ها / بیشترین بدهکار ----
@@ -1496,7 +1500,7 @@ async function loadDashboard() {
 
   const sortedDebtors = (debtors || []).slice().sort((a, b) => b.balance - a.balance);
   $('#dash-top-debtor').innerHTML = sortedDebtors.slice(0, 5).map((p, i) =>
-    `<li><span><span class="insight-rank">${toFaDigits(i + 1)}</span>${p.name}</span><strong title="${wordsTitle(p.balance)}" style="color:var(--danger)">${fmt(p.balance)}</strong></li>`
+    `<li><span><span class="insight-rank">${toFaDigits(i + 1)}</span>${p.name}</span><strong title="${wordsTitle(p.balance)}" style="color:var(--danger)">${fmtRial(p.balance)}</strong></li>`
   ).join('') || '<li class="muted">مشتری بدهکاری ثبت نشده ✅</li>';
 }
 
@@ -1522,8 +1526,8 @@ function renderItemsTable() {
         ${it.photo_filename ? `<img src="/assets/${it.photo_filename}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;cursor:pointer" onclick="openItemPhotoModal(${it.id})">` : `<button class="btn btn-sm btn-secondary" onclick="openItemPhotoModal(${it.id})">+ عکس</button>`}
       </td>
       <td>${it.code || '—'}</td><td>${it.name}</td><td>${it.category_id ? escHtml(catNameById[it.category_id] || '—') : '—'}</td><td>${it.brand || '—'}</td><td>${it.unit}</td>
-      <td title="${it.purchase_price ? 'به حروف: ' + numberToPersianWords(it.purchase_price) + ' تومان' : ''}">${it.purchase_price === null ? '—' : fmt(it.purchase_price)}</td>
-      <td title="${it.sale_price ? 'به حروف: ' + numberToPersianWords(it.sale_price) + ' تومان' : ''}">${fmt(it.sale_price)}</td>
+      <td title="${it.purchase_price ? 'به حروف: ' + numberToPersianWords(it.purchase_price) + ' تومان' : ''}">${it.purchase_price === null ? '—' : fmtRial(it.purchase_price)}</td>
+      <td title="${it.sale_price ? 'به حروف: ' + numberToPersianWords(it.sale_price) + ' تومان' : ''}">${fmtRial(it.sale_price)}</td>
       <td>${it.stock_qty <= 0 ? `<span class="badge badge-red">تمام شده${it.stock_qty < 0 ? ' (' + fmt(Math.abs(it.stock_qty)) + ' کسری)' : ''}</span>` : (it.stock_qty <= it.min_stock ? `<span class="badge badge-orange">${fmt(it.stock_qty)}</span>` : fmt(it.stock_qty))}</td>
       <td>
         <button class="btn btn-sm btn-secondary" onclick="openEditItemModal(${it.id})">ویرایش</button>
@@ -1747,8 +1751,8 @@ function loadInvoiceForm(type) {
         <div class="form-row"><div><label>شماره سریال (اختیاری)</label><input type="text" id="${type}-serial" placeholder="مثلاً SN-12345"></div>
           <div><label>گارانتی (ماه، اختیاری)</label><input type="number" step="1" min="0" id="${type}-warranty" placeholder="مثلاً 12"></div></div>` : ''}
         <button class="btn btn-secondary" id="${type}-add-line">+ افزودن به سبد فاکتور</button>
-        <table class="data-table" style="margin-top:14px"><thead><tr><th>کالا</th><th>تعداد</th><th>قیمت</th><th>جمع</th>${type === 'sale' ? '<th>سریال/گارانتی</th>' : ''}</tr></thead><tbody id="${type}-cart-tbody"></tbody></table>
-        <div class="cart-total" id="${type}-cart-total">جمع کل: ۰ تومان</div>
+        <table class="data-table" style="margin-top:14px"><thead><tr><th>کالا</th><th>تعداد</th><th>قیمت (ریال)</th><th>جمع (ریال)</th>${type === 'sale' ? '<th>سریال/گارانتی</th>' : ''}</tr></thead><tbody id="${type}-cart-tbody"></tbody></table>
+        <div class="cart-total" id="${type}-cart-total">جمع کل: ۰ ریال</div>
         <div class="words-hint" id="${type}-cart-total-words"></div>
         <div class="form-row" style="margin-top:14px">
           <div><label>تخفیف کل فاکتور (ریال)</label><input type="text" inputmode="decimal" id="${type}-discount" value="0"><div class="words-hint" id="${type}-discount-words"></div></div>
@@ -1792,8 +1796,8 @@ function loadInvoiceForm(type) {
           if (!itemObj) { infoBox.classList.add('hidden'); return; }
           const isAdmin = state.user.role === 'admin';
           const parts = [];
-          if (isAdmin && itemObj.purchase_price != null) parts.push({ k: 'آخرین قیمت خرید', v: fmt(itemObj.purchase_price) + ' تومان' });
-          if (isAdmin && itemObj.avg_cost != null) parts.push({ k: 'میانگین بهای تمام‌شده', v: fmt(itemObj.avg_cost) + ' تومان' });
+          if (isAdmin && itemObj.purchase_price != null) parts.push({ k: 'آخرین قیمت خرید', v: fmtRial(itemObj.purchase_price) + ' ریال' });
+          if (isAdmin && itemObj.avg_cost != null) parts.push({ k: 'میانگین بهای تمام‌شده', v: fmtRial(itemObj.avg_cost) + ' ریال' });
           parts.push({ k: 'موجودی فعلی', v: fmt(itemObj.stock_qty) + ' ' + (itemObj.unit || '') });
           infoBox.innerHTML = parts.map(p => `<div class="item"><div class="k">${p.k}</div><div class="v">${p.v}</div></div>`).join('');
           infoBox.classList.remove('hidden');
@@ -1938,7 +1942,7 @@ function loadInvoiceForm(type) {
     const grandTotal = Math.max(subtotal - discount, 0);
 
     const rowsHtml = cart.map(c => `
-      <tr><td>${c.item_name}</td><td>${fmt(c.qty)}</td><td>${fmt(c.unit_price)}</td><td>${fmt(c.qty * c.unit_price)}</td></tr>
+      <tr><td>${c.item_name}</td><td>${fmt(c.qty)}</td><td>${fmtRial(c.unit_price)}</td><td>${fmtRial(c.qty * c.unit_price)}</td></tr>
     `).join('');
 
     openModal(`
@@ -1949,13 +1953,13 @@ function loadInvoiceForm(type) {
         <div class="item"><span class="k">یادداشت</span><span class="v">${note || '—'}</span></div>
       </div>
       <table class="data-table">
-        <thead><tr><th>کالا</th><th>تعداد</th><th>قیمت واحد</th><th>جمع</th></tr></thead>
+        <thead><tr><th>کالا</th><th>تعداد</th><th>قیمت واحد (ریال)</th><th>جمع (ریال)</th></tr></thead>
         <tbody>${rowsHtml}</tbody>
       </table>
       <table class="totals" style="margin-top:10px">
-        <tr><td class="label">جمع جزء:</td><td class="value">${fmt(subtotal)} تومان</td></tr>
-        <tr><td class="label">تخفیف:</td><td class="value">${fmt(discount)} تومان</td></tr>
-        <tr class="grand"><td class="label">جمع نهایی:</td><td class="value">${fmt(grandTotal)} تومان</td></tr>
+        <tr><td class="label">جمع جزء:</td><td class="value">${fmtRial(subtotal)} ریال</td></tr>
+        <tr><td class="label">تخفیف:</td><td class="value">${fmtRial(discount)} ریال</td></tr>
+        <tr class="grand"><td class="label">جمع نهایی:</td><td class="value">${fmtRial(grandTotal)} ریال</td></tr>
       </table>
       <div class="modal-actions">
         <button class="btn btn-secondary" onclick="closeModal()">بازگشت و ویرایش</button>
@@ -1978,7 +1982,7 @@ function loadInvoiceForm(type) {
     };
     const res = await api('POST', '/invoices', payload);
     if (res && res.ok) {
-      toast(`فاکتور ${res.invoice_number} ثبت شد — جمع کل: ${fmt(res.total)} تومان`, 'success');
+      toast(`فاکتور ${res.invoice_number} ثبت شد — جمع کل: ${fmtRial(res.total)} ریال`, 'success');
       if (payType === 'check') {
         const due = prompt('تاریخ سررسید چک را وارد کنید (مثلاً 1404-06-01):');
         if (due) {
@@ -2015,11 +2019,11 @@ function renderCart(type) {
   const cart = state[cartKey];
   $(`#${type}-cart-tbody`).innerHTML = cart.map(c =>
     `<tr><td>${c.item_name}</td><td>${fmt(c.qty)}</td>
-     <td title="به حروف: ${numberToPersianWords(c.unit_price)} تومان">${fmt(c.unit_price)}</td>
-     <td title="به حروف: ${numberToPersianWords(c.qty * c.unit_price)} تومان">${fmt(c.qty * c.unit_price)}</td>
+     <td title="به حروف: ${numberToPersianWords(c.unit_price)} تومان">${fmtRial(c.unit_price)}</td>
+     <td title="به حروف: ${numberToPersianWords(c.qty * c.unit_price)} تومان">${fmtRial(c.qty * c.unit_price)}</td>
      ${type === 'sale' ? `<td>${[c.serial_number ? escHtml(c.serial_number) : '', c.warranty_months ? `${c.warranty_months} ماه گارانتی` : ''].filter(Boolean).join(' / ') || '—'}</td>` : ''}</tr>`).join('');
   const total = cart.reduce((s, c) => s + c.qty * c.unit_price, 0);
-  $(`#${type}-cart-total`).textContent = `جمع کل: ${fmt(total)} تومان`;
+  $(`#${type}-cart-total`).textContent = `جمع کل: ${fmtRial(total)} ریال`;
   $(`#${type}-cart-total-words`).textContent = total ? `به حروف: ${numberToPersianWords(total)} تومان` : '';
 }
 
@@ -2052,7 +2056,7 @@ async function loadHistory() {
   $('#history-tbody').innerHTML = data.map(inv => `
     <tr${inv.voided ? ' style="opacity:0.55"' : ''}>
       <td>${inv.number || inv.id}${inv.voided ? ' <span class="badge badge-red">باطل‌شده</span>' : ''}</td><td>${typeLabel[inv.invoice_type] || inv.invoice_type}</td><td>${toJalaliDate(inv.date, true)}</td>
-      <td>${inv.party_name || '—'}</td><td>${inv.voided ? `دلیل ابطال: ${escHtml(inv.void_reason)}` : (inv.description || '—')}</td><td title="${wordsTitle(inv.total)}">${fmt(inv.total)}</td><td title="${wordsTitle(inv.paid)}">${fmt(inv.paid)}</td>
+      <td>${inv.party_name || '—'}</td><td>${inv.voided ? `دلیل ابطال: ${escHtml(inv.void_reason)}` : (inv.description || '—')}</td><td title="${wordsTitle(inv.total)}">${fmtRial(inv.total)}</td><td title="${wordsTitle(inv.paid)}">${fmtRial(inv.paid)}</td>
       <td>${escHtml(inv.created_by) || '—'}</td>
       <td>
         ${inv.voided ? '' : `
@@ -2074,14 +2078,14 @@ async function openInstallmentsModal(invoiceId) {
   if (existing === null) return;
 
   const existingRows = existing.map(i => `
-    <tr><td>${escHtml(i.due_date)}</td><td title="${wordsTitle(i.amount)}">${fmt(i.amount)}</td>
+    <tr><td>${escHtml(i.due_date)}</td><td title="${wordsTitle(i.amount)}">${fmtRial(i.amount)}</td>
     <td>${i.paid ? `<span class="badge badge-green">پرداخت‌شده</span>` : `<button class="btn btn-sm btn-success" onclick="payInstallment(${i.id}, ${invoiceId})">ثبت پرداخت</button>`}</td></tr>`).join('');
 
   openModal(`
     <h3>اقساط فاکتور ${inv.number || inv.id}</h3>
-    <p>مانده فاکتور: <strong title="${wordsTitle(remaining)}">${fmt(remaining)} تومان</strong></p>
+    <p>مانده فاکتور: <strong title="${wordsTitle(remaining)}">${fmtRial(remaining)} ریال</strong></p>
     <table class="data-table" style="margin-top:10px">
-      <thead><tr><th>سررسید</th><th>مبلغ</th><th>وضعیت</th></tr></thead>
+      <thead><tr><th>سررسید</th><th>مبلغ (ریال)</th><th>وضعیت</th></tr></thead>
       <tbody>${existingRows || '<tr><td colspan="3" class="muted">هنوز قسطی تعریف نشده</td></tr>'}</tbody>
     </table>
     <div class="card" style="margin-top:14px">
@@ -2177,7 +2181,7 @@ async function openEditInvoiceModal(invoiceId) {
         <div><label>قیمت واحد (ریال)</label><input type="text" inputmode="decimal" id="edit-inv-price"><div class="words-hint" id="edit-inv-price-words"></div></div>
       </div>
       <button class="btn btn-secondary" type="button" id="edit-inv-add-line">+ افزودن قلم</button>
-      <table class="data-table" style="margin-top:10px"><thead><tr><th>کالا</th><th>تعداد</th><th>قیمت</th><th>جمع</th><th></th></tr></thead><tbody id="edit-inv-cart-tbody"></tbody></table>
+      <table class="data-table" style="margin-top:10px"><thead><tr><th>کالا</th><th>تعداد</th><th>قیمت (ریال)</th><th>جمع (ریال)</th><th></th></tr></thead><tbody id="edit-inv-cart-tbody"></tbody></table>
       <div class="cart-total" id="edit-inv-cart-total"></div>
     </div>
     <div class="modal-actions">
@@ -2229,11 +2233,11 @@ async function openEditInvoiceModal(invoiceId) {
 function renderEditInvoiceCart() {
   $('#edit-inv-cart-tbody').innerHTML = editInvoiceCart.map((c, i) => `
     <tr>
-      <td>${c.item_name}</td><td>${fmt(c.qty)}</td><td>${fmt(c.unit_price)}</td><td>${fmt(c.qty * c.unit_price)}</td>
+      <td>${c.item_name}</td><td>${fmt(c.qty)}</td><td>${fmtRial(c.unit_price)}</td><td>${fmtRial(c.qty * c.unit_price)}</td>
       <td><button class="btn btn-sm btn-danger" type="button" onclick="removeEditInvoiceCartRow(${i})">حذف</button></td>
     </tr>`).join('');
   const total = editInvoiceCart.reduce((s, c) => s + c.qty * c.unit_price, 0);
-  $('#edit-inv-cart-total').textContent = `جمع جزء: ${fmt(total)} تومان`;
+  $('#edit-inv-cart-total').textContent = `جمع جزء: ${fmtRial(total)} ریال`;
 }
 
 function removeEditInvoiceCartRow(i) {
@@ -2308,7 +2312,7 @@ async function showSendInvoiceResult(inv) {
     <div class="item"><span class="k">نوع</span><span class="v">${typeLabel[inv.invoice_type] || inv.invoice_type}</span></div>
     <div class="item"><span class="k">طرف‌حساب</span><span class="v">${inv.party_name || '—'}</span></div>
     <div class="item"><span class="k">تاریخ</span><span class="v">${toJalaliDate(inv.date, true)}</span></div>
-    <div class="item"><span class="k">جمع کل</span><span class="v">${fmt(inv.total)} تومان</span></div>`;
+    <div class="item"><span class="k">جمع کل</span><span class="v">${fmtRial(inv.total)} ریال</span></div>`;
   $('#send-inv-result-card').classList.remove('hidden');
   $('#send-inv-preview-frame').srcdoc = '';
 
@@ -2357,7 +2361,7 @@ async function loadParties() {
     <tr>
       <td>${p.name}${p.is_vip ? ' <span class="badge badge-green">VIP</span>' : ''}${p.note ? ` <span title="${p.note}">📝</span>` : ''}</td>
       <td>${p.phone || '—'}</td><td>${p.type === 'customer' ? 'مشتری' : 'تامین‌کننده'}</td>
-      <td>${p.balance > 0 ? `<span class="badge badge-orange" title="${wordsTitle(p.balance)}">${fmt(p.balance)}</span>` : (p.balance < 0 ? `<span class="badge badge-red" title="${wordsTitle(Math.abs(p.balance))}">${fmt(Math.abs(p.balance))}</span>` : '0')}</td>
+      <td>${p.balance > 0 ? `<span class="badge badge-orange" title="${wordsTitle(p.balance)}">${fmtRial(p.balance)}</span>` : (p.balance < 0 ? `<span class="badge badge-red" title="${wordsTitle(Math.abs(p.balance))}">${fmtRial(Math.abs(p.balance))}</span>` : '0')}</td>
       <td>${p.last_purchase ? toJalaliDate(p.last_purchase) : '—'}</td>
       <td>
         <button class="btn btn-sm btn-secondary" onclick="showLedger(${p.id})">ریز حساب</button>
@@ -2437,11 +2441,11 @@ function openEditPartyModal(partyId) {
 async function showLedger(partyId) {
   const data = await api('GET', `/parties/${partyId}/ledger`);
   if (!data) return;
-  const rows = data.invoices.map(inv => `<tr><td>${toJalaliDate(inv.date, true)}</td><td>${inv.invoice_type}</td><td title="${wordsTitle(inv.total)}">${fmt(inv.total)}</td><td title="${wordsTitle(inv.paid)}">${fmt(inv.paid)}</td></tr>`).join('');
+  const rows = data.invoices.map(inv => `<tr><td>${toJalaliDate(inv.date, true)}</td><td>${inv.invoice_type}</td><td title="${wordsTitle(inv.total)}">${fmtRial(inv.total)}</td><td title="${wordsTitle(inv.paid)}">${fmtRial(inv.paid)}</td></tr>`).join('');
   openModal(`
     <h3>ریز حساب: ${data.party.name}</h3>
-    <p>مانده فعلی: <strong title="${wordsTitle(data.party.balance)}">${fmt(data.party.balance)} تومان</strong></p>
-    <table class="data-table" style="margin-top:12px"><thead><tr><th>تاریخ</th><th>نوع</th><th>جمع کل</th><th>پرداخت‌شده</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">فاکتوری ثبت نشده</td></tr>'}</tbody></table>
+    <p>مانده فعلی: <strong title="${wordsTitle(data.party.balance)}">${fmtRial(data.party.balance)} ریال</strong></p>
+    <table class="data-table" style="margin-top:12px"><thead><tr><th>تاریخ</th><th>نوع</th><th>جمع کل (ریال)</th><th>پرداخت‌شده (ریال)</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">فاکتوری ثبت نشده</td></tr>'}</tbody></table>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal()">بستن</button>
       <button class="btn btn-secondary" id="ledger-print-btn">چاپ صورت‌حساب کامل</button>
@@ -2479,7 +2483,7 @@ function settlePayment(partyId, partyName) {
     const amount = readRialAsToman($('#settle-amount'));
     if (!amount) return;
     const res = await api('POST', `/parties/${partyId}/payment`, { amount });
-    if (res && res.ok) { toast(`ثبت شد. مانده جدید: ${fmt(res.new_balance)} تومان`, 'success'); closeModal(); loadParties(); }
+    if (res && res.ok) { toast(`ثبت شد. مانده جدید: ${fmtRial(res.new_balance)} ریال`, 'success'); closeModal(); loadParties(); }
   });
 }
 
@@ -2500,7 +2504,7 @@ async function loadChecks() {
     const isDue = ch.status === 'pending' && ch.direction === 'received' && normalizeDigitsForCompare(ch.due_date) <= today;
     if (isDue) dueTodayIds.push(ch.id);
     return `<tr${isDue ? ' style="background:var(--warning-100)"' : ''}>
-      <td>${escHtml(ch.party_name || '—')}</td><td title="${wordsTitle(ch.amount)}">${fmt(ch.amount)}</td><td>${ch.due_date}${isDue ? ' <span class="badge badge-orange">سررسید شده</span>' : ''}</td><td>${dirLabel[ch.direction] || ch.direction}</td>
+      <td>${escHtml(ch.party_name || '—')}</td><td title="${wordsTitle(ch.amount)}">${fmtRial(ch.amount)}</td><td>${ch.due_date}${isDue ? ' <span class="badge badge-orange">سررسید شده</span>' : ''}</td><td>${dirLabel[ch.direction] || ch.direction}</td>
       <td><span class="badge badge-${st[1]}">${st[0]}</span></td>
       <td>
         ${ch.status === 'pending' ? `<button class="btn btn-sm btn-success" onclick="setCheckStatus(${ch.id},'cashed')">وصول شد</button>
@@ -2720,7 +2724,7 @@ async function loadBankPage() {
     <div class="stat-card primary" title="${wordsTitle(a.balance)}" style="position:relative">
       <button class="btn btn-ghost btn-sm" style="position:absolute;top:8px;left:8px;padding:2px 8px" onclick="openEditBankAccountModal(${a.id})">✏️</button>
       <div class="stat-label">${a.name}${a.bank_name ? ' — ' + a.bank_name : ''}</div>
-      <div class="stat-value">${fmt(a.balance)} تومان</div>
+      <div class="stat-value">${fmtRial(a.balance)} ریال</div>
       ${a.account_number ? `<div class="muted" style="font-size:11px;margin-top:4px">شماره حساب/کارت: <bdi dir="ltr">${escHtml(a.account_number)}</bdi></div>` : ''}
       ${a.iban ? `<div class="muted" style="font-size:11px">شبا: <bdi dir="ltr">${escHtml(a.iban)}</bdi></div>` : ''}
     </div>`).join('') || '<p class="muted">هنوز حساب بانکی تعریف نشده.</p>';
@@ -2852,7 +2856,7 @@ async function loadBankStatement() {
   const typeLabel = { deposit: 'واریز', withdrawal: 'برداشت', transfer_in: 'انتقال ورودی', transfer_out: 'انتقال خروجی' };
   $('#bank-statement-tbody').innerHTML = (data.transactions || []).map(tx => `
     <tr><td>${toJalaliDate(tx.date, true)}</td><td>${typeLabel[tx.tx_type] || tx.tx_type}</td>
-    <td title="${wordsTitle(tx.amount)}">${fmt(tx.amount)}</td><td>${tx.description || '—'}</td></tr>`
+    <td title="${wordsTitle(tx.amount)}">${fmtRial(tx.amount)}</td><td>${tx.description || '—'}</td></tr>`
   ).join('') || '<tr><td colspan="4" class="muted">تراکنشی ثبت نشده</td></tr>';
 }
 
@@ -2867,9 +2871,9 @@ async function loadCash() {
   attachRialWordsPreview($('#cash-closing-counted'), 'cash-closing-counted-words');
   const data = await api('GET', '/cash');
   if (!data) return;
-  $('#cash-stat').innerHTML = `<div class="stat-card accent" title="${wordsTitle(data.balance)}"><div class="stat-label">موجودی صندوق</div><div class="stat-value">${fmt(data.balance)} تومان</div></div>`;
+  $('#cash-stat').innerHTML = `<div class="stat-card accent" title="${wordsTitle(data.balance)}"><div class="stat-label">موجودی صندوق</div><div class="stat-value">${fmtRial(data.balance)} ریال</div></div>`;
   $('#cash-tbody').innerHTML = data.transactions.map(tx => `
-    <tr><td>${toJalaliDate(tx.date, true)}</td><td>${tx.tx_type === 'in' ? 'دریافت' : 'پرداخت'}</td><td title="${wordsTitle(tx.amount)}">${fmt(tx.amount)}</td>
+    <tr><td>${toJalaliDate(tx.date, true)}</td><td>${tx.tx_type === 'in' ? 'دریافت' : 'پرداخت'}</td><td title="${wordsTitle(tx.amount)}">${fmtRial(tx.amount)}</td>
     <td>${tx.expense_category ? (EXPENSE_CATEGORY_LABELS[tx.expense_category] || tx.expense_category) : '—'}</td>
     <td>${tx.description || '—'}</td></tr>`).join('');
   loadCashClosings();
@@ -2892,8 +2896,8 @@ async function loadCashClosings() {
   const data = await api('GET', '/cash/closings');
   if (!data) return;
   $('#cash-closings-tbody').innerHTML = data.map(c => `
-    <tr><td>${toJalaliDate(c.created_at, true)}</td><td>${fmt(c.expected_balance)}</td><td>${fmt(c.counted_balance)}</td>
-    <td style="color:${c.difference === 0 ? 'var(--accent)' : 'var(--danger)'}">${fmt(c.difference)}</td>
+    <tr><td>${toJalaliDate(c.created_at, true)}</td><td>${fmtRial(c.expected_balance)}</td><td>${fmtRial(c.counted_balance)}</td>
+    <td style="color:${c.difference === 0 ? 'var(--accent)' : 'var(--danger)'}">${fmtRial(c.difference)}</td>
     <td>${escHtml(c.note) || '—'}</td><td>${escHtml(c.username) || '—'}</td></tr>`).join('');
 }
 $('#btn-close-cash').addEventListener('click', async () => {
@@ -2903,7 +2907,7 @@ $('#btn-close-cash').addEventListener('click', async () => {
     counted_balance: counted, note: $('#cash-closing-note').value.trim(), username: state.user.username,
   });
   if (res && res.ok) {
-    const diffMsg = res.difference === 0 ? 'صندوق مطابقت دارد ✅' : `⚠️ اختلاف: ${fmt(Math.abs(res.difference))} تومان (${res.difference > 0 ? 'اضافه' : 'کسری'})`;
+    const diffMsg = res.difference === 0 ? 'صندوق مطابقت دارد ✅' : `⚠️ اختلاف: ${fmtRial(Math.abs(res.difference))} ریال (${res.difference > 0 ? 'اضافه' : 'کسری'})`;
     toast(`بستن صندوق ثبت شد — ${diffMsg}`, res.difference === 0 ? 'success' : 'danger');
     $('#cash-closing-counted').value = ''; $('#cash-closing-note').value = '';
     loadCashClosings();
@@ -2915,8 +2919,8 @@ async function loadMonthly() {
   const data = await api('GET', `/reports/monthly?role=${state.user.role}`);
   if (!data) return;
   $('#monthly-tbody').innerHTML = data.map(m => `
-    <tr><td>${toJalaliMonthLabel(m.month)}</td><td title="${wordsTitle(m.sales)}">${fmt(m.sales)}</td><td title="${wordsTitle(m.purchases)}">${m.purchases === null ? '—' : fmt(m.purchases)}</td>
-    <td style="color:${m.profit >= 0 ? 'var(--accent)' : 'var(--danger)'}" title="${m.profit !== null ? wordsTitle(Math.abs(m.profit)) : ''}">${m.profit === null ? '—' : fmt(m.profit)}</td></tr>`).join('');
+    <tr><td>${toJalaliMonthLabel(m.month)}</td><td title="${wordsTitle(m.sales)}">${fmtRial(m.sales)}</td><td title="${wordsTitle(m.purchases)}">${m.purchases === null ? '—' : fmtRial(m.purchases)}</td>
+    <td style="color:${m.profit >= 0 ? 'var(--accent)' : 'var(--danger)'}" title="${m.profit !== null ? wordsTitle(Math.abs(m.profit)) : ''}">${m.profit === null ? '—' : fmtRial(m.profit)}</td></tr>`).join('');
   drawBarChart($('#monthly-chart'), data.map(m => toJalaliMonthLabel(m.month)), data.map(m => m.profit || 0));
 }
 
@@ -2957,21 +2961,21 @@ async function loadExtraReports() {
     api('GET', '/reports/reorder-suggestions'),
     api('GET', '/reports/yoy-comparison'),
   ]);
-  if (byEmployee) $('#by-employee-tbody').innerHTML = byEmployee.map(e => `<tr><td>${escHtml(e.username)}</td><td>${fmt(e.invoice_count)}</td><td title="${wordsTitle(e.total_amount)}">${fmt(e.total_amount)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">فروشی ثبت نشده</td></tr>';
-  if (expenses) $('#expenses-tbody').innerHTML = expenses.categories.map(c => `<tr><td>${EXPENSE_CATEGORY_LABELS[c.category] || c.category}</td><td>${fmt(c.tx_count)}</td><td title="${wordsTitle(c.total_amount)}">${fmt(c.total_amount)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">هزینه‌ای ثبت نشده</td></tr>';
-  if (profitByItem) $('#profit-by-item-tbody').innerHTML = profitByItem.map(it => `<tr><td>${it.name}</td><td>${fmt(it.total_qty)}</td><td title="${wordsTitle(it.total_sales)}">${fmt(it.total_sales)}</td><td title="${wordsTitle(it.estimated_cost)}">${fmt(it.estimated_cost)}</td><td style="color:${it.estimated_profit >= 0 ? 'var(--accent)' : 'var(--danger)'}" title="${wordsTitle(Math.abs(it.estimated_profit))}">${fmt(it.estimated_profit)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">فروشی ثبت نشده</td></tr>';
+  if (byEmployee) $('#by-employee-tbody').innerHTML = byEmployee.map(e => `<tr><td>${escHtml(e.username)}</td><td>${fmt(e.invoice_count)}</td><td title="${wordsTitle(e.total_amount)}">${fmtRial(e.total_amount)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">فروشی ثبت نشده</td></tr>';
+  if (expenses) $('#expenses-tbody').innerHTML = expenses.categories.map(c => `<tr><td>${EXPENSE_CATEGORY_LABELS[c.category] || c.category}</td><td>${fmt(c.tx_count)}</td><td title="${wordsTitle(c.total_amount)}">${fmtRial(c.total_amount)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">هزینه‌ای ثبت نشده</td></tr>';
+  if (profitByItem) $('#profit-by-item-tbody').innerHTML = profitByItem.map(it => `<tr><td>${it.name}</td><td>${fmt(it.total_qty)}</td><td title="${wordsTitle(it.total_sales)}">${fmtRial(it.total_sales)}</td><td title="${wordsTitle(it.estimated_cost)}">${fmtRial(it.estimated_cost)}</td><td style="color:${it.estimated_profit >= 0 ? 'var(--accent)' : 'var(--danger)'}" title="${wordsTitle(Math.abs(it.estimated_profit))}">${fmtRial(it.estimated_profit)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">فروشی ثبت نشده</td></tr>';
   lastReorderSuggestions = reorder || [];
   $('#reorder-tbody').innerHTML = (reorder || []).map(it => `<tr><td>${it.name}</td><td>${fmt(it.stock_qty)} ${it.unit}</td><td>${it.daily_rate}</td><td style="color:var(--danger)">${it.days_left} روز</td><td>${fmt(it.suggested_reorder_qty)} ${it.unit}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">فعلاً کالایی نیاز به سفارش فوری ندارد</td></tr>';
   if (yoy) {
     $('#yoy-stat-grid').innerHTML = `
-      <div class="stat-card primary" title="${wordsTitle(yoy.this_month)}"><div class="stat-label">فروش این ماه</div><div class="stat-value">${fmt(yoy.this_month)} تومان</div></div>
-      <div class="stat-card" title="${wordsTitle(yoy.same_month_last_year)}"><div class="stat-label">همین ماه سال قبل</div><div class="stat-value">${fmt(yoy.same_month_last_year)} تومان</div></div>
-      <div class="stat-card accent" title="${wordsTitle(yoy.this_year)}"><div class="stat-label">فروش امسال (از ابتدای سال میلادی)</div><div class="stat-value">${fmt(yoy.this_year)} تومان</div></div>
-      <div class="stat-card" title="${wordsTitle(yoy.last_year)}"><div class="stat-label">فروش سال قبل (همین بازه)</div><div class="stat-value">${fmt(yoy.last_year)} تومان</div></div>`;
+      <div class="stat-card primary" title="${wordsTitle(yoy.this_month)}"><div class="stat-label">فروش این ماه</div><div class="stat-value">${fmtRial(yoy.this_month)} ریال</div></div>
+      <div class="stat-card" title="${wordsTitle(yoy.same_month_last_year)}"><div class="stat-label">همین ماه سال قبل</div><div class="stat-value">${fmtRial(yoy.same_month_last_year)} ریال</div></div>
+      <div class="stat-card accent" title="${wordsTitle(yoy.this_year)}"><div class="stat-label">فروش امسال (از ابتدای سال میلادی)</div><div class="stat-value">${fmtRial(yoy.this_year)} ریال</div></div>
+      <div class="stat-card" title="${wordsTitle(yoy.last_year)}"><div class="stat-label">فروش سال قبل (همین بازه)</div><div class="stat-value">${fmtRial(yoy.last_year)} ریال</div></div>`;
   }
-  if (debtors) $('#debtors-tbody').innerHTML = debtors.map(p => `<tr><td>${p.name}</td><td>${p.phone || '—'}</td><td title="${wordsTitle(p.balance)}">${fmt(p.balance)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">بدهکاری ثبت نشده</td></tr>';
-  if (creditors) $('#creditors-tbody').innerHTML = creditors.map(p => `<tr><td>${p.name}</td><td>${p.phone || '—'}</td><td title="${wordsTitle(p.owed_amount)}">${fmt(p.owed_amount)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">بدهی‌ای ثبت نشده</td></tr>';
-  if (topItems) $('#top-items-tbody').innerHTML = topItems.map(it => `<tr><td>${it.name}</td><td>${it.brand || '—'}</td><td>${fmt(it.total_qty)}</td><td title="${wordsTitle(it.total_amount)}">${fmt(it.total_amount)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">فروشی ثبت نشده</td></tr>';
+  if (debtors) $('#debtors-tbody').innerHTML = debtors.map(p => `<tr><td>${p.name}</td><td>${p.phone || '—'}</td><td title="${wordsTitle(p.balance)}">${fmtRial(p.balance)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">بدهکاری ثبت نشده</td></tr>';
+  if (creditors) $('#creditors-tbody').innerHTML = creditors.map(p => `<tr><td>${p.name}</td><td>${p.phone || '—'}</td><td title="${wordsTitle(p.owed_amount)}">${fmtRial(p.owed_amount)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">بدهی‌ای ثبت نشده</td></tr>';
+  if (topItems) $('#top-items-tbody').innerHTML = topItems.map(it => `<tr><td>${it.name}</td><td>${it.brand || '—'}</td><td>${fmt(it.total_qty)}</td><td title="${wordsTitle(it.total_amount)}">${fmtRial(it.total_amount)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">فروشی ثبت نشده</td></tr>';
 }
 
 // ===================== پشتیبان‌گیری =====================
@@ -3218,7 +3222,7 @@ function renderAiScanTable() {
     </tr>`;
   }).join('');
   const total = aiScanExtractedItems.filter(r => r.include).reduce((s, r) => s + r.qty * r.unit_price, 0);
-  $('#ai-scan-total').textContent = `جمع کل (فقط ردیف‌های تیک‌خورده): ${fmt(total)} تومان`;
+  $('#ai-scan-total').textContent = `جمع کل (فقط ردیف‌های تیک‌خورده): ${fmtRial(total)} ریال`;
 }
 
 async function resolveSupplierByName(name) {
@@ -3245,7 +3249,7 @@ $('#btn-ai-scan-confirm').addEventListener('click', () => {
     const matched = state.items.find(it => it.id === r.matched_item_id);
     return `<tr>
       <td>${r.name}${matched ? '' : ' <span class="badge badge-orange">کالای جدید</span>'}</td>
-      <td>${fmt(r.qty)}</td><td>${fmt(r.unit_price)}</td><td>${fmt(r.qty * r.unit_price)}</td>
+      <td>${fmt(r.qty)}</td><td>${fmtRial(r.unit_price)}</td><td>${fmtRial(r.qty * r.unit_price)}</td>
     </tr>`;
   }).join('');
 
@@ -3257,11 +3261,11 @@ $('#btn-ai-scan-confirm').addEventListener('click', () => {
       <div class="item"><span class="k">تعداد ردیف</span><span class="v">${rows.length}</span></div>
     </div>
     <table class="data-table">
-      <thead><tr><th>کالا</th><th>تعداد</th><th>قیمت واحد</th><th>جمع</th></tr></thead>
+      <thead><tr><th>کالا</th><th>تعداد</th><th>قیمت واحد (ریال)</th><th>جمع (ریال)</th></tr></thead>
       <tbody>${rowsHtml}</tbody>
     </table>
     <table class="totals" style="margin-top:10px">
-      <tr class="grand"><td class="label">جمع نهایی:</td><td class="value">${fmt(total)} تومان</td></tr>
+      <tr class="grand"><td class="label">جمع نهایی:</td><td class="value">${fmtRial(total)} ریال</td></tr>
     </table>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal()">بازگشت و ویرایش</button>
@@ -3331,7 +3335,7 @@ async function openReturnModal(invoiceId) {
     <h3>ثبت مرجوعی برای فاکتور ${invoice.number || invoice.id}</h3>
     <p class="muted">تعداد کالایی که ${isSale ? 'مشتری پس آورده' : 'به تامین‌کننده پس داده‌ای'} را وارد کن (حداکثر تا سقف تعداد خریداری‌شده).</p>
     <table class="data-table">
-      <thead><tr><th>کالا</th><th>تعداد خریداری‌شده</th><th>قیمت واحد</th><th>تعداد مرجوعی</th></tr></thead>
+      <thead><tr><th>کالا</th><th>تعداد خریداری‌شده</th><th>قیمت واحد (ریال)</th><th>تعداد مرجوعی</th></tr></thead>
       <tbody id="return-modal-tbody"></tbody>
     </table>
     <div class="modal-actions">
@@ -3341,7 +3345,7 @@ async function openReturnModal(invoiceId) {
 
   $('#return-modal-tbody').innerHTML = returnModalState.items.map((it, i) => `
     <tr>
-      <td>${it.item_name}</td><td>${fmt_qty_js(it.qty)}</td><td>${fmt(it.unit_price)}</td>
+      <td>${it.item_name}</td><td>${fmt_qty_js(it.qty)}</td><td>${fmtRial(it.unit_price)}</td>
       <td><input type="number" step="any" min="0" max="${it.qty}" value="0" style="width:80px"
           onchange="returnModalState.items[${i}].return_qty = Math.min(parseFloat(this.value)||0, ${it.qty})"></td>
     </tr>`).join('');
@@ -3418,10 +3422,10 @@ function renderBulkPriceTable() {
     <tr>
       <td><input type="checkbox" ${r.include ? 'checked' : ''} onchange="bulkPriceRows[${i}].include=this.checked"></td>
       <td>${r.name}</td>
-      <td>${fmt(r.old_purchase_price)}</td>
+      <td>${fmtRial(r.old_purchase_price)}</td>
       <td><input type="text" inputmode="decimal" value="${(r.new_purchase_price * 10).toLocaleString('en-US')}" style="width:120px"
           onchange="bulkPriceRows[${i}].new_purchase_price=Math.round((parseFloat(this.value.replace(/,/g,''))||0)/10)"></td>
-      <td>${fmt(r.old_sale_price)}</td>
+      <td>${fmtRial(r.old_sale_price)}</td>
       <td><input type="text" inputmode="decimal" value="${(r.new_sale_price * 10).toLocaleString('en-US')}" style="width:120px"
           onchange="bulkPriceRows[${i}].new_sale_price=Math.round((parseFloat(this.value.replace(/,/g,''))||0)/10)"></td>
     </tr>`).join('');
@@ -3456,8 +3460,8 @@ async function refreshPriceHistory() {
   $('#price-history-tbody').innerHTML = (history || []).map(h => `
     <tr>
       <td>${toJalaliDate(h.changed_at, true)}</td><td>${h.item_name}</td>
-      <td>${fmt(h.old_purchase_price)} ← ${fmt(h.new_purchase_price)}</td>
-      <td>${fmt(h.old_sale_price)} ← ${fmt(h.new_sale_price)}</td>
+      <td>${fmtRial(h.old_purchase_price)} ← ${fmtRial(h.new_purchase_price)}</td>
+      <td>${fmtRial(h.old_sale_price)} ← ${fmtRial(h.new_sale_price)}</td>
       <td>${h.note || '—'}</td>
       <td><button class="btn btn-sm btn-secondary" onclick="revertPriceHistory(${h.id})">بازگردانی</button></td>
     </tr>`).join('') || '<tr><td colspan="6" class="muted">هنوز تغییری ثبت نشده</td></tr>';
@@ -3499,7 +3503,7 @@ async function loadQuickSalePage() {
     $('#qs-favorites-grid').innerHTML = favorites.map(it => `
       <div class="qs-fav-tile" data-fav-item-id="${it.id}">
         <span>${escHtml(it.name)}</span>
-        <span class="qs-fav-price">${fmt(it.sale_price)} تومان</span>
+        <span class="qs-fav-price">${fmtRial(it.sale_price)} ریال</span>
       </div>`).join('');
     $$('.qs-fav-tile', $('#qs-favorites-grid')).forEach(el => {
       el.addEventListener('click', () => {
@@ -3549,11 +3553,11 @@ function renderQsCart() {
       <td><input type="number" step="any" value="${c.qty}" style="width:70px" onchange="qsValidateAndSetQty(${i}, this)"></td>
       <td><input type="text" inputmode="decimal" value="${(c.unit_price * 10).toLocaleString('en-US')}" style="width:120px"
           onchange="qsCart[${i}].unit_price=Math.round((parseFloat(this.value.replace(/,/g,''))||0)/10); renderQsCart();"></td>
-      <td>${fmt(c.qty * c.unit_price)}</td>
+      <td>${fmtRial(c.qty * c.unit_price)}</td>
       <td><button class="btn btn-sm btn-danger" onclick="qsCart.splice(${i},1); renderQsCart();">حذف</button></td>
     </tr>`).join('');
   const total = qsCart.reduce((s, c) => s + c.qty * c.unit_price, 0);
-  $('#qs-total').textContent = `جمع کل: ${fmt(total)} تومان`;
+  $('#qs-total').textContent = `جمع کل: ${fmtRial(total)} ریال`;
   $('#qs-total-words').textContent = total ? `به حروف: ${numberToPersianWords(total)} تومان` : '';
 }
 
@@ -3576,7 +3580,7 @@ $('#qs-search').addEventListener('keydown', (e) => {
   qsCurrentMatches = matches.slice(0, 8);
   $('#qs-suggestions').classList.remove('hidden');
   $('#qs-suggestions').innerHTML = qsCurrentMatches.map((it, i) =>
-    `<div class="ss-item" style="border:1px solid var(--border);border-radius:6px;margin-bottom:4px" data-qs-idx="${i}">${it.name} — ${fmt(it.sale_price)} تومان</div>`
+    `<div class="ss-item" style="border:1px solid var(--border);border-radius:6px;margin-bottom:4px" data-qs-idx="${i}">${it.name} — ${fmtRial(it.sale_price)} ریال</div>`
   ).join('');
 });
 $('#qs-suggestions').addEventListener('click', (e) => {
@@ -3601,7 +3605,7 @@ async function submitQuickSale() {
   };
   const res = await api('POST', '/invoices', payload);
   if (res && res.ok) {
-    toast(`فروش ${res.invoice_number} ثبت شد — جمع کل: ${fmt(res.total)} تومان`, 'success');
+    toast(`فروش ${res.invoice_number} ثبت شد — جمع کل: ${fmtRial(res.total)} ریال`, 'success');
     celebrateSuccess();
     if (payType === 'check') {
       const due = prompt('تاریخ سررسید چک را وارد کنید (مثلاً 1404-06-01):');

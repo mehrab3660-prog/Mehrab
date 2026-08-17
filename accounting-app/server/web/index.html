@@ -253,10 +253,10 @@
         </div>
         <div class="card">
           <table class="data-table">
-            <thead><tr><th>کالا</th><th>تعداد</th><th>قیمت واحد (ریال)</th><th>جمع</th><th></th></tr></thead>
+            <thead><tr><th>کالا</th><th>تعداد</th><th>قیمت واحد (ریال)</th><th>جمع (ریال)</th><th></th></tr></thead>
             <tbody id="qs-cart-tbody"></tbody>
           </table>
-          <div class="cart-total" id="qs-total" style="font-size:22px">جمع کل: ۰ تومان</div>
+          <div class="cart-total" id="qs-total" style="font-size:22px">جمع کل: ۰ ریال</div>
           <div class="words-hint" id="qs-total-words"></div>
         </div>
         <div class="card">
@@ -291,7 +291,7 @@
             <thead><tr>
               <th><input type="checkbox" id="items-select-all" style="width:auto"></th>
               <th>عکس</th><th>کد/بارکد</th><th>نام</th><th>دسته‌بندی</th><th>برند</th><th>واحد</th>
-              <th>قیمت خرید</th><th>قیمت فروش</th><th>موجودی</th><th>عملیات</th>
+              <th>قیمت خرید (ریال)</th><th>قیمت فروش (ریال)</th><th>موجودی</th><th>عملیات</th>
             </tr></thead>
             <tbody id="items-tbody"></tbody>
           </table>
@@ -360,7 +360,7 @@
             <button class="btn btn-secondary" id="btn-refresh-history">بروزرسانی</button>
           </div>
           <table class="data-table">
-            <thead><tr><th>شماره</th><th>نوع</th><th>تاریخ</th><th>طرف حساب</th><th>یادداشت</th><th>جمع کل</th><th>پرداخت‌شده</th><th>کارمند</th><th>عملیات</th></tr></thead>
+            <thead><tr><th>شماره</th><th>نوع</th><th>تاریخ</th><th>طرف حساب</th><th>یادداشت</th><th>جمع کل (ریال)</th><th>پرداخت‌شده (ریال)</th><th>کارمند</th><th>عملیات</th></tr></thead>
             <tbody id="history-tbody"></tbody>
           </table>
         </div>
@@ -390,7 +390,7 @@
       <!-- مشتریان و تامین‌کنندگان -->
       <section class="page" id="page-parties">
         <div class="page-header">
-          <div><h2>مشتریان و تامین‌کنندگان</h2><p class="page-sub">افرادی که از تو نسیه می‌خرن (مشتری) یا تو ازشون نسیه می‌خری (تامین‌کننده) — مثلاً «آقای رضایی ۸۰,۰۰۰ تومان بهت بدهکاره». وقتی پولش رو دادن، از دکمه «تسویه» ثبت کن.</p></div>
+          <div><h2>مشتریان و تامین‌کنندگان</h2><p class="page-sub">افرادی که از تو نسیه می‌خرن (مشتری) یا تو ازشون نسیه می‌خری (تامین‌کننده) — مثلاً «آقای رضایی ۸۰۰,۰۰۰ ریال بهت بدهکاره». وقتی پولش رو دادن، از دکمه «تسویه» ثبت کن.</p></div>
           <button class="btn btn-primary" id="btn-new-party">+ طرف‌حساب جدید</button>
         </div>
         <div class="card">
@@ -404,7 +404,7 @@
       <!-- چک‌ها -->
       <section class="page" id="page-checks">
         <div class="page-header">
-          <div><h2>چک‌ها</h2><p class="page-sub">چک‌هایی که از مشتری گرفتی یا به تامین‌کننده دادی و هنوز نقد نشده‌اند — مثلاً «چک ۵۰۰,۰۰۰ تومانی سررسید ماه بعد». وقتی وصول یا برگشت خورد، وضعیتش رو اینجا آپدیت کن.</p></div>
+          <div><h2>چک‌ها</h2><p class="page-sub">چک‌هایی که از مشتری گرفتی یا به تامین‌کننده دادی و هنوز نقد نشده‌اند — مثلاً «چک ۵,۰۰۰,۰۰۰ ریالی سررسید ماه بعد». وقتی وصول یا برگشت خورد، وضعیتش رو اینجا آپدیت کن.</p></div>
           <div style="display:flex;gap:8px">
             <button class="btn btn-primary" id="btn-new-check">+ ثبت چک جدید</button>
             <button class="btn btn-primary hidden" id="btn-settle-due-checks">تسویه سریع چک‌های سررسید شده</button>
@@ -412,7 +412,7 @@
         </div>
         <div class="card">
           <table class="data-table">
-            <thead><tr><th>طرف حساب</th><th>مبلغ</th><th>سررسید</th><th>نوع</th><th>وضعیت</th><th>عملیات</th></tr></thead>
+            <thead><tr><th>طرف حساب</th><th>مبلغ (ریال)</th><th>سررسید</th><th>نوع</th><th>وضعیت</th><th>عملیات</th></tr></thead>
             <tbody id="checks-tbody"></tbody>
           </table>
         </div>
@@ -456,7 +456,7 @@
           <div class="card-title">گردش حساب</div>
           <select id="statement-account" style="margin-bottom:12px"></select>
           <table class="data-table">
-            <thead><tr><th>تاریخ</th><th>نوع</th><th>مبلغ</th><th>توضیحات</th></tr></thead>
+            <thead><tr><th>تاریخ</th><th>نوع</th><th>مبلغ (ریال)</th><th>توضیحات</th></tr></thead>
             <tbody id="bank-statement-tbody"></tbody>
           </table>
         </div>
@@ -464,7 +464,7 @@
 
       <!-- صندوق -->
       <section class="page" id="page-cash">
-        <div class="page-header"><div><h2>صندوق</h2><p class="page-sub">پول نقدی که وارد یا خارج مغازه می‌شود — مثلاً «۲۰۰,۰۰۰ تومان بابت اجاره از صندوق پرداخت شد». فروش و خرید نقدی خودش اینجا ثبت می‌شود، برای بقیه تراکنش‌ها دستی ثبت کن.</p></div></div>
+        <div class="page-header"><div><h2>صندوق</h2><p class="page-sub">پول نقدی که وارد یا خارج مغازه می‌شود — مثلاً «۲,۰۰۰,۰۰۰ ریال بابت اجاره از صندوق پرداخت شد». فروش و خرید نقدی خودش اینجا ثبت می‌شود، برای بقیه تراکنش‌ها دستی ثبت کن.</p></div></div>
         <div class="stat-grid" id="cash-stat"></div>
         <div class="card">
           <div class="table-toolbar">
@@ -485,7 +485,7 @@
             <button class="btn btn-primary" id="btn-add-cash">ثبت تراکنش</button>
           </div>
           <table class="data-table">
-            <thead><tr><th>تاریخ</th><th>نوع</th><th>مبلغ</th><th>دسته هزینه</th><th>توضیحات</th></tr></thead>
+            <thead><tr><th>تاریخ</th><th>نوع</th><th>مبلغ (ریال)</th><th>دسته هزینه</th><th>توضیحات</th></tr></thead>
             <tbody id="cash-tbody"></tbody>
           </table>
         </div>
@@ -499,7 +499,7 @@
             <button class="btn btn-primary" id="btn-close-cash">ثبت بستن صندوق</button>
           </div>
           <table class="data-table">
-            <thead><tr><th>تاریخ</th><th>موجودی مورد انتظار</th><th>شمارش‌شده</th><th>اختلاف</th><th>یادداشت</th><th>کاربر</th></tr></thead>
+            <thead><tr><th>تاریخ</th><th>موجودی مورد انتظار (ریال)</th><th>شمارش‌شده (ریال)</th><th>اختلاف (ریال)</th><th>یادداشت</th><th>کاربر</th></tr></thead>
             <tbody id="cash-closings-tbody"></tbody>
           </table>
         </div>
@@ -513,7 +513,7 @@
         </div>
         <div class="card">
           <table class="data-table">
-            <thead><tr><th>ماه</th><th>فروش</th><th>خرید</th><th>سود/زیان</th></tr></thead>
+            <thead><tr><th>ماه</th><th>فروش (ریال)</th><th>خرید (ریال)</th><th>سود/زیان (ریال)</th></tr></thead>
             <tbody id="monthly-tbody"></tbody>
           </table>
         </div>
@@ -534,11 +534,11 @@
           <div class="report-grid">
             <div class="card">
               <div class="card-title">مشتریان بدهکار</div>
-              <table class="data-table"><thead><tr><th>نام</th><th>تلفن</th><th>بدهی</th></tr></thead><tbody id="debtors-tbody"></tbody></table>
+              <table class="data-table"><thead><tr><th>نام</th><th>تلفن</th><th>بدهی (ریال)</th></tr></thead><tbody id="debtors-tbody"></tbody></table>
             </div>
             <div class="card">
               <div class="card-title">تامین‌کنندگان بستانکار</div>
-              <table class="data-table"><thead><tr><th>نام</th><th>تلفن</th><th>بدهی ما</th></tr></thead><tbody id="creditors-tbody"></tbody></table>
+              <table class="data-table"><thead><tr><th>نام</th><th>تلفن</th><th>بدهی ما (ریال)</th></tr></thead><tbody id="creditors-tbody"></tbody></table>
             </div>
           </div>
         </div>
@@ -546,11 +546,11 @@
         <div class="extra-subpage" id="extra-subpage-sales-insight">
           <div class="card">
             <div class="card-title">پرفروش‌ترین کالاها (۳۰ روز اخیر)</div>
-            <table class="data-table"><thead><tr><th>کالا</th><th>برند</th><th>تعداد</th><th>جمع فروش</th></tr></thead><tbody id="top-items-tbody"></tbody></table>
+            <table class="data-table"><thead><tr><th>کالا</th><th>برند</th><th>تعداد</th><th>جمع فروش (ریال)</th></tr></thead><tbody id="top-items-tbody"></tbody></table>
           </div>
           <div class="card admin-only">
             <div class="card-title">سود به‌تفکیک هر کالا (۳۰ روز اخیر)</div>
-            <table class="data-table"><thead><tr><th>کالا</th><th>تعداد فروش</th><th>جمع فروش</th><th>بهای تمام‌شده تخمینی</th><th>سود تخمینی</th></tr></thead><tbody id="profit-by-item-tbody"></tbody></table>
+            <table class="data-table"><thead><tr><th>کالا</th><th>تعداد فروش</th><th>جمع فروش (ریال)</th><th>بهای تمام‌شده تخمینی (ریال)</th><th>سود تخمینی (ریال)</th></tr></thead><tbody id="profit-by-item-tbody"></tbody></table>
           </div>
         </div>
 
@@ -571,11 +571,11 @@
           <div class="report-grid">
             <div class="card">
               <div class="card-title">فروش هر کارمند</div>
-              <table class="data-table"><thead><tr><th>کارمند</th><th>تعداد فاکتور</th><th>جمع فروش</th></tr></thead><tbody id="by-employee-tbody"></tbody></table>
+              <table class="data-table"><thead><tr><th>کارمند</th><th>تعداد فاکتور</th><th>جمع فروش (ریال)</th></tr></thead><tbody id="by-employee-tbody"></tbody></table>
             </div>
             <div class="card">
               <div class="card-title">هزینه‌های جاری بر اساس دسته</div>
-              <table class="data-table"><thead><tr><th>دسته</th><th>تعداد</th><th>جمع مبلغ</th></tr></thead><tbody id="expenses-tbody"></tbody></table>
+              <table class="data-table"><thead><tr><th>دسته</th><th>تعداد</th><th>جمع مبلغ (ریال)</th></tr></thead><tbody id="expenses-tbody"></tbody></table>
             </div>
           </div>
         </div>
@@ -634,7 +634,7 @@
         <div class="card hidden" id="bulk-price-preview-card">
           <div class="card-title">پیش‌نمایش — قبل از اعمال بررسی و در صورت نیاز اصلاح کن</div>
           <table class="data-table">
-            <thead><tr><th>شامل شود؟</th><th>کالا</th><th>قیمت خرید فعلی</th><th>قیمت خرید جدید (ریال)</th><th>قیمت فروش فعلی</th><th>قیمت فروش جدید (ریال)</th></tr></thead>
+            <thead><tr><th>شامل شود؟</th><th>کالا</th><th>قیمت خرید فعلی (ریال)</th><th>قیمت خرید جدید (ریال)</th><th>قیمت فروش فعلی (ریال)</th><th>قیمت فروش جدید (ریال)</th></tr></thead>
             <tbody id="bulk-price-tbody"></tbody>
           </table>
           <button class="btn btn-primary" id="btn-bulk-price-apply" style="margin-top:14px">اعمال تغییرات</button>
@@ -642,7 +642,7 @@
         <div class="card">
           <div class="card-title">تاریخچه تغییرات قیمت</div>
           <table class="data-table">
-            <thead><tr><th>زمان</th><th>کالا</th><th>خرید قبلی → جدید</th><th>فروش قبلی → جدید</th><th>یادداشت</th><th>عملیات</th></tr></thead>
+            <thead><tr><th>زمان</th><th>کالا</th><th>خرید قبلی → جدید (ریال)</th><th>فروش قبلی → جدید (ریال)</th><th>یادداشت</th><th>عملیات</th></tr></thead>
             <tbody id="price-history-tbody"></tbody>
           </table>
         </div>

@@ -63,12 +63,13 @@ def fmt_qty(q):
 
 
 def fmt_amount(n):
-    """عدد را با جداکننده هزارگان و ارقام فارسی برمی‌گرداند، مثل ۱۲۵،۰۰۰"""
+    """مبلغ (که داخلی/دیتابیس به تومان ذخیره می‌شه) رو به ریال (ضربدر ۱۰) با جداکننده
+    هزارگان و ارقام فارسی برمی‌گردونه، مثل ۱،۲۵۰،۰۰۰ — چون فاکتور چاپی باید کاملاً به ریال باشه"""
     try:
         n = float(n)
     except (TypeError, ValueError):
         n = 0
-    formatted = f"{n:,.0f}"
+    formatted = f"{n * 10:,.0f}"
     return to_fa_digits(formatted)
 
 
@@ -138,8 +139,8 @@ def build_invoice_html(invoice, items, party, page_format="A5",
     balance_rows = ""
     if party is not None:
         balance_rows = f"""
-        <tr><td class="label">مانده قبلی:</td><td class="value">{fmt_amount(balance_before)} تومان</td></tr>
-        <tr><td class="label">مانده کل:</td><td class="value">{fmt_amount(balance_after)} تومان</td></tr>"""
+        <tr><td class="label">مانده قبلی:</td><td class="value">{fmt_amount(balance_before)} ریال</td></tr>
+        <tr><td class="label">مانده کل:</td><td class="value">{fmt_amount(balance_after)} ریال</td></tr>"""
 
     payment_type = invoice.get("payment_type", "cash")
     paid_amount = invoice.get("paid", 0) or 0
@@ -148,8 +149,8 @@ def build_invoice_html(invoice, items, party, page_format="A5",
     payment_rows = f'<tr><td class="label">نوع پرداخت:</td><td class="value">{esc(payment_label)}</td></tr>'
     if payment_type != "cash":
         payment_rows += f"""
-        <tr><td class="label">پرداخت‌شده:</td><td class="value">{fmt_amount(paid_amount)} تومان</td></tr>
-        <tr><td class="label">مانده این فاکتور:</td><td class="value">{fmt_amount(remaining_amount)} تومان</td></tr>"""
+        <tr><td class="label">پرداخت‌شده:</td><td class="value">{fmt_amount(paid_amount)} ریال</td></tr>
+        <tr><td class="label">مانده این فاکتور:</td><td class="value">{fmt_amount(remaining_amount)} ریال</td></tr>"""
 
     seller_extra = ""
     if shop_national_id:
@@ -266,7 +267,7 @@ def build_invoice_html(invoice, items, party, page_format="A5",
 <table class="items">
   <thead>
     <tr>
-      <th>ردیف</th><th>نوع کالا</th><th>شرح کالا</th><th>تعداد</th><th>مبلغ واحد</th><th>جمع کل</th>{'<th>سریال/گارانتی</th>' if has_serial_or_warranty else ''}
+      <th>ردیف</th><th>نوع کالا</th><th>شرح کالا</th><th>تعداد</th><th>مبلغ واحد (ریال)</th><th>جمع کل (ریال)</th>{'<th>سریال/گارانتی</th>' if has_serial_or_warranty else ''}
     </tr>
   </thead>
   <tbody>
@@ -275,14 +276,14 @@ def build_invoice_html(invoice, items, party, page_format="A5",
 </table>
 
 <table class="totals">
-  <tr><td class="label">جمع کل:</td><td class="value">{fmt_amount(subtotal)} تومان</td></tr>
-  <tr><td class="label">تخفیف:</td><td class="value">{fmt_amount(discount)} تومان</td></tr>
-  <tr class="grand"><td class="label">جمع کل با تخفیف:</td><td class="value">{fmt_amount(total)} تومان</td></tr>
+  <tr><td class="label">جمع کل:</td><td class="value">{fmt_amount(subtotal)} ریال</td></tr>
+  <tr><td class="label">تخفیف:</td><td class="value">{fmt_amount(discount)} ریال</td></tr>
+  <tr class="grand"><td class="label">جمع کل با تخفیف:</td><td class="value">{fmt_amount(total)} ریال</td></tr>
   {payment_rows}
   {balance_rows}
 </table>
 
-<div class="words-box"><strong>مبلغ به حروف:</strong> {words_text} تومان</div>
+<div class="words-box"><strong>مبلغ به حروف:</strong> {words_text} ریال</div>
 
 <div class="signatures">
   <span>امضای خریدار</span>
@@ -374,13 +375,13 @@ def build_statement_html(party, invoices, shop_name="حسابداری", shop_pho
 <div class="party-box">
   <span><strong>تلفن:</strong> {esc(to_fa_digits(party.get('phone') or '—'))}</span>
   <span class="balance {'debt' if balance > 0 else ('credit' if balance < 0 else '')}">
-    مانده فعلی: {fmt_amount(abs(balance))} تومان ({balance_label})
+    مانده فعلی: {fmt_amount(abs(balance))} ریال ({balance_label})
   </span>
 </div>
 
 <table class="items">
   <thead>
-    <tr><th>ردیف</th><th>تاریخ</th><th>شماره فاکتور</th><th>نوع</th><th>جمع کل</th><th>پرداخت‌شده</th><th>مانده فاکتور</th></tr>
+    <tr><th>ردیف</th><th>تاریخ</th><th>شماره فاکتور</th><th>نوع</th><th>جمع کل (ریال)</th><th>پرداخت‌شده (ریال)</th><th>مانده فاکتور (ریال)</th></tr>
   </thead>
   <tbody>
     {rows_html or '<tr><td colspan="7">فاکتوری ثبت نشده</td></tr>'}
@@ -423,7 +424,7 @@ def build_labels_html(items):
           <div class="label-name">{esc(it.get('name'))}</div>
           {f'<div class="label-barcode">{svg}</div>' if svg else ''}
           {f'<div class="label-code">{esc(code)}</div>' if code else ''}
-          <div class="label-price">{fmt_amount(it.get('sale_price'))} تومان</div>
+          <div class="label-price">{fmt_amount(it.get('sale_price'))} ریال</div>
         </div>"""
 
     html_out = f"""<!DOCTYPE html>

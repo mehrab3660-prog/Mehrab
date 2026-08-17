@@ -2308,7 +2308,7 @@ def invoice_print(invoice_id):
     inv_dict = dict(invoice)
     items_list = [dict(r) for r in items]
     party_dict = dict(party) if party else None
-    words_text = pdf_generator.number_to_persian_words(inv_dict["total"])
+    words_text = pdf_generator.number_to_persian_words(inv_dict["total"] * 10)
 
     html = invoice_html.build_invoice_html(
         inv_dict, items_list, party_dict, page_format=page_format,
@@ -2560,11 +2560,25 @@ def build_assistant_data_snapshot(role):
         FROM cash_transactions""").fetchone()["bal"]
     conn.close()
 
+    # همه‌ی مبلغ‌ها (که داخلی به تومان ذخیره می‌شن) اینجا به ریال تبدیل می‌شن، چون کل رابط
+    # کاربری هم به ریال نمایش داده می‌شه — دستیار هوشمند باید همون واحدی رو بگه که کاربر می‌بینه
+    def item_to_rial(it):
+        d = dict(it)
+        if d.get("sale_price") is not None:
+            d["sale_price"] = round(d["sale_price"] * 10)
+        if d.get("purchase_price") is not None:
+            d["purchase_price"] = round(d["purchase_price"] * 10)
+        return d
+
     snapshot = {
-        "کالاها (موجودی به تعداد، قیمت‌ها به تومان)": [dict(r) for r in items],
-        "چک‌های_در_انتظار_وصول_یا_پرداخت": [dict(r) for r in checks],
-        "حساب‌های_بانکی (موجودی به تومان)": [dict(r) for r in bank_accounts],
-        "موجودی_صندوق_تومان": cash_balance,
+        "کالاها (موجودی به تعداد، قیمت‌ها به ریال)": [item_to_rial(r) for r in items],
+        "چک‌های_در_انتظار_وصول_یا_پرداخت (مبلغ به ریال)": [
+            {**dict(r), "amount": round(r["amount"] * 10)} for r in checks
+        ],
+        "حساب‌های_بانکی (موجودی به ریال)": [
+            {**dict(r), "balance": round(r["balance"] * 10)} for r in bank_accounts
+        ],
+        "موجودی_صندوق_ریال": round((cash_balance or 0) * 10),
     }
     return json.dumps(snapshot, ensure_ascii=False)
 
