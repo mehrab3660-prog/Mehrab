@@ -303,6 +303,18 @@ export default function ProductDetailClient() {
             )}
           </div>
 
+          {!outOfStock && (
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-foreground/60">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <rect x="3" y="7" width="13" height="11" rx="1.5" />
+                <path d="M16 10h3.5a1 1 0 0 1 .9.55L22 14v4h-6" strokeLinejoin="round" />
+                <circle cx="8" cy="19.5" r="1.5" />
+                <circle cx="18" cy="19.5" r="1.5" />
+              </svg>
+              ارسال ظرف ۱ روز کاری — تحویل طی ۲ تا ۴ روز کاری
+            </p>
+          )}
+
           <div className="mt-4 flex items-baseline gap-2">
             <p className="text-2xl font-extrabold text-brand">{formatToman(product.basePrice)}</p>
             {hasDiscount && (
