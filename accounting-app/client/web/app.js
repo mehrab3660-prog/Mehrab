@@ -212,9 +212,9 @@ function attachWordsPreview(input, wordsElId) {
 
 // نمایش زنده «معادل تومان به حروف» زیر هر فیلد مبلغی که ورودیش به ریاله (فاکتور/چک/فیش بانکی
 // معمولاً به ریال نوشته می‌شن)؛ خودِ فیلد فقط برای نمایش/تایپ به ریاله، ذخیره‌سازی همچنان به تومانه (readRialAsToman)
-function attachRialWordsPreview(input, wordsElId) {
+function attachRialWordsPreview(input, wordsElOrId) {
   if (!input) return;
-  const wordsEl = document.getElementById(wordsElId);
+  const wordsEl = typeof wordsElOrId === 'string' ? document.getElementById(wordsElOrId) : wordsElOrId;
   if (!wordsEl) return;
   const update = () => {
     const rial = readAmount(input);
@@ -239,13 +239,13 @@ function marginSuggestPillsHtml() {
   }
   return html;
 }
-// دکمه‌های «پیشنهاد قیمت فروش» بر اساس درصد سود روی قیمت خرید (که به تومانه)؛
+// دکمه‌های «پیشنهاد قیمت فروش» بر اساس درصد سود روی قیمت خرید (که این هم مثل قیمت فروش به ریال گرفته می‌شه)؛
 // عدد پیشنهادی در فیلد قیمت فروش به‌صورت ریال (ضربدر ۱۰) گذاشته می‌شه چون اون فیلد به ریاله
 function bindSalePriceSuggestions(wrapEl, purchaseInput, saleInput, tomanElId) {
   if (!wrapEl) return;
   wrapEl.querySelectorAll('[data-margin]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const purchaseToman = readAmount(purchaseInput);
+      const purchaseToman = readRialAsToman(purchaseInput);
       if (!purchaseToman) { toast('اول قیمت خرید را وارد کن', 'danger'); return; }
       const margin = parseFloat(btn.dataset.margin);
       const suggestedToman = Math.round(purchaseToman * (1 + margin / 100));
@@ -1454,7 +1454,7 @@ function openEditItemModal(itemId) {
     <div class="form-row"><div><label>کد/بارکد</label><input id="ei-code" value="${escHtml(it.code || '')}"></div><div><label>نام کالا</label><input id="ei-name" value="${escHtml(it.name || '')}"></div></div>
     <div class="form-row"><div><label>برند</label><input id="ei-brand" value="${escHtml(it.brand || '')}"></div><div><label>واحد</label><input id="ei-unit" value="${escHtml(it.unit || 'عدد')}"></div></div>
     <div class="form-row"><div><label>دسته‌بندی *</label><select id="ei-cat"><option value="">— انتخاب کن —</option>${catOptions}</select></div></div>
-    <div class="form-row"><div${state.user.role !== 'admin' ? ' style="display:none"' : ''}><label>قیمت خرید (تومان)</label><input type="text" inputmode="decimal" id="ei-purchase" value="${it.purchase_price ? Number(it.purchase_price).toLocaleString('en-US') : ''}"><div class="words-hint" id="ei-purchase-words"></div></div><div><label>قیمت فروش (ریال)</label><input type="text" inputmode="decimal" id="ei-sale" value="${it.sale_price ? Number(it.sale_price * 10).toLocaleString('en-US') : ''}"><div class="words-hint" id="ei-sale-toman"></div></div></div>
+    <div class="form-row"><div${state.user.role !== 'admin' ? ' style="display:none"' : ''}><label>قیمت خرید (ریال)</label><input type="text" inputmode="decimal" id="ei-purchase" value="${it.purchase_price ? Number(it.purchase_price * 10).toLocaleString('en-US') : ''}"><div class="words-hint" id="ei-purchase-words"></div></div><div><label>قیمت فروش (ریال)</label><input type="text" inputmode="decimal" id="ei-sale" value="${it.sale_price ? Number(it.sale_price * 10).toLocaleString('en-US') : ''}"><div class="words-hint" id="ei-sale-toman"></div></div></div>
     <div class="field" id="ei-suggest-wrap"${state.user.role !== 'admin' ? ' style="display:none"' : ''}>
       <label>پیشنهاد قیمت فروش (بر اساس قیمت خرید)</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap">${marginSuggestPillsHtml()}</div>
@@ -1463,7 +1463,7 @@ function openEditItemModal(itemId) {
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-edit-item-btn">ذخیره</button></div>`);
   attachThousandsFormatting($('#ei-purchase'));
   attachThousandsFormatting($('#ei-sale'));
-  attachWordsPreview($('#ei-purchase'), 'ei-purchase-words');
+  attachRialWordsPreview($('#ei-purchase'), 'ei-purchase-words');
   attachRialWordsPreview($('#ei-sale'), 'ei-sale-toman');
   bindSalePriceSuggestions($('#ei-suggest-wrap'), $('#ei-purchase'), $('#ei-sale'), 'ei-sale-toman');
   $('#save-edit-item-btn').addEventListener('click', async () => {
@@ -1474,7 +1474,7 @@ function openEditItemModal(itemId) {
     const payload = {
       code: $('#ei-code').value, name, brand: $('#ei-brand').value, unit: $('#ei-unit').value || 'عدد',
       category_id: categoryId,
-      purchase_price: readAmount($('#ei-purchase')), sale_price: readRialAsToman($('#ei-sale')),
+      purchase_price: readRialAsToman($('#ei-purchase')), sale_price: readRialAsToman($('#ei-sale')),
       stock_qty: parseFloat($('#ei-stock').value || 0), min_stock: parseFloat($('#ei-min').value || 0),
     };
     const res = await api('PUT', `/items/${itemId}`, payload);
@@ -1591,7 +1591,7 @@ $('#btn-new-item').addEventListener('click', () => {
     <div class="form-row"><div><label>کد/بارکد</label><input id="ni-code"></div><div><label>نام کالا</label><input id="ni-name"></div></div>
     <div class="form-row"><div><label>برند</label><input id="ni-brand"></div><div><label>واحد</label><input id="ni-unit" value="عدد"></div></div>
     <div class="form-row"><div><label>دسته‌بندی *</label><select id="ni-cat"><option value="">— انتخاب کن —</option>${catOptions}</select></div></div>
-    <div class="form-row"><div${state.user.role !== 'admin' ? ' style="display:none"' : ''}><label>قیمت خرید (تومان)</label><input type="text" inputmode="decimal" id="ni-purchase"><div class="words-hint" id="ni-purchase-words"></div></div><div><label>قیمت فروش (ریال)</label><input type="text" inputmode="decimal" id="ni-sale" placeholder="مثلاً 1,500,000"><div class="words-hint" id="ni-sale-toman"></div></div></div>
+    <div class="form-row"><div${state.user.role !== 'admin' ? ' style="display:none"' : ''}><label>قیمت خرید (ریال)</label><input type="text" inputmode="decimal" id="ni-purchase"><div class="words-hint" id="ni-purchase-words"></div></div><div><label>قیمت فروش (ریال)</label><input type="text" inputmode="decimal" id="ni-sale" placeholder="مثلاً 1,500,000"><div class="words-hint" id="ni-sale-toman"></div></div></div>
     <div class="field" id="ni-suggest-wrap"${state.user.role !== 'admin' ? ' style="display:none"' : ''}>
       <label>پیشنهاد قیمت فروش (بر اساس قیمت خرید)</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap">${marginSuggestPillsHtml()}</div>
@@ -1600,7 +1600,7 @@ $('#btn-new-item').addEventListener('click', () => {
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-item-btn">ذخیره</button></div>`);
   attachThousandsFormatting($('#ni-purchase'));
   attachThousandsFormatting($('#ni-sale'));
-  attachWordsPreview($('#ni-purchase'), 'ni-purchase-words');
+  attachRialWordsPreview($('#ni-purchase'), 'ni-purchase-words');
   attachRialWordsPreview($('#ni-sale'), 'ni-sale-toman');
   bindSalePriceSuggestions($('#ni-suggest-wrap'), $('#ni-purchase'), $('#ni-sale'), 'ni-sale-toman');
   $('#save-item-btn').addEventListener('click', async () => {
@@ -1611,7 +1611,7 @@ $('#btn-new-item').addEventListener('click', () => {
     const payload = {
       code: $('#ni-code').value, name, brand: $('#ni-brand').value, unit: $('#ni-unit').value || 'عدد',
       category_id: categoryId,
-      purchase_price: readAmount($('#ni-purchase')), sale_price: readRialAsToman($('#ni-sale')),
+      purchase_price: readRialAsToman($('#ni-purchase')), sale_price: readRialAsToman($('#ni-sale')),
       stock_qty: parseFloat($('#ni-stock').value || 0), min_stock: parseFloat($('#ni-min').value || 0),
     };
     const res = await api('POST', '/items', payload);
@@ -2014,8 +2014,12 @@ async function openInstallmentsModal(invoiceId) {
     $('#inst-rows').innerHTML = Array.from({ length: count }, (_, i) => `
       <div class="form-row">
         <div><label>سررسید قسط ${toFaDigits(i + 1)} (مثلاً 1404-07-01)</label><input type="text" class="inst-due-date" placeholder="1404-07-01"></div>
-        <div><label>مبلغ (تومان)</label><input type="text" inputmode="decimal" class="inst-amount" value="${(i === count - 1 ? lastAmount : perAmount).toLocaleString('en-US')}"></div>
+        <div><label>مبلغ (ریال)</label><input type="text" inputmode="decimal" class="inst-amount" value="${((i === count - 1 ? lastAmount : perAmount) * 10).toLocaleString('en-US')}"><div class="words-hint inst-amount-words"></div></div>
       </div>`).join('');
+    $$('.inst-amount').forEach((input, i) => {
+      attachThousandsFormatting(input);
+      attachRialWordsPreview(input, $$('.inst-amount-words')[i]);
+    });
     $('#btn-save-installments').classList.remove('hidden');
   });
 
@@ -2024,7 +2028,7 @@ async function openInstallmentsModal(invoiceId) {
     const amountInputs = $$('.inst-amount');
     const installments = dateInputs.map((el, i) => ({
       due_date: el.value.trim(),
-      amount: parseFloat((amountInputs[i].value || '').replace(/,/g, '')) || 0,
+      amount: readRialAsToman(amountInputs[i]),
     }));
     if (installments.some(i => !i.due_date || !i.amount)) { toast('تاریخ و مبلغ همه اقساط را پر کن', 'danger'); return; }
     const res = await api('POST', `/invoices/${invoiceId}/installments`, { installments, username: state.user.username });
@@ -3122,8 +3126,8 @@ function renderAiScanTable() {
         </select>
       </td>
       <td><input type="number" step="any" value="${row.qty}" style="width:70px" onchange="aiScanExtractedItems[${i}].qty=parseFloat(this.value)||0"></td>
-      <td><input type="text" inputmode="decimal" value="${row.unit_price.toLocaleString('en-US')}" style="width:100px"
-          onchange="aiScanExtractedItems[${i}].unit_price=parseFloat(this.value.replace(/,/g,''))||0; renderAiScanTable();"></td>
+      <td><input type="text" inputmode="decimal" value="${(row.unit_price * 10).toLocaleString('en-US')}" style="width:120px"
+          onchange="aiScanExtractedItems[${i}].unit_price=Math.round((parseFloat(this.value.replace(/,/g,''))||0)/10); renderAiScanTable();"></td>
     </tr>`;
   }).join('');
   const total = aiScanExtractedItems.filter(r => r.include).reduce((s, r) => s + r.qty * r.unit_price, 0);
@@ -3328,11 +3332,11 @@ function renderBulkPriceTable() {
       <td><input type="checkbox" ${r.include ? 'checked' : ''} onchange="bulkPriceRows[${i}].include=this.checked"></td>
       <td>${r.name}</td>
       <td>${fmt(r.old_purchase_price)}</td>
-      <td><input type="text" inputmode="decimal" value="${r.new_purchase_price.toLocaleString('en-US')}" style="width:100px"
-          onchange="bulkPriceRows[${i}].new_purchase_price=parseFloat(this.value.replace(/,/g,''))||0"></td>
+      <td><input type="text" inputmode="decimal" value="${(r.new_purchase_price * 10).toLocaleString('en-US')}" style="width:120px"
+          onchange="bulkPriceRows[${i}].new_purchase_price=Math.round((parseFloat(this.value.replace(/,/g,''))||0)/10)"></td>
       <td>${fmt(r.old_sale_price)}</td>
-      <td><input type="text" inputmode="decimal" value="${r.new_sale_price.toLocaleString('en-US')}" style="width:100px"
-          onchange="bulkPriceRows[${i}].new_sale_price=parseFloat(this.value.replace(/,/g,''))||0"></td>
+      <td><input type="text" inputmode="decimal" value="${(r.new_sale_price * 10).toLocaleString('en-US')}" style="width:120px"
+          onchange="bulkPriceRows[${i}].new_sale_price=Math.round((parseFloat(this.value.replace(/,/g,''))||0)/10)"></td>
     </tr>`).join('');
 }
 
@@ -3456,8 +3460,8 @@ function renderQsCart() {
     <tr>
       <td>${c.item_name}</td>
       <td><input type="number" step="any" value="${c.qty}" style="width:70px" onchange="qsValidateAndSetQty(${i}, this)"></td>
-      <td><input type="text" inputmode="decimal" value="${c.unit_price.toLocaleString('en-US')}" style="width:100px"
-          onchange="qsCart[${i}].unit_price=parseFloat(this.value.replace(/,/g,''))||0; renderQsCart();"></td>
+      <td><input type="text" inputmode="decimal" value="${(c.unit_price * 10).toLocaleString('en-US')}" style="width:120px"
+          onchange="qsCart[${i}].unit_price=Math.round((parseFloat(this.value.replace(/,/g,''))||0)/10); renderQsCart();"></td>
       <td>${fmt(c.qty * c.unit_price)}</td>
       <td><button class="btn btn-sm btn-danger" onclick="qsCart.splice(${i},1); renderQsCart();">حذف</button></td>
     </tr>`).join('');
