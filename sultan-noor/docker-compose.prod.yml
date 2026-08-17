@@ -42,7 +42,10 @@ services:
     volumes:
       - meilisearch_data:/meili_data
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7700/health"]
+      # 127.0.0.1, not localhost: this image binds only IPv4, but the
+      # container's /etc/hosts resolves "localhost" to ::1 first, which
+      # wget tries and gets connection-refused on before ever trying IPv4.
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:7700/health"]
       interval: 5s
       timeout: 5s
       retries: 10
