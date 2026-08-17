@@ -2535,9 +2535,44 @@ def analyze_invoice_photo():
     return jsonify({"ok": True, "data": data, "method": "ai"})
 
 
+def build_assistant_data_snapshot(role):
+    """عکس لحظه‌ای فشرده از اطلاعات مغازه (موجودی کالا، چک‌های در انتظار، حساب بانک/صندوق)
+    که همراه هر سوال به دستیار هوشمند داده می‌شود تا با عدد واقعی جواب بدهد، نه حدسی.
+    قیمت خرید فقط برای مدیر فرستاده می‌شود (مثل بقیه‌ی برنامه)."""
+    conn = get_connection()
+    is_admin = role == "admin"
+
+    price_cols = ", purchase_price" if is_admin else ""
+    items = conn.execute(
+        f"SELECT name, code, unit, stock_qty, min_stock, sale_price{price_cols} "
+        "FROM items WHERE deleted_at IS NULL ORDER BY name LIMIT 400"
+    ).fetchall()
+
+    checks = conn.execute("""
+        SELECT c.amount, c.due_date, c.direction, p.name as party_name
+        FROM checks c LEFT JOIN parties p ON c.party_id = p.id
+        WHERE c.status = 'pending' ORDER BY c.due_date LIMIT 100
+    """).fetchall()
+
+    bank_accounts = conn.execute("SELECT name, balance FROM bank_accounts").fetchall()
+    cash_balance = conn.execute("""SELECT
+        COALESCE(SUM(CASE WHEN tx_type='in' THEN amount ELSE -amount END),0) as bal
+        FROM cash_transactions""").fetchone()["bal"]
+    conn.close()
+
+    snapshot = {
+        "کالاها (موجودی به تعداد، قیمت‌ها به تومان)": [dict(r) for r in items],
+        "چک‌های_در_انتظار_وصول_یا_پرداخت": [dict(r) for r in checks],
+        "حساب‌های_بانکی (موجودی به تومان)": [dict(r) for r in bank_accounts],
+        "موجودی_صندوق_تومان": cash_balance,
+    }
+    return json.dumps(snapshot, ensure_ascii=False)
+
+
 @app.route("/assistant/ask", methods=["POST"])
 def assistant_ask():
-    """دستیار هوشمند برنامه — فقط درباره‌ی نحوه‌ی کار با خود برنامه پاسخ می‌دهد
+    """دستیار هوشمند برنامه: هم راهنمای کار با برنامه، هم پاسخ‌گوی سوال درباره‌ی وضعیت لحظه‌ای
+    مغازه (با تزریق یک عکس لحظه‌ای از داده‌ها)، هم سوالات عمومی فنی برق
     (نیاز به اینترنت و همان کلید API که برای اسکن فاکتور خرید در config.json تنظیم شده دارد)"""
     d = request.json or {}
     question = d.get("question", "")
@@ -2547,7 +2582,8 @@ def assistant_ask():
     if not s.get("ai_enabled") or not s.get("ai_api_key"):
         return jsonify({"ok": False, "message": "دستیار هوشمند فعال نیست. مدیر باید از «تنظیمات کلی › دستیار هوش مصنوعی» کلید API را وارد کند."}), 400
 
-    ok, answer = assistant_ai.ask_assistant(question, history, s.get("ai_api_key"), "claude-haiku-4-5-20251001")
+    data_context = build_assistant_data_snapshot(g.current_user.get("role"))
+    ok, answer = assistant_ai.ask_assistant(question, history, s.get("ai_api_key"), "claude-haiku-4-5-20251001", data_context)
     if not ok:
         return jsonify({"ok": False, "message": answer}), 400
     return jsonify({"ok": True, "answer": answer})

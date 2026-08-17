@@ -743,10 +743,92 @@ function calcPress(key) {
     calcRender();
   }
 }
+// ===================== جابه‌جایی آزاد دکمه‌های شناور (ماشین حساب، دستیار هوشمند) =====================
+// دکمه رو نگه‌دار و بکش تا هرجای صفحه که خواستی جاش بدی؛ موقعیتش ذخیره می‌شه و دفعه‌ی بعد هم همون‌جاست
+function makeFabDraggable(fab, panel, storageKey) {
+  const saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
+  if (saved) {
+    fab.style.left = saved.left + 'px';
+    fab.style.top = saved.top + 'px';
+    fab.style.right = 'auto';
+    fab.style.bottom = 'auto';
+  }
+
+  let dragging = false, moved = false, startX, startY, startLeft, startTop;
+  const clamp = (val, max) => Math.max(4, Math.min(val, max));
+
+  function onPointerMove(e) {
+    if (!dragging) return;
+    const point = e.touches ? e.touches[0] : e;
+    const dx = point.clientX - startX, dy = point.clientY - startY;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) moved = true;
+    if (!moved) return;
+    if (e.cancelable) e.preventDefault();
+    const newLeft = clamp(startLeft + dx, window.innerWidth - fab.offsetWidth - 4);
+    const newTop = clamp(startTop + dy, window.innerHeight - fab.offsetHeight - 4);
+    fab.style.left = newLeft + 'px';
+    fab.style.top = newTop + 'px';
+    fab.style.right = 'auto';
+    fab.style.bottom = 'auto';
+    if (panel && !panel.classList.contains('hidden')) repositionPanelNearFab(fab, panel);
+  }
+
+  function onPointerUp() {
+    dragging = false;
+    document.removeEventListener('mousemove', onPointerMove);
+    document.removeEventListener('mouseup', onPointerUp);
+    document.removeEventListener('touchmove', onPointerMove);
+    document.removeEventListener('touchend', onPointerUp);
+    if (moved) {
+      const rect = fab.getBoundingClientRect();
+      localStorage.setItem(storageKey, JSON.stringify({ left: rect.left, top: rect.top }));
+    }
+  }
+
+  function onPointerDown(e) {
+    const point = e.touches ? e.touches[0] : e;
+    dragging = true; moved = false;
+    const rect = fab.getBoundingClientRect();
+    startX = point.clientX; startY = point.clientY;
+    startLeft = rect.left; startTop = rect.top;
+    document.addEventListener('mousemove', onPointerMove);
+    document.addEventListener('mouseup', onPointerUp);
+    document.addEventListener('touchmove', onPointerMove, { passive: false });
+    document.addEventListener('touchend', onPointerUp);
+  }
+
+  fab.addEventListener('mousedown', onPointerDown);
+  fab.addEventListener('touchstart', onPointerDown, { passive: true });
+  // اگه واقعاً کشیده شده (نه یه کلیک ساده)، جلوی باز/بسته شدن پنل رو بگیر
+  fab.addEventListener('click', (e) => {
+    if (moved) { e.stopImmediatePropagation(); e.preventDefault(); moved = false; }
+  }, true);
+}
+
+function repositionPanelNearFab(fab, panel) {
+  const rect = fab.getBoundingClientRect();
+  const panelWidth = panel.offsetWidth || 240;
+  const panelHeight = panel.offsetHeight || 300;
+  let left = rect.left;
+  let top = rect.top - panelHeight - 10;
+  if (top < 4) top = rect.bottom + 10; // اگه بالای دکمه جا نبود، پایینش باز بشه
+  if (left + panelWidth > window.innerWidth - 4) left = window.innerWidth - panelWidth - 4;
+  if (left < 4) left = 4;
+  panel.style.left = left + 'px';
+  panel.style.top = top + 'px';
+  panel.style.right = 'auto';
+  panel.style.bottom = 'auto';
+}
+
 function bindCalculator() {
   if (calcBound) return;
   calcBound = true;
-  $('#calc-fab').addEventListener('click', () => $('#calc-panel').classList.toggle('hidden'));
+  makeFabDraggable($('#calc-fab'), $('#calc-panel'), 'calcFabPos');
+  $('#calc-fab').addEventListener('click', () => {
+    const willOpen = $('#calc-panel').classList.contains('hidden');
+    $('#calc-panel').classList.toggle('hidden');
+    if (willOpen) repositionPanelNearFab($('#calc-fab'), $('#calc-panel'));
+  });
   $('#calc-close-btn').addEventListener('click', () => $('#calc-panel').classList.add('hidden'));
   $$('.calc-btn').forEach(btn => btn.addEventListener('click', () => calcPress(btn.dataset.calc)));
 }
@@ -754,9 +836,14 @@ function bindCalculator() {
 function bindAssistant() {
   if (assistantBound) return;
   assistantBound = true;
+  makeFabDraggable($('#assistant-fab'), $('#assistant-panel'), 'assistantFabPos');
   $('#assistant-fab').addEventListener('click', () => {
+    const willOpen = $('#assistant-panel').classList.contains('hidden');
     $('#assistant-panel').classList.toggle('hidden');
-    if (!$('#assistant-panel').classList.contains('hidden')) $('#assistant-input').focus();
+    if (willOpen) {
+      repositionPanelNearFab($('#assistant-fab'), $('#assistant-panel'));
+      $('#assistant-input').focus();
+    }
   });
   $('#assistant-close-btn').addEventListener('click', () => $('#assistant-panel').classList.add('hidden'));
   $('#assistant-send-btn').addEventListener('click', sendAssistantMessage);
