@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { randomInt } from 'crypto';
+import { randomInt, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SmsProvider } from './sms.provider';
 import { ActivityLogService } from '../activity/activity-log.service';
@@ -106,6 +106,15 @@ export class AuthService {
     let user = await this.prisma.user.findUnique({ where: { phone: dto.phone } });
     const isNewUser = !user;
     if (!user) {
+      const referralCode = await this.generateReferralCode();
+      let referredByUserId: string | undefined;
+      if (dto.referralCode) {
+        const referrer = await this.prisma.user.findUnique({
+          where: { referralCode: dto.referralCode.trim().toUpperCase() },
+          select: { id: true },
+        });
+        if (referrer) referredByUserId = referrer.id;
+      }
       user = await this.prisma.user.create({
         data: {
           phone: dto.phone,
@@ -113,10 +122,19 @@ export class AuthService {
           customerType: dto.customerType ?? 'RETAIL',
           companyName: dto.companyName,
           isPhoneVerified: true,
+          referralCode,
+          referredByUserId,
         },
       });
     } else if (!user.isPhoneVerified) {
       user = await this.prisma.user.update({ where: { id: user.id }, data: { isPhoneVerified: true } });
+    }
+
+    // Backfills a referral code for accounts created before this feature
+    // shipped — every login runs through here, so active users pick one up
+    // on their next sign-in without needing a one-off data migration.
+    if (!user.referralCode) {
+      user = await this.prisma.user.update({ where: { id: user.id }, data: { referralCode: await this.generateReferralCode() } });
     }
 
     await this.activity.record({ userId: user.id, event: 'auth.otp_verified', metadata: { purpose: dto.purpose } });
@@ -156,6 +174,15 @@ export class AuthService {
   private async sendWelcomeDiscount(phone: string) {
     await this.ensureWelcomeDiscountCode();
     await this.sms.sendText(phone, 'به سلطان نور خوش آمدید! برای اولین خرید خود با کد WELCOME10 ده درصد تخفیف بگیرید.');
+  }
+
+  private async generateReferralCode(): Promise<string> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = randomBytes(3).toString('hex').toUpperCase();
+      const exists = await this.prisma.user.findUnique({ where: { referralCode: code }, select: { id: true } });
+      if (!exists) return code;
+    }
+    throw new Error('تولید کد معرف یکتا ناموفق بود');
   }
 
   private issueTokens(userId: string, phone: string, role: string, customerType: string) {

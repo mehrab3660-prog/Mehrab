@@ -10,6 +10,7 @@ const LOYALTY_TYPE_LABEL: Record<string, string> = {
   EARNED: "امتیاز کسب‌شده",
   REDEEMED: "استفاده از امتیاز",
   ADJUSTED: "بازگشت/لغو سفارش",
+  REFERRAL_BONUS: "پاداش معرفی دوستان",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -26,6 +27,15 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loyalty, setLoyalty] = useState<LoyaltySummary | null>(null);
   const [showLoyaltyHistory, setShowLoyaltyHistory] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  function copyReferralLink(code: string) {
+    const link = `${window.location.origin}/login?ref=${code}`;
+    navigator.clipboard.writeText(link).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
 
   useEffect(() => {
     if (!accessToken) return;
@@ -95,6 +105,34 @@ export default function OrdersPage() {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+      )}
+
+      {loyalty && loyalty.referralCode && (
+        <div className="mb-6 rounded-2xl surface-card p-4 sm:p-5">
+          <p className="font-bold">دعوت از دوستان</p>
+          <p className="mt-1 text-sm text-foreground/60">
+            کد معرف خود را با دوستانتان به اشتراک بگذارید — با اولین خرید تحویل‌داده‌شده‌ی آن‌ها، هر دو نفر{" "}
+            {loyalty.referralBonusPoints.toLocaleString("fa-IR")} امتیاز وفاداری هدیه می‌گیرید.
+          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <span className="flex-1 rounded-lg border border-dashed border-brand/40 bg-surface px-3 py-2 text-center font-mono text-lg font-bold tracking-widest text-brand">
+              {loyalty.referralCode}
+            </span>
+            <button
+              type="button"
+              onClick={() => copyReferralLink(loyalty.referralCode!)}
+              className="flex-shrink-0 rounded-lg bg-brand px-4 py-2 text-sm font-bold text-[#0b0e14]"
+            >
+              {copied ? "کپی شد!" : "کپی لینک دعوت"}
+            </button>
+          </div>
+          {loyalty.referralCount > 0 && (
+            <p className="mt-3 text-xs text-foreground/50">
+              {loyalty.referralCount.toLocaleString("fa-IR")} نفر با کد شما ثبت‌نام کرده‌اند —{" "}
+              {loyalty.referralRewardedCount.toLocaleString("fa-IR")} نفر اولین خرید خود را تکمیل کرده‌اند.
+            </p>
           )}
         </div>
       )}

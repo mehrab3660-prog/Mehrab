@@ -23,4 +23,8 @@ export class VerifyOtpDto {
   @IsOptional()
   @IsString()
   companyName?: string;
+
+  @IsOptional()
+  @IsString()
+  referralCode?: string;
 }

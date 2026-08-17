@@ -9,7 +9,12 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { ShippingService } from '../shipping/shipping.service';
 import { SmsProvider } from '../auth/sms.provider';
 import { CreateOrderDto, UpdateOrderStatusDto } from './dto/order.dto';
-import { LOYALTY_EARN_DIVISOR_TOMAN, LOYALTY_MAX_REDEMPTION_RATIO, LOYALTY_POINT_VALUE_TOMAN } from '../loyalty/loyalty.constants';
+import {
+  LOYALTY_EARN_DIVISOR_TOMAN,
+  LOYALTY_MAX_REDEMPTION_RATIO,
+  LOYALTY_POINT_VALUE_TOMAN,
+  REFERRAL_BONUS_POINTS,
+} from '../loyalty/loyalty.constants';
 
 const ORDER_STATUS_SMS_LABELS: Record<string, string> = {
   PROCESSING: 'در حال آماده‌سازی',
@@ -261,7 +266,10 @@ export class OrdersService {
   }
 
   async updateStatus(adminId: string, id: string, dto: UpdateOrderStatusDto) {
-    const order = await this.prisma.order.findUnique({ where: { id }, include: { user: { select: { phone: true } } } });
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      include: { user: { select: { phone: true, referredByUserId: true, referralRewardedAt: true } } },
+    });
     if (!order) throw new NotFoundException('سفارش یافت نشد');
 
     const updated = await this.prisma.order.update({
@@ -306,6 +314,10 @@ export class OrdersService {
 
     if ((dto.status === 'CANCELLED' || dto.status === 'REFUNDED') && !order.loyaltyPointsReversedAt) {
       await this.reverseLoyaltyPoints(order);
+    }
+
+    if (dto.status === 'DELIVERED' && order.user.referredByUserId && !order.user.referralRewardedAt) {
+      await this.awardReferralBonus(order.userId, order.user.referredByUserId, order.orderNumber);
     }
 
     return updated;
@@ -365,6 +377,50 @@ export class OrdersService {
       }
       await tx.order.update({ where: { id: order.id }, data: { loyaltyPointsReversedAt: new Date() } });
     });
+  }
+
+  // A one-time thank-you for bringing a friend, paid to both sides the
+  // first time that friend's order is actually delivered — not at signup,
+  // so it can't be farmed with throwaway accounts. Guarded by the referred
+  // user's referralRewardedAt so it only ever fires once per relationship.
+  // Deliberately not clawed back if this order is later refunded: unlike
+  // awardLoyaltyPoints/reverseLoyaltyPoints, this bonus is a flat
+  // relationship reward, not proportional to the order's value.
+  private async awardReferralBonus(referredUserId: string, referrerUserId: string, orderNumber: string) {
+    await this.prisma.$transaction(async (tx) => {
+      const referredUser = await tx.user.update({
+        where: { id: referredUserId },
+        data: { loyaltyPoints: { increment: REFERRAL_BONUS_POINTS }, referralRewardedAt: new Date() },
+      });
+      await tx.loyaltyTransaction.create({
+        data: {
+          userId: referredUserId,
+          type: 'REFERRAL_BONUS',
+          points: REFERRAL_BONUS_POINTS,
+          balanceAfter: referredUser.loyaltyPoints,
+          note: 'پاداش معرفی — اولین خرید شما تحویل داده شد',
+        },
+      });
+
+      const referrerUser = await tx.user.update({
+        where: { id: referrerUserId },
+        data: { loyaltyPoints: { increment: REFERRAL_BONUS_POINTS } },
+      });
+      await tx.loyaltyTransaction.create({
+        data: {
+          userId: referrerUserId,
+          type: 'REFERRAL_BONUS',
+          points: REFERRAL_BONUS_POINTS,
+          balanceAfter: referrerUser.loyaltyPoints,
+          note: `پاداش معرفی — دوست شما سفارش ${orderNumber} را دریافت کرد`,
+        },
+      });
+    });
+
+    await Promise.all([
+      this.notifications.notify(referredUserId, 'SYSTEM', 'پاداش معرفی', `${REFERRAL_BONUS_POINTS} امتیاز وفاداری برای اولین خرید شما اضافه شد.`),
+      this.notifications.notify(referrerUserId, 'SYSTEM', 'پاداش معرفی', `دوست شما اولین خرید خود را دریافت کرد و ${REFERRAL_BONUS_POINTS} امتیاز به شما اضافه شد.`),
+    ]);
   }
 
   private generateOrderNumber() {

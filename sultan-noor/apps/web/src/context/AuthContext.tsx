@@ -22,6 +22,7 @@ interface AuthState {
     purpose: "LOGIN" | "REGISTER";
     fullName?: string;
     customerType?: "RETAIL" | "WHOLESALE";
+    referralCode?: string;
   }) => Promise<void>;
   logout: () => void;
 }

@@ -116,6 +116,7 @@ describe('AuthService', () => {
         phone: '09120000001',
         role: 'CUSTOMER',
         customerType: 'RETAIL',
+        referralCode: 'ABC123',
       });
 
       const result = await service.verifyOtp(baseDto);
@@ -152,6 +153,7 @@ describe('AuthService', () => {
         role: 'CUSTOMER',
         customerType: 'RETAIL',
         isPhoneVerified: true,
+        referralCode: 'AAA111',
       });
 
       await service.verifyOtp(baseDto);
@@ -160,6 +162,85 @@ describe('AuthService', () => {
       expect(prisma.user.create).not.toHaveBeenCalled();
       expect(prisma.user.update).not.toHaveBeenCalled();
       expect(sms.sendText).not.toHaveBeenCalled();
+    });
+
+    it('links a new user to the referrer found by referralCode', async () => {
+      prisma.otpCode.findFirst.mockResolvedValue({
+        id: 'otp1',
+        codeHash: await bcrypt.hash('12345', 10),
+        expiresAt: new Date(Date.now() + 60_000),
+        attempts: 0,
+      });
+      prisma.user.findUnique.mockImplementation(({ where }: any) => {
+        if (where.phone) return Promise.resolve(null); // no existing user with this phone
+        if (where.referralCode === 'FRIEND1') return Promise.resolve({ id: 'referrer1' });
+        return Promise.resolve(null); // referral-code collision check inside generateReferralCode
+      });
+      prisma.user.create.mockResolvedValue({
+        id: 'user2',
+        phone: '09120000001',
+        role: 'CUSTOMER',
+        customerType: 'RETAIL',
+        referralCode: 'ABC123',
+      });
+
+      await service.verifyOtp({ ...baseDto, referralCode: 'friend1' });
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ referredByUserId: 'referrer1' }) }),
+      );
+    });
+
+    it('ignores an unknown referral code instead of blocking registration', async () => {
+      prisma.otpCode.findFirst.mockResolvedValue({
+        id: 'otp1',
+        codeHash: await bcrypt.hash('12345', 10),
+        expiresAt: new Date(Date.now() + 60_000),
+        attempts: 0,
+      });
+      prisma.user.findUnique.mockResolvedValue(null); // no existing user, no matching referrer, no code collision
+      prisma.user.create.mockResolvedValue({
+        id: 'user3',
+        phone: '09120000001',
+        role: 'CUSTOMER',
+        customerType: 'RETAIL',
+        referralCode: 'XYZ999',
+      });
+
+      await expect(service.verifyOtp({ ...baseDto, referralCode: 'NOPE' })).resolves.toBeDefined();
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ referredByUserId: undefined }) }),
+      );
+    });
+
+    it('backfills a referral code for an existing user who does not have one yet', async () => {
+      prisma.otpCode.findFirst.mockResolvedValue({
+        id: 'otp1',
+        codeHash: await bcrypt.hash('12345', 10),
+        expiresAt: new Date(Date.now() + 60_000),
+        attempts: 0,
+      });
+      const legacyUser = {
+        id: 'user4',
+        phone: '09120000001',
+        role: 'CUSTOMER',
+        customerType: 'RETAIL',
+        isPhoneVerified: true,
+        referralCode: null,
+      };
+      prisma.user.findUnique.mockImplementation(({ where }: any) => {
+        if (where.phone) return Promise.resolve(legacyUser);
+        return Promise.resolve(null); // referral-code collision check → available
+      });
+      prisma.user.update.mockResolvedValue({ ...legacyUser, referralCode: 'NEWCODE' });
+
+      const result = await service.verifyOtp(baseDto);
+
+      expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'user4' }, data: { referralCode: expect.any(String) } });
+      expect(result.user.sub).toBe('user4');
     });
   });
 });

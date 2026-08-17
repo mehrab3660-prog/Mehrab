@@ -103,6 +103,10 @@ export interface LoyaltySummary {
   earnDivisorToman: number;
   maxRedemptionRatio: number;
   transactions: LoyaltyTransaction[];
+  referralCode: string | null;
+  referralBonusPoints: number;
+  referralCount: number;
+  referralRewardedCount: number;
 }
 
 export interface ReturnRequest {

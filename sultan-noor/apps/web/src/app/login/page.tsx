@@ -1,21 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { api, ApiError } from "@/lib/api";
 
 const RESEND_COOLDOWN_SECONDS = 120;
 
-export default function LoginPage() {
+function LoginPageContent() {
   const { requestOtp, verifyOtp } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [step, setStep] = useState<"phone" | "otp">("phone");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [fullName, setFullName] = useState("");
   const [isNewUser, setIsNewUser] = useState(false);
+  // A shared referral link looks like /login?ref=ABC123 — prefill the code
+  // so a new user doesn't have to type it in themselves, but still let them
+  // edit or clear it.
+  const [referralCode, setReferralCode] = useState(() => searchParams.get("ref")?.toUpperCase() ?? "");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [resendIn, setResendIn] = useState(0);
@@ -81,7 +86,13 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      await verifyOtp({ phone, code, purpose: "LOGIN", fullName: fullName || undefined });
+      await verifyOtp({
+        phone,
+        code,
+        purpose: "LOGIN",
+        fullName: fullName || undefined,
+        referralCode: isNewUser && referralCode ? referralCode : undefined,
+      });
       router.push("/");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "کد وارد شده نادرست است");
@@ -119,12 +130,20 @@ export default function LoginPage() {
           />
 
           {isNewUser && (
-            <input
-              placeholder="نام و نام خانوادگی"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="w-full rounded-lg border border-border-color bg-background px-3 py-2"
-            />
+            <>
+              <input
+                placeholder="نام و نام خانوادگی"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="w-full rounded-lg border border-border-color bg-background px-3 py-2"
+              />
+              <input
+                placeholder="کد معرف (اختیاری)"
+                value={referralCode}
+                onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                className="w-full rounded-lg border border-border-color bg-background px-3 py-2"
+              />
+            </>
           )}
 
           <button disabled={loading} className="w-full rounded-lg bg-brand py-2 font-bold text-[#0b0e14]">
@@ -146,5 +165,13 @@ export default function LoginPage() {
 
       {error && <p className="mt-4 text-center text-sm text-red-500">{error}</p>}
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="px-4 py-24 text-center">در حال بارگذاری...</div>}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

@@ -226,7 +226,7 @@ describe('OrdersService.updateStatus — loyalty point effects', () => {
       loyaltyPointsEarned: 0,
       loyaltyPointsAwardedAt: null,
       loyaltyPointsReversedAt: null,
-      user: { phone: '09120000000' },
+      user: { phone: '09120000000', referredByUserId: null, referralRewardedAt: null },
       ...overrides,
     };
   }
@@ -346,5 +346,54 @@ describe('OrdersService.updateStatus — loyalty point effects', () => {
 
     expect(tx.user.update).not.toHaveBeenCalled();
     expect(tx.loyaltyTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('pays a referral bonus to both the referred user and the referrer on first DELIVERED, and notifies both', async () => {
+    // loyaltyPointsAwardedAt is already set so the (separately tested)
+    // earn-on-delivered path is skipped — isolates this test to the
+    // referral-bonus transaction only.
+    prisma.order.findUnique.mockResolvedValue(
+      buildOrder({
+        loyaltyPointsAwardedAt: new Date(),
+        user: { phone: '09120000000', referredByUserId: 'referrer1', referralRewardedAt: null },
+      }),
+    );
+    tx.user.update
+      .mockResolvedValueOnce({ loyaltyPoints: 50 }) // referred user (u1)
+      .mockResolvedValueOnce({ loyaltyPoints: 130 }); // referrer
+
+    await service.updateStatus('admin1', 'order1', { status: 'DELIVERED' } as any);
+
+    expect(tx.user.update).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      data: { loyaltyPoints: { increment: 50 }, referralRewardedAt: expect.any(Date) },
+    });
+    expect(tx.user.update).toHaveBeenCalledWith({ where: { id: 'referrer1' }, data: { loyaltyPoints: { increment: 50 } } });
+    expect(tx.loyaltyTransaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ userId: 'u1', type: 'REFERRAL_BONUS', points: 50, balanceAfter: 50 }) }),
+    );
+    expect(tx.loyaltyTransaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ userId: 'referrer1', type: 'REFERRAL_BONUS', points: 50, balanceAfter: 130 }) }),
+    );
+    expect(notifications.notify).toHaveBeenCalledWith('u1', 'SYSTEM', 'پاداش معرفی', expect.any(String));
+    expect(notifications.notify).toHaveBeenCalledWith('referrer1', 'SYSTEM', 'پاداش معرفی', expect.any(String));
+  });
+
+  it('does not pay a referral bonus twice for the same referred user', async () => {
+    prisma.order.findUnique.mockResolvedValue(
+      buildOrder({ user: { phone: '09120000000', referredByUserId: 'referrer1', referralRewardedAt: new Date() } }),
+    );
+
+    await service.updateStatus('admin1', 'order1', { status: 'DELIVERED' } as any);
+
+    expect(tx.user.update).not.toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'referrer1' } }));
+  });
+
+  it('does not pay a referral bonus for an order from a user with no referrer', async () => {
+    prisma.order.findUnique.mockResolvedValue(buildOrder());
+
+    await service.updateStatus('admin1', 'order1', { status: 'DELIVERED' } as any);
+
+    expect(notifications.notify).not.toHaveBeenCalledWith(expect.anything(), 'SYSTEM', 'پاداش معرفی', expect.anything());
   });
 });

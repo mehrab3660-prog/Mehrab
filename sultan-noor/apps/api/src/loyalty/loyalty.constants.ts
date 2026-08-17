@@ -9,3 +9,7 @@ export const LOYALTY_POINT_VALUE_TOMAN = 1_000;
 // A customer can never cover more than half an order's subtotal with
 // points — keeps at least some real payment on every order.
 export const LOYALTY_MAX_REDEMPTION_RATIO = 0.5;
+
+// Referral program: both sides of a referral get this many points, paid
+// out once the referred friend's first order is actually delivered.
+export const REFERRAL_BONUS_POINTS = 50;

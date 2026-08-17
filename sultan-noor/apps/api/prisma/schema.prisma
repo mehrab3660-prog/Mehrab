@@ -48,6 +48,18 @@ model User {
   // recomputed by summing history on every read.
   loyaltyPoints Int @default(0)
 
+  // Referral program. referralCode is this user's own shareable code —
+  // nullable only because existing users predate the feature; AuthService
+  // backfills it lazily on their next login. referredByUserId is set once,
+  // at signup, from whatever code (if any) the new user entered.
+  // referralRewardedAt guards the one-time bonus payout so it can only ever
+  // fire once per referral relationship, no matter how many orders follow.
+  referralCode       String?   @unique
+  referredByUserId   String?
+  referredBy         User?     @relation("Referrals", fields: [referredByUserId], references: [id])
+  referrals          User[]    @relation("Referrals")
+  referralRewardedAt DateTime?
+
   addresses     Address[]
   carts         Cart[]
   wishlists     Wishlist[]
@@ -611,6 +623,7 @@ enum LoyaltyTransactionType {
   EARNED
   REDEEMED
   ADJUSTED
+  REFERRAL_BONUS
 }
 
 // Full audit trail of every loyalty-point balance change, so a customer (or
