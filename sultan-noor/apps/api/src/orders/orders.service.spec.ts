@@ -29,7 +29,7 @@ describe('OrdersService.createFromCart', () => {
 
   beforeEach(() => {
     tx = {
-      stock: { findFirst: jest.fn(), update: jest.fn() },
+      stock: { findMany: jest.fn(), update: jest.fn().mockResolvedValue({ quantity: 8 }) },
       order: { create: jest.fn() },
       discountCode: { update: jest.fn() },
       cartItem: { deleteMany: jest.fn() },
@@ -77,7 +77,7 @@ describe('OrdersService.createFromCart', () => {
   it('rejects the whole order when a line item has insufficient stock (transactional)', async () => {
     prisma.cart.findFirst.mockResolvedValue(buildCart());
     productsService.resolveUnitPrice.mockResolvedValue(150_000);
-    tx.stock.findFirst.mockResolvedValue(null); // no warehouse has enough stock
+    tx.stock.findMany.mockResolvedValue([]); // no warehouse has enough stock
 
     await expect(service.createFromCart('u1', { addressId: 'addr1' } as any)).rejects.toThrow(/موجودی کافی/);
     expect(tx.order.create).not.toHaveBeenCalled();
@@ -86,7 +86,7 @@ describe('OrdersService.createFromCart', () => {
   it('computes subtotal/shipping/grandTotal correctly with no discount', async () => {
     prisma.cart.findFirst.mockResolvedValue(buildCart());
     productsService.resolveUnitPrice.mockResolvedValue(150_000);
-    tx.stock.findFirst.mockResolvedValue({ id: 'stock1' });
+    tx.stock.findMany.mockResolvedValue([{ id: 'stock1', warehouseId: 'w1', productVariantId: 'v1', quantity: 10 }]);
     tx.order.create.mockResolvedValue({ id: 'order1', orderNumber: 'SN-TEST', items: [] });
 
     await service.createFromCart('u1', { addressId: 'addr1' } as any);
@@ -103,7 +103,7 @@ describe('OrdersService.createFromCart', () => {
   it('applies a discount code to the grand total and records its usage', async () => {
     prisma.cart.findFirst.mockResolvedValue(buildCart());
     productsService.resolveUnitPrice.mockResolvedValue(150_000);
-    tx.stock.findFirst.mockResolvedValue({ id: 'stock1' });
+    tx.stock.findMany.mockResolvedValue([{ id: 'stock1', warehouseId: 'w1', productVariantId: 'v1', quantity: 10 }]);
     tx.order.create.mockResolvedValue({ id: 'order1', orderNumber: 'SN-TEST', items: [] });
     pricingService.evaluateDiscountCode.mockResolvedValue({ discount: { id: 'disc1' }, amount: 50_000 });
 
@@ -115,10 +115,27 @@ describe('OrdersService.createFromCart', () => {
     expect(tx.discountCode.update).toHaveBeenCalledWith({ where: { id: 'disc1' }, data: { usedCount: { increment: 1 } } });
   });
 
+  it('prefers a single warehouse that can fulfill the whole order over splitting across warehouses', async () => {
+    prisma.cart.findFirst.mockResolvedValue(buildCart());
+    productsService.resolveUnitPrice.mockResolvedValue(150_000);
+    // w1 alone covers the needed quantity (2); w2 has less than needed.
+    tx.stock.findMany.mockResolvedValue([
+      { id: 'stock-w1', warehouseId: 'w1', productVariantId: 'v1', quantity: 10 },
+      { id: 'stock-w2', warehouseId: 'w2', productVariantId: 'v1', quantity: 1 },
+    ]);
+    tx.order.create.mockResolvedValue({ id: 'order1', orderNumber: 'SN-TEST', items: [] });
+
+    await service.createFromCart('u1', { addressId: 'addr1' } as any);
+
+    expect(tx.stock.update).toHaveBeenCalledWith({ where: { id: 'stock-w1' }, data: { quantity: { decrement: 2 } } });
+    const data = tx.order.create.mock.calls[0][0].data;
+    expect(data.items.create[0].fulfillmentWarehouseId).toBe('w1');
+  });
+
   it('never lets the grand total go negative even if a discount exceeds subtotal+shipping', async () => {
     prisma.cart.findFirst.mockResolvedValue(buildCart());
     productsService.resolveUnitPrice.mockResolvedValue(1_000);
-    tx.stock.findFirst.mockResolvedValue({ id: 'stock1' });
+    tx.stock.findMany.mockResolvedValue([{ id: 'stock1', warehouseId: 'w1', productVariantId: 'v1', quantity: 10 }]);
     tx.order.create.mockResolvedValue({ id: 'order1', orderNumber: 'SN-TEST', items: [] });
     pricingService.evaluateDiscountCode.mockResolvedValue({ discount: { id: 'disc1' }, amount: 999_999 });
 

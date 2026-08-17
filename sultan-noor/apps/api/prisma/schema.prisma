@@ -171,6 +171,7 @@ model Warehouse {
 
   stocks         Stock[]
   purchaseOrders PurchaseOrder[]
+  fulfilledOrderItems OrderItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -491,6 +492,12 @@ model OrderItem {
   unitPrice        Decimal         @db.Decimal(14, 2)
   quantity         Int
   lineTotal        Decimal         @db.Decimal(14, 2)
+
+  // Which warehouse this line was actually reserved/picked from — set by
+  // OrdersService's warehouse-routing logic at order creation, so staff
+  // know where to pick each item from without guessing.
+  fulfillmentWarehouseId String?
+  fulfillmentWarehouse   Warehouse? @relation(fields: [fulfillmentWarehouseId], references: [id])
 
   returnRequestItems ReturnRequestItem[]
 }

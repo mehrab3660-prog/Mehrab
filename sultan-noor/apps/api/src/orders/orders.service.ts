@@ -92,17 +92,54 @@ export class OrdersService {
 
     const lowStockAlerts: { name: string; sku?: string; remaining: number }[] = [];
 
+    // A missing variant here would silently skip the stock check entirely —
+    // CartService.addItem always resolves one, but this stays a hard error
+    // as defense in depth rather than a silent `continue`.
+    const missingVariant = pricedItems.find((i) => !i.productVariantId);
+    if (missingVariant) throw new BadRequestException(`گزینه‌ی محصول برای «${missingVariant.nameSnapshot}» نامشخص است`);
+
     const order = await this.prisma.$transaction(async (tx) => {
-      // Reserve stock for every item (best-effort at first available warehouse).
-      // A missing variant here would silently skip the stock check entirely —
-      // CartService.addItem always resolves one, but this stays a hard error
-      // as defense in depth rather than a silent `continue`.
+      // Smart warehouse routing: prefer fulfilling the whole order from a
+      // single active warehouse (avoids splitting one order's picking/
+      // shipping across locations). Only when no single warehouse holds
+      // enough of everything do we fall back to a per-item best fit — the
+      // sufficient warehouse with the least stock, so warehouses with more
+      // headroom stay free for orders that need it.
+      const variantIds = pricedItems.map((i) => i.productVariantId!);
+      const stockRows = await tx.stock.findMany({
+        where: { productVariantId: { in: variantIds }, warehouse: { isActive: true } },
+      });
+
+      const byWarehouse = new Map<string, typeof stockRows>();
+      for (const row of stockRows) {
+        const list = byWarehouse.get(row.warehouseId) ?? [];
+        list.push(row);
+        byWarehouse.set(row.warehouseId, list);
+      }
+
+      let singleWarehouseId: string | null = null;
+      let singleWarehouseTotal = Infinity;
+      for (const [warehouseId, rows] of byWarehouse) {
+        const canFulfillAll = pricedItems.every((item) =>
+          rows.some((r) => r.productVariantId === item.productVariantId && r.quantity >= item.quantity),
+        );
+        if (!canFulfillAll) continue;
+        const total = rows.reduce((sum, r) => sum + r.quantity, 0);
+        if (total < singleWarehouseTotal) {
+          singleWarehouseId = warehouseId;
+          singleWarehouseTotal = total;
+        }
+      }
+
+      const itemsWithWarehouse: ((typeof pricedItems)[number] & { fulfillmentWarehouseId: string })[] = [];
       for (const item of pricedItems) {
-        if (!item.productVariantId) throw new BadRequestException(`گزینه‌ی محصول برای «${item.nameSnapshot}» نامشخص است`);
-        const stock = await tx.stock.findFirst({
-          where: { productVariantId: item.productVariantId, quantity: { gte: item.quantity } },
-        });
+        const stock = singleWarehouseId
+          ? stockRows.find((r) => r.warehouseId === singleWarehouseId && r.productVariantId === item.productVariantId)
+          : stockRows
+              .filter((r) => r.productVariantId === item.productVariantId && r.quantity >= item.quantity)
+              .sort((a, b) => a.quantity - b.quantity)[0];
         if (!stock) throw new BadRequestException(`موجودی کافی برای «${item.nameSnapshot}» وجود ندارد`);
+
         const updatedStock = await tx.stock.update({
           where: { id: stock.id },
           data: { quantity: { decrement: item.quantity } },
@@ -113,6 +150,7 @@ export class OrdersService {
         if (stock.quantity > LOW_STOCK_THRESHOLD && updatedStock.quantity <= LOW_STOCK_THRESHOLD) {
           lowStockAlerts.push({ name: item.nameSnapshot, sku: item.skuSnapshot, remaining: updatedStock.quantity });
         }
+        itemsWithWarehouse.push({ ...item, fulfillmentWarehouseId: stock.warehouseId });
       }
 
       const created = await tx.order.create({
@@ -128,7 +166,7 @@ export class OrdersService {
           discountCodeId,
           deliveryDate,
           deliverySlot: dto.deliverySlot,
-          items: { create: pricedItems },
+          items: { create: itemsWithWarehouse },
           statusHistory: { create: { status: 'PENDING_PAYMENT', note: 'سفارش ثبت شد' } },
         },
         include: { items: true },
