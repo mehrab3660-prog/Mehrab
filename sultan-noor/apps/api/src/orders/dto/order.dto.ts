@@ -1,4 +1,4 @@
-import { IsDateString, IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { DeliverySlot, OrderStatus } from '@prisma/client';
 
 export class CreateOrderDto {
@@ -16,6 +16,11 @@ export class CreateOrderDto {
   @IsOptional()
   @IsEnum(DeliverySlot)
   deliverySlot?: DeliverySlot;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  redeemLoyaltyPoints?: number;
 }
 
 export class UpdateOrderStatusDto {

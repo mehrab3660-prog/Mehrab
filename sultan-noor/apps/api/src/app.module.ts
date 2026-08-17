@@ -38,6 +38,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { SettingsModule } from './settings/settings.module';
 import { StockSubscriptionsModule } from './stock-subscriptions/stock-subscriptions.module';
 import { ReturnsModule } from './returns/returns.module';
+import { LoyaltyModule } from './loyalty/loyalty.module';
 
 @Module({
   imports: [
@@ -78,6 +79,7 @@ import { ReturnsModule } from './returns/returns.module';
     DashboardModule,
     StockSubscriptionsModule,
     ReturnsModule,
+    LoyaltyModule,
   ],
   controllers: [AppController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

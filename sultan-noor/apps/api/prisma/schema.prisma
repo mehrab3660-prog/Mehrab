@@ -43,6 +43,11 @@ model User {
   customerGroupId String?
   customerGroup   CustomerGroup? @relation(fields: [customerGroupId], references: [id])
 
+  // Current redeemable balance — the running total, kept in sync with
+  // LoyaltyTransaction rows below so the balance never needs to be
+  // recomputed by summing history on every read.
+  loyaltyPoints Int @default(0)
+
   addresses     Address[]
   carts         Cart[]
   wishlists     Wishlist[]
@@ -58,6 +63,7 @@ model User {
   blogPosts     BlogPost[]
   stockSubscriptions StockSubscription[]
   returnRequests ReturnRequest[]
+  loyaltyTransactions LoyaltyTransaction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -468,9 +474,21 @@ model Order {
   discountCodeId String?
   discountCode   DiscountCode? @relation(fields: [discountCodeId], references: [id])
 
+  // Loyalty points the customer redeemed against this order (and the toman
+  // value that came off the total for it), plus what was later earned on it
+  // once delivered. The two *AwardedAt/*ReversedAt timestamps are idempotency
+  // guards — OrdersService.updateStatus can be called more than once with the
+  // same status, and points must only ever be credited or clawed back once.
+  loyaltyPointsRedeemed  Int      @default(0)
+  loyaltyDiscount        Decimal  @db.Decimal(14, 2) @default(0)
+  loyaltyPointsEarned    Int      @default(0)
+  loyaltyPointsAwardedAt DateTime?
+  loyaltyPointsReversedAt DateTime?
+
   invoice        Invoice?
   payments       Payment[]
   returnRequests ReturnRequest[]
+  loyaltyTransactions LoyaltyTransaction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -587,6 +605,32 @@ model Payment {
   // Every payment lookup (initiate, verify, duplicate-callback checks) filters
   // by these two together — was completely unindexed.
   @@index([orderId, authority])
+}
+
+enum LoyaltyTransactionType {
+  EARNED
+  REDEEMED
+  ADJUSTED
+}
+
+// Full audit trail of every loyalty-point balance change, so a customer (or
+// support) can always see why their balance is what it is, not just the
+// current total. User.loyaltyPoints is the running balance kept in sync
+// with these rows by LoyaltyService/OrdersService.
+model LoyaltyTransaction {
+  id           String                 @id @default(cuid())
+  userId       String
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId      String?
+  order        Order?                 @relation(fields: [orderId], references: [id])
+  type         LoyaltyTransactionType
+  points       Int // signed: positive = credited, negative = debited
+  balanceAfter Int
+  note         String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 // ────────────────────────────── Reviews & Q&A ──────────────────────────────

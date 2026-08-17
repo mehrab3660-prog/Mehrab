@@ -4,7 +4,13 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Order } from "@/lib/types";
+import { Order, LoyaltySummary } from "@/lib/types";
+
+const LOYALTY_TYPE_LABEL: Record<string, string> = {
+  EARNED: "امتیاز کسب‌شده",
+  REDEEMED: "استفاده از امتیاز",
+  ADJUSTED: "بازگشت/لغو سفارش",
+};
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING_PAYMENT: "در انتظار پرداخت",
@@ -18,10 +24,16 @@ const STATUS_LABELS: Record<string, string> = {
 export default function OrdersPage() {
   const { user, accessToken, logout } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [loyalty, setLoyalty] = useState<LoyaltySummary | null>(null);
+  const [showLoyaltyHistory, setShowLoyaltyHistory] = useState(false);
 
   useEffect(() => {
     if (!accessToken) return;
     api.get<Order[]>("/orders/mine", accessToken).then(setOrders);
+    api
+      .get<LoyaltySummary>("/loyalty/me", accessToken)
+      .then(setLoyalty)
+      .catch(() => setLoyalty(null));
   }, [accessToken]);
 
   if (!user) {
@@ -46,6 +58,47 @@ export default function OrdersPage() {
           خروج از حساب
         </button>
       </div>
+
+      {loyalty && (
+        <div className="mb-6 rounded-2xl surface-card p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm text-foreground/60">امتیاز وفاداری شما</p>
+              <p className="text-2xl font-extrabold text-brand">{loyalty.balance.toLocaleString("fa-IR")} امتیاز</p>
+              <p className="mt-1 text-xs text-foreground/50">
+                هر امتیاز {loyalty.pointValueToman.toLocaleString("fa-IR")} تومان تخفیف در خرید بعدی — به ازای هر{" "}
+                {loyalty.earnDivisorToman.toLocaleString("fa-IR")} تومان خرید، ۱ امتیاز کسب می‌کنید.
+              </p>
+            </div>
+            {loyalty.transactions.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowLoyaltyHistory((v) => !v)}
+                className="flex-shrink-0 rounded-lg border border-border-color px-3 py-1.5 text-sm font-medium text-foreground/70 hover:border-brand/40 hover:text-brand"
+              >
+                {showLoyaltyHistory ? "بستن تاریخچه" : "تاریخچه"}
+              </button>
+            )}
+          </div>
+          {showLoyaltyHistory && (
+            <div className="mt-4 space-y-2 border-t border-border-color pt-4">
+              {loyalty.transactions.map((t) => (
+                <div key={t.id} className="flex items-center justify-between text-sm">
+                  <div>
+                    <p className="text-foreground/80">{LOYALTY_TYPE_LABEL[t.type] ?? t.type}</p>
+                    {t.note && <p className="text-xs text-foreground/40">{t.note}</p>}
+                  </div>
+                  <span className={`font-bold ${t.points >= 0 ? "text-green-500" : "text-red-400"}`}>
+                    {t.points >= 0 ? "+" : ""}
+                    {t.points.toLocaleString("fa-IR")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {orders.length === 0 ? (
         <p className="text-foreground/60">هنوز سفارشی ثبت نکرده‌اید.</p>
       ) : (

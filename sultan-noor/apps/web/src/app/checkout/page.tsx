@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
 import { api, ApiError } from "@/lib/api";
+import { LoyaltySummary } from "@/lib/types";
 
 interface Address {
   id: string;
@@ -56,6 +57,8 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<"ZARINPAL" | "IDPAY" | "CASH_ON_DELIVERY">("ZARINPAL");
   const [deliveryDate, setDeliveryDate] = useState("");
   const [deliverySlot, setDeliverySlot] = useState<"MORNING" | "AFTERNOON" | "EVENING" | "">("");
+  const [loyaltySummary, setLoyaltySummary] = useState<LoyaltySummary | null>(null);
+  const [redeemPoints, setRedeemPoints] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -83,6 +86,14 @@ export default function CheckoutPage() {
       .catch(() => setSuggestedCode(null));
   }, [accessToken]);
 
+  useEffect(() => {
+    if (!accessToken) return;
+    api
+      .get<LoyaltySummary>("/loyalty/me", accessToken)
+      .then(setLoyaltySummary)
+      .catch(() => setLoyaltySummary(null));
+  }, [accessToken]);
+
   if (authLoading || !user) return null;
 
   async function ensureAddress(): Promise<string> {
@@ -108,6 +119,7 @@ export default function CheckoutPage() {
           discountCode: discountCode || undefined,
           deliveryDate: deliveryDate || undefined,
           deliverySlot: deliverySlot || undefined,
+          redeemLoyaltyPoints: redeemPoints > 0 ? redeemPoints : undefined,
         },
         accessToken,
       );
@@ -139,6 +151,14 @@ export default function CheckoutPage() {
     );
   }
 
+  const maxRedeemablePoints = loyaltySummary
+    ? Math.min(
+        loyaltySummary.balance,
+        Math.floor((cart.subtotal * loyaltySummary.maxRedemptionRatio) / loyaltySummary.pointValueToman),
+      )
+    : 0;
+  const loyaltyDiscount = loyaltySummary ? redeemPoints * loyaltySummary.pointValueToman : 0;
+
   const orderSummary = (
     <div className="rounded-2xl surface-card p-4 sm:p-5 lg:sticky lg:top-24">
       <h2 className="mb-3 font-bold">خلاصه سفارش</h2>
@@ -152,9 +172,15 @@ export default function CheckoutPage() {
           </div>
         ))}
       </div>
+      {loyaltyDiscount > 0 && (
+        <div className="mt-3 flex items-center justify-between border-t border-border-color pt-3 text-sm">
+          <span className="text-foreground/70">تخفیف امتیاز وفاداری</span>
+          <span className="font-medium text-green-500">− {formatToman(loyaltyDiscount)}</span>
+        </div>
+      )}
       <div className="mt-4 flex items-center justify-between border-t border-border-color pt-4">
         <span className="font-bold">جمع کل</span>
-        <span className="text-xl font-extrabold text-brand">{formatToman(cart.subtotal)}</span>
+        <span className="text-xl font-extrabold text-brand">{formatToman(Math.max(cart.subtotal - loyaltyDiscount, 0))}</span>
       </div>
     </div>
   );
@@ -239,6 +265,42 @@ export default function CheckoutPage() {
               className="min-h-11 w-full rounded-lg border border-border-color bg-background px-3 py-2.5 text-sm focus:border-brand focus:outline-none"
             />
           </section>
+
+          {loyaltySummary && loyaltySummary.balance > 0 && (
+            <section className="rounded-2xl surface-card p-4 sm:p-5">
+              <h2 className="mb-3 font-bold">امتیاز وفاداری</h2>
+              <p className="mb-3 text-sm text-foreground/60">
+                موجودی شما: <span className="font-bold text-brand">{loyaltySummary.balance.toLocaleString("fa-IR")}</span> امتیاز
+                (هر امتیاز {formatToman(loyaltySummary.pointValueToman)} تخفیف)
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  max={maxRedeemablePoints}
+                  value={redeemPoints || ""}
+                  onChange={(e) =>
+                    setRedeemPoints(Math.max(0, Math.min(maxRedeemablePoints, Math.floor(Number(e.target.value) || 0))))
+                  }
+                  placeholder="تعداد امتیاز برای استفاده"
+                  className="min-h-11 flex-1 rounded-lg border border-border-color bg-background px-3 py-2.5 text-sm focus:border-brand focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setRedeemPoints(maxRedeemablePoints)}
+                  disabled={maxRedeemablePoints === 0}
+                  className="min-h-11 flex-shrink-0 rounded-lg border border-brand/40 px-3 text-sm font-medium text-brand disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  حداکثر
+                </button>
+              </div>
+              {redeemPoints > 0 && (
+                <p className="mt-2 text-sm text-green-500">
+                  {formatToman(redeemPoints * loyaltySummary.pointValueToman)} از مبلغ سفارش کم می‌شود
+                </p>
+              )}
+            </section>
+          )}
 
           <section className="rounded-2xl surface-card p-4 sm:p-5">
             <h2 className="mb-3 font-bold">روش پرداخت</h2>

@@ -148,10 +148,22 @@ export default function OrderDetailPage() {
           <span>هزینه ارسال</span>
           <span>{Number(order.shippingTotal).toLocaleString("fa-IR")} تومان</span>
         </div>
+        {!!order.loyaltyPointsRedeemed && (
+          <div className="flex justify-between text-green-500">
+            <span>تخفیف امتیاز وفاداری ({order.loyaltyPointsRedeemed.toLocaleString("fa-IR")} امتیاز)</span>
+            <span>− {Number(order.loyaltyDiscount).toLocaleString("fa-IR")} تومان</span>
+          </div>
+        )}
         <div className="flex justify-between text-base font-bold text-brand">
           <span>مبلغ نهایی</span>
           <span>{Number(order.grandTotal).toLocaleString("fa-IR")} تومان</span>
         </div>
+        {!!order.loyaltyPointsEarned && (
+          <div className="flex justify-between border-t border-border-color pt-2 text-xs text-foreground/50">
+            <span>امتیاز کسب‌شده از این سفارش</span>
+            <span>{order.loyaltyPointsEarned.toLocaleString("fa-IR")} امتیاز</span>
+          </div>
+        )}
       </div>
 
       {order.invoice && (

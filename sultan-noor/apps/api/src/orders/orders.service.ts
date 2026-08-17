@@ -9,6 +9,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { ShippingService } from '../shipping/shipping.service';
 import { SmsProvider } from '../auth/sms.provider';
 import { CreateOrderDto, UpdateOrderStatusDto } from './dto/order.dto';
+import { LOYALTY_EARN_DIVISOR_TOMAN, LOYALTY_MAX_REDEMPTION_RATIO, LOYALTY_POINT_VALUE_TOMAN } from '../loyalty/loyalty.constants';
 
 const ORDER_STATUS_SMS_LABELS: Record<string, string> = {
   PROCESSING: 'در حال آماده‌سازی',
@@ -83,11 +84,22 @@ export class OrdersService {
       discountCodeId = discount.id;
     }
 
+    const redeemLoyaltyPoints = dto.redeemLoyaltyPoints ?? 0;
+    let loyaltyDiscount = 0;
+    if (redeemLoyaltyPoints > 0) {
+      if (redeemLoyaltyPoints > user.loyaltyPoints) throw new BadRequestException('امتیاز درخواستی بیشتر از موجودی شماست');
+      loyaltyDiscount = redeemLoyaltyPoints * LOYALTY_POINT_VALUE_TOMAN;
+      const maxLoyaltyDiscount = Math.floor((subtotal - discountTotal) * LOYALTY_MAX_REDEMPTION_RATIO);
+      if (loyaltyDiscount > maxLoyaltyDiscount) {
+        throw new BadRequestException('امتیاز قابل استفاده در این سفارش حداکثر تا نیمی از مبلغ آن است');
+      }
+    }
+
     const shippingTotal = await this.shippingService.resolveShippingCost(
       cart.items.map((item) => ({ quantity: item.quantity, productVariant: item.productVariant })),
       address.province,
     );
-    const grandTotal = Math.max(subtotal - discountTotal + shippingTotal, 0);
+    const grandTotal = Math.max(subtotal - discountTotal - loyaltyDiscount + shippingTotal, 0);
     const orderNumber = this.generateOrderNumber();
 
     const lowStockAlerts: { name: string; sku?: string; remaining: number }[] = [];
@@ -166,6 +178,8 @@ export class OrdersService {
           discountCodeId,
           deliveryDate,
           deliverySlot: dto.deliverySlot,
+          loyaltyPointsRedeemed: redeemLoyaltyPoints,
+          loyaltyDiscount,
           items: { create: itemsWithWarehouse },
           statusHistory: { create: { status: 'PENDING_PAYMENT', note: 'سفارش ثبت شد' } },
         },
@@ -174,6 +188,23 @@ export class OrdersService {
 
       if (discountCodeId) {
         await tx.discountCode.update({ where: { id: discountCodeId }, data: { usedCount: { increment: 1 } } });
+      }
+
+      if (redeemLoyaltyPoints > 0) {
+        const updatedUser = await tx.user.update({
+          where: { id: userId },
+          data: { loyaltyPoints: { decrement: redeemLoyaltyPoints } },
+        });
+        await tx.loyaltyTransaction.create({
+          data: {
+            userId,
+            orderId: created.id,
+            type: 'REDEEMED',
+            points: -redeemLoyaltyPoints,
+            balanceAfter: updatedUser.loyaltyPoints,
+            note: `استفاده در سفارش ${created.orderNumber}`,
+          },
+        });
       }
 
       await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
@@ -269,7 +300,71 @@ export class OrdersService {
       });
     }
 
+    if (dto.status === 'DELIVERED' && !order.loyaltyPointsAwardedAt) {
+      await this.awardLoyaltyPoints(order);
+    }
+
+    if ((dto.status === 'CANCELLED' || dto.status === 'REFUNDED') && !order.loyaltyPointsReversedAt) {
+      await this.reverseLoyaltyPoints(order);
+    }
+
     return updated;
+  }
+
+  // A purchase only earns points once it's actually delivered — not on
+  // placement, so a never-completed order can't mint points. Guarded by
+  // loyaltyPointsAwardedAt so a status re-saved as DELIVERED never double-pays.
+  private async awardLoyaltyPoints(order: { id: string; userId: string; orderNumber: string; subtotal: unknown; discountTotal: unknown; loyaltyDiscount: unknown }) {
+    const earnableBase = Number(order.subtotal) - Number(order.discountTotal) - Number(order.loyaltyDiscount);
+    const pointsEarned = Math.max(0, Math.floor(earnableBase / LOYALTY_EARN_DIVISOR_TOMAN));
+
+    await this.prisma.$transaction(async (tx) => {
+      if (pointsEarned > 0) {
+        const updatedUser = await tx.user.update({
+          where: { id: order.userId },
+          data: { loyaltyPoints: { increment: pointsEarned } },
+        });
+        await tx.loyaltyTransaction.create({
+          data: {
+            userId: order.userId,
+            orderId: order.id,
+            type: 'EARNED',
+            points: pointsEarned,
+            balanceAfter: updatedUser.loyaltyPoints,
+            note: `خرید سفارش ${order.orderNumber}`,
+          },
+        });
+      }
+      await tx.order.update({ where: { id: order.id }, data: { loyaltyPointsEarned: pointsEarned, loyaltyPointsAwardedAt: new Date() } });
+    });
+  }
+
+  // Cancelling or refunding an order undoes its loyalty effects: any points
+  // spent on it come back (the purchase they paid for didn't happen), and
+  // any points already earned on it (only possible if it was DELIVERED and
+  // is now being refunded) are clawed back. Guarded by loyaltyPointsReversedAt
+  // so this only ever runs once per order.
+  private async reverseLoyaltyPoints(order: { id: string; userId: string; orderNumber: string; loyaltyPointsRedeemed: number; loyaltyPointsEarned: number }) {
+    const netChange = order.loyaltyPointsRedeemed - order.loyaltyPointsEarned;
+
+    await this.prisma.$transaction(async (tx) => {
+      if (netChange !== 0) {
+        const current = await tx.user.findUniqueOrThrow({ where: { id: order.userId } });
+        const newBalance = Math.max(0, current.loyaltyPoints + netChange);
+        await tx.user.update({ where: { id: order.userId }, data: { loyaltyPoints: newBalance } });
+        await tx.loyaltyTransaction.create({
+          data: {
+            userId: order.userId,
+            orderId: order.id,
+            type: 'ADJUSTED',
+            points: newBalance - current.loyaltyPoints,
+            balanceAfter: newBalance,
+            note: `لغو/بازگشت سفارش ${order.orderNumber}`,
+          },
+        });
+      }
+      await tx.order.update({ where: { id: order.id }, data: { loyaltyPointsReversedAt: new Date() } });
+    });
   }
 
   private generateOrderNumber() {

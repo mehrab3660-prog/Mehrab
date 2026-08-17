@@ -81,7 +81,28 @@ export interface Order {
   createdAt: string;
   deliveryDate?: string | null;
   deliverySlot?: "MORNING" | "AFTERNOON" | "EVENING" | null;
+  loyaltyPointsRedeemed?: number;
+  loyaltyDiscount?: string;
+  loyaltyPointsEarned?: number;
   items: { id: string; nameSnapshot: string; quantity: number; unitPrice: string; lineTotal: string }[];
+}
+
+export interface LoyaltyTransaction {
+  id: string;
+  type: "EARNED" | "REDEEMED" | "ADJUSTED";
+  points: number;
+  balanceAfter: number;
+  note?: string | null;
+  orderId?: string | null;
+  createdAt: string;
+}
+
+export interface LoyaltySummary {
+  balance: number;
+  pointValueToman: number;
+  earnDivisorToman: number;
+  maxRedemptionRatio: number;
+  transactions: LoyaltyTransaction[];
 }
 
 export interface ReturnRequest {
