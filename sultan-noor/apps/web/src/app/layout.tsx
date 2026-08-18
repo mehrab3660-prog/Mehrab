@@ -13,6 +13,7 @@ import AiAdvisorWidget from "@/components/AiAdvisorWidget";
 import PageTransition from "@/components/PageTransition";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import MainContent from "@/components/MainContent";
+import { JsonLd, SITE_URL } from "@/lib/jsonld";
 
 const vazirmatn = Vazirmatn({
   variable: "--font-vazirmatn",
@@ -24,10 +25,32 @@ export const metadata: Metadata = {
   description: "فروشگاه سلطان نور — محصولات روشنایی و تجهیزات برق، با مشاور خرید هوشمند.",
 };
 
+const organizationJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "سلطان نور",
+  url: SITE_URL,
+  description: "فروشگاه اینترنتی تخصصی تجهیزات برق و روشنایی، با مشاور خرید هوشمند.",
+};
+
+const websiteJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: "سلطان نور",
+  url: SITE_URL,
+  potentialAction: {
+    "@type": "SearchAction",
+    target: `${SITE_URL}/products?q={search_term_string}`,
+    "query-input": "required name=search_term_string",
+  },
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fa" dir="rtl" className={`${vazirmatn.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
+        <JsonLd data={organizationJsonLd} />
+        <JsonLd data={websiteJsonLd} />
         <AuthProvider>
           <ToastProvider>
             <CartProvider>
