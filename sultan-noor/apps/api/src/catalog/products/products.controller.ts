@@ -71,6 +71,15 @@ export class ProductsController {
     return this.productsService.bulkImport(file, warehouseId || undefined);
   }
 
+  @Post('bulk-images')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.STAFF)
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 100 * 1024 * 1024 } }))
+  bulkImportImages(@UploadedFile() file: Express.Multer.File | undefined, @Req() req: Request) {
+    if (!file) throw new BadRequestException('فایل ZIP ارسال نشده است');
+    return this.productsService.bulkImportImages(file, `${req.protocol}://${req.get('host')}`);
+  }
+
   @Post(':id/images')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.STAFF)

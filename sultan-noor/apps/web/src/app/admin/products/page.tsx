@@ -52,6 +52,12 @@ interface BulkImportResult {
   errors: { row: number; message: string }[];
 }
 
+interface BulkImageImportResult {
+  totalFiles: number;
+  matched: number;
+  unmatched: string[];
+}
+
 const BULK_IMPORT_TEMPLATE =
   "name,slug,sku,basePrice,compareAtPrice,brand,category,price,weightGrams,quantity\n" +
   "لامپ نمونه ۹ وات,sample-led-9w,SKU-SAMPLE-1,150000,,,,,,10\n";
@@ -80,6 +86,10 @@ export default function AdminProductsPage() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<BulkImportResult | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [imageZipFile, setImageZipFile] = useState<File | null>(null);
+  const [importingImages, setImportingImages] = useState(false);
+  const [imageImportResult, setImageImportResult] = useState<BulkImageImportResult | null>(null);
+  const [imageImportError, setImageImportError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
@@ -172,6 +182,24 @@ export default function AdminProductsPage() {
     }
   }
 
+  async function handleBulkImageImport(e: React.FormEvent) {
+    e.preventDefault();
+    if (!imageZipFile) return;
+    setImportingImages(true);
+    setImageImportError(null);
+    setImageImportResult(null);
+    try {
+      const result = await api.upload<BulkImageImportResult>("/products/bulk-images", imageZipFile, "file", accessToken);
+      setImageImportResult(result);
+      setImageZipFile(null);
+      load();
+    } catch (err) {
+      setImageImportError(err instanceof ApiError ? err.message : "خطا در وارد کردن فایل ZIP");
+    } finally {
+      setImportingImages(false);
+    }
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -217,6 +245,7 @@ export default function AdminProductsPage() {
         <p>اگر تعداد محصولات زیاد است، به‌جای وارد کردن یک‌به‌یک، از بخش «ورود گروهی محصولات» استفاده کنید: اول «دانلود قالب نمونه» را بزنید، فایل اکسل/CSV خودتان را طبق همان قالب پر کنید، سپس آن را انتخاب و «وارد کردن» را بزنید.</p>
         <p>ستون‌های name (نام)، slug (آدرس انگلیسی صفحه) و sku (کد محصول) در فایل ورود گروهی الزامی هستند. اگر ستون basePrice (قیمت پایه) را برای یک ردیف خالی بگذارید، آن محصول به‌صورت «پیش‌نویس» (پنهان از مشتری) ساخته می‌شود تا بعداً خودتان قیمتش را وارد و منتشرش کنید.</p>
         <p>اگر نام برند یا دسته‌بندی‌ای در فایل بنویسید که هنوز در سایت وجود ندارد، خودکار ساخته می‌شود.</p>
+        <p>برای وصل کردن عکس به چند محصول هم‌زمان (به‌جای یکی‌یکی)، از بخش «ورود گروهی عکس محصولات» استفاده کنید: چند عکس را با نام‌گذاری بر اساس کد محصول (SKU) در یک فایل ZIP بریزید و آن را انتخاب کنید.</p>
         <p>برای تغییر مشخصات یک محصول (نام، قیمت، برند، دسته‌بندی، توضیحات و غیره)، روی «ویرایش» در انتهای همان ردیف بزنید.</p>
         <p>برای حذف یک محصول، روی «حذف» در انتهای همان ردیف بزنید. این کار قابل بازگشت نیست.</p>
       </AdminHelp>
@@ -307,6 +336,48 @@ export default function AdminProductsPage() {
                   <li key={i}>
                     ردیف {e.row.toLocaleString("fa-IR")}: {e.message}
                   </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </form>
+
+      <form onSubmit={handleBulkImageImport} className="mb-8 space-y-3 rounded-lg border border-border-color p-4">
+        <h2 className="font-bold">ورود گروهی عکس محصولات (فایل ZIP)</h2>
+        <p className="text-xs text-foreground/50">
+          یک فایل ZIP از عکس‌ها انتخاب کنید. نام هر عکس (بدون پسوند) باید دقیقاً همان کد محصول (SKU) باشد — مثلاً عکس محصولی
+          با کد AT09 باید در فایل ZIP به اسم AT09.jpg باشد. هر عکس با کد مطابق، خودکار به همان محصول وصل می‌شود.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <input type="file" accept=".zip" onChange={(e) => setImageZipFile(e.target.files?.[0] ?? null)} className="text-sm" />
+          <button
+            disabled={!imageZipFile || importingImages}
+            className="rounded-lg bg-brand px-3 py-1 text-sm font-bold text-[#0b0e14] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {importingImages ? "در حال وارد کردن..." : "وارد کردن"}
+          </button>
+        </div>
+        {imageImportError && <p className="text-sm text-red-500">{imageImportError}</p>}
+        {imageImportResult && (
+          <div className="rounded-lg bg-background p-3 text-sm">
+            <p>
+              از {imageImportResult.totalFiles.toLocaleString("fa-IR")} عکس،{" "}
+              <span className="font-bold text-emerald-400">{imageImportResult.matched.toLocaleString("fa-IR")}</span> به محصول
+              مربوطه وصل شد
+              {imageImportResult.unmatched.length > 0 && (
+                <>
+                  {" و "}
+                  <span className="font-bold text-red-400">{imageImportResult.unmatched.length.toLocaleString("fa-IR")}</span>{" "}
+                  عکس با هیچ کد محصولی مطابقت نداشت.
+                </>
+              )}
+              {imageImportResult.unmatched.length === 0 && "."}
+            </p>
+            {imageImportResult.unmatched.length > 0 && (
+              <ul className="mt-2 space-y-1 text-xs text-foreground/60">
+                {imageImportResult.unmatched.map((name, i) => (
+                  <li key={i}>{name}</li>
                 ))}
               </ul>
             )}

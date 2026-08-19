@@ -2,11 +2,19 @@ import { BadRequestException, Injectable, Logger, NotFoundException, OnApplicati
 import { Prisma, Role } from '@prisma/client';
 import * as path from 'path';
 import * as XLSX from 'xlsx';
+import AdmZip from 'adm-zip';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SearchService } from '../../search/search.service';
 import { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import { deleteUploadedImage, saveUploadedImage } from '../../common/utils/image-upload.util';
 import { CreateProductDto, ListProductsQueryDto, UpdateProductDto } from './dto/product.dto';
+
+const IMAGE_EXTENSION_MIME: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+};
 
 const IMAGE_DIR = process.env.PRODUCT_IMAGE_STORAGE_DIR ?? path.join(process.cwd(), 'storage', 'products');
 
@@ -430,6 +438,60 @@ export class ProductsService implements OnApplicationBootstrap {
     });
     await this.reindex(productId);
     return image;
+  }
+
+  // Bulk-attaches product images from a single ZIP: each image file's name
+  // (without extension) is matched case-insensitively against a product
+  // variant's SKU. Meant for staff who have gathered real product photos
+  // (e.g. from a supplier's own catalog) and don't want to attach them one
+  // by one through the single-image upload form.
+  async bulkImportImages(file: Express.Multer.File, baseUrl: string) {
+    let zip: AdmZip;
+    try {
+      zip = new AdmZip(file.buffer);
+    } catch {
+      throw new BadRequestException('فایل قابل خواندن نیست؛ باید یک فایل ZIP معتبر باشد');
+    }
+
+    const entries = zip.getEntries().filter((e) => !e.isDirectory);
+    if (entries.length === 0) throw new BadRequestException('فایل ZIP هیچ عکسی ندارد');
+
+    const variants = await this.prisma.productVariant.findMany({ select: { sku: true, productId: true } });
+    const productIdBySku = new Map(variants.map((v) => [v.sku.toLowerCase(), v.productId]));
+
+    let matched = 0;
+    const unmatched: string[] = [];
+    const touchedProductIds = new Set<string>();
+
+    for (const entry of entries) {
+      const base = path.basename(entry.entryName);
+      const extension = path.extname(base).toLowerCase();
+      const skuKey = path.basename(base, extension).toLowerCase();
+      const mimetype = IMAGE_EXTENSION_MIME[extension];
+      const productId = productIdBySku.get(skuKey);
+
+      if (!mimetype || !productId) {
+        unmatched.push(base);
+        continue;
+      }
+
+      const buffer = entry.getData();
+      const pseudoFile = { buffer, size: buffer.length, mimetype } as Express.Multer.File;
+      try {
+        const filename = saveUploadedImage(pseudoFile, IMAGE_DIR);
+        const position = await this.prisma.productImage.count({ where: { productId } });
+        await this.prisma.productImage.create({
+          data: { productId, url: `${baseUrl}/api/product-images/${filename}`, position },
+        });
+        touchedProductIds.add(productId);
+        matched++;
+      } catch {
+        unmatched.push(base);
+      }
+    }
+
+    await Promise.all(Array.from(touchedProductIds).map((id) => this.reindex(id)));
+    return { totalFiles: entries.length, matched, unmatched };
   }
 
   async removeImage(imageId: string) {

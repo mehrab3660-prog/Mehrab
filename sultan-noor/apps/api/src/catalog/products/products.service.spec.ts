@@ -1,7 +1,23 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as XLSX from 'xlsx';
+import AdmZip from 'adm-zip';
 import { ProductsService } from './products.service';
+
+// Real disk I/O has no place in a unit test — swap in a deterministic fake
+// that hands back a fixed filename instead of actually writing a file.
+jest.mock('../../common/utils/image-upload.util', () => ({
+  saveUploadedImage: jest.fn(() => 'fake-uuid.jpg'),
+  deleteUploadedImage: jest.fn(),
+}));
+
+function buildZipFile(entries: Record<string, string>): Express.Multer.File {
+  const zip = new AdmZip();
+  for (const [name, content] of Object.entries(entries)) {
+    zip.addFile(name, Buffer.from(content));
+  }
+  return { buffer: zip.toBuffer() } as Express.Multer.File;
+}
 
 function buildProduct(id: string, variantIds: string[]) {
   return {
@@ -35,6 +51,8 @@ describe('ProductsService', () => {
       brand: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn() },
       category: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn() },
       warehouse: { findUnique: jest.fn() },
+      productVariant: { findMany: jest.fn().mockResolvedValue([]) },
+      productImage: { count: jest.fn().mockResolvedValue(0), create: jest.fn().mockResolvedValue({}) },
     };
     search = { indexProduct: jest.fn().mockResolvedValue(undefined) };
     service = new ProductsService(prisma, search);
@@ -268,6 +286,49 @@ describe('ProductsService', () => {
 
       expect(result.created).toBe(1);
       expect(result.failed).toBe(0);
+    });
+  });
+
+  describe('bulkImportImages', () => {
+    it('rejects a file that is not a valid ZIP', async () => {
+      const file = { buffer: Buffer.from('not a zip') } as Express.Multer.File;
+      await expect(service.bulkImportImages(file, 'http://api')).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects an empty ZIP', async () => {
+      const file = buildZipFile({});
+      await expect(service.bulkImportImages(file, 'http://api')).rejects.toThrow(BadRequestException);
+    });
+
+    it('matches an image filename (without extension) to a variant SKU case-insensitively', async () => {
+      prisma.productVariant.findMany.mockResolvedValue([{ sku: 'AT09', productId: 'p1' }]);
+      const file = buildZipFile({ 'at09.jpg': 'fake-image-bytes' });
+
+      const result = await service.bulkImportImages(file, 'http://api');
+
+      expect(result).toEqual({ totalFiles: 1, matched: 1, unmatched: [] });
+      expect(prisma.productImage.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ productId: 'p1' }) }),
+      );
+    });
+
+    it('reports a filename with no matching SKU as unmatched instead of failing the whole batch', async () => {
+      prisma.productVariant.findMany.mockResolvedValue([{ sku: 'AT09', productId: 'p1' }]);
+      const file = buildZipFile({ 'at09.jpg': 'a', 'unknown-code.jpg': 'b' });
+
+      const result = await service.bulkImportImages(file, 'http://api');
+
+      expect(result).toEqual({ totalFiles: 2, matched: 1, unmatched: ['unknown-code.jpg'] });
+    });
+
+    it('reports a non-image file extension as unmatched', async () => {
+      prisma.productVariant.findMany.mockResolvedValue([{ sku: 'AT09', productId: 'p1' }]);
+      const file = buildZipFile({ 'at09.txt': 'not an image' });
+
+      const result = await service.bulkImportImages(file, 'http://api');
+
+      expect(result).toEqual({ totalFiles: 1, matched: 0, unmatched: ['at09.txt'] });
+      expect(prisma.productImage.create).not.toHaveBeenCalled();
     });
   });
 });
