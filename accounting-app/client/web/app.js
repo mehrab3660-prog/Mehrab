@@ -890,7 +890,7 @@ async function sendAssistantMessage() {
 $('#fp-submit-btn').addEventListener('click', async () => {
   const p1 = $('#fp-new-password').value;
   const p2 = $('#fp-confirm-password').value;
-  if (!p1 || p1.length < 4) { $('#fp-error').textContent = 'رمز عبور باید حداقل ۴ کاراکتر باشد'; return; }
+  if (!p1 || p1.length < 8) { $('#fp-error').textContent = 'رمز عبور باید حداقل ۸ کاراکتر باشد'; return; }
   if (p1 !== p2) { $('#fp-error').textContent = 'رمز عبور و تکرار آن یکسان نیستند'; return; }
   const res = await api('POST', '/users/me/password', { new_password: p1 });
   if (res && res.ok) {
@@ -916,7 +916,7 @@ $('#btn-change-own-password').addEventListener('click', () => {
   $('#own-pw-save-btn').addEventListener('click', async () => {
     const p1 = $('#own-pw-new').value;
     const p2 = $('#own-pw-confirm').value;
-    if (!p1 || p1.length < 4) { toast('رمز عبور باید حداقل ۴ کاراکتر باشد', 'danger'); return; }
+    if (!p1 || p1.length < 8) { toast('رمز عبور باید حداقل ۸ کاراکتر باشد', 'danger'); return; }
     if (p1 !== p2) { toast('رمز عبور و تکرار آن یکسان نیستند', 'danger'); return; }
     const res = await api('POST', '/users/me/password', { new_password: p1 });
     if (res && res.ok) {
@@ -2247,7 +2247,16 @@ function removeEditInvoiceCartRow(i) {
 
 async function saveFullInvoiceEdit(invoiceId, partySS) {
   if (!editInvoiceCart.length) { toast('فاکتور باید حداقل یک کالا داشته باشد', 'danger'); return; }
-  if (!confirm('آیا مطمئنی می‌خوای این فاکتور رو با این تغییرات ذخیره کنی؟\nموجودی انبار و حساب طرف‌حساب بر این اساس دوباره محاسبه می‌شود.')) return;
+  const inv = state.invoicesById[invoiceId];
+  const sale_like = inv && ['sale', 'purchase_return'].includes(inv.invoice_type);
+  const newTotal = editInvoiceCart.reduce((s, c) => s + c.qty * c.unit_price, 0)
+    - readRialAsToman($('#edit-inv-discount'));
+  const itemsSummary = editInvoiceCart.map(c => `  • ${c.item_name}: ${fmt(c.qty)} عدد × ${fmtRial(c.unit_price)} ریال`).join('\n');
+  const stockNote = sale_like
+    ? 'موجودی این کالاها بر اساس تعداد جدید دوباره از انبار کم می‌شود.'
+    : 'موجودی این کالاها بر اساس تعداد جدید دوباره به انبار اضافه می‌شود.';
+  const summary = `خلاصهٔ فاکتور بعد از این ویرایش:\n${itemsSummary}\nجمع کل جدید: ${fmtRial(newTotal)} ریال\n\n${stockNote}\nحساب طرف‌حساب و صندوق نیز بر همین اساس دوباره محاسبه می‌شوند.\n\nآیا این تغییرات ذخیره شود؟`;
+  if (!confirm(summary)) return;
 
   const payload = {
     party_id: partySS.getValue() || null,
@@ -2270,7 +2279,16 @@ async function saveFullInvoiceEdit(invoiceId, partySS) {
 
 async function deleteInvoice(invoiceId) {
   const inv = state.invoicesById[invoiceId];
-  if (!confirm(`آیا مطمئنی می‌خوای فاکتور ${inv?.number || invoiceId} رو حذف کنی؟\nموجودی کالا، حساب طرف‌حساب و صندوق به حالت قبل از این فاکتور برمی‌گردند.\nاین کار قابل بازگشت نیست.`)) return;
+  const items = await api('GET', `/invoices/${invoiceId}/items`);
+  const sale_like = inv && ['sale', 'purchase_return'].includes(inv.invoice_type);
+  const itemsSummary = (items || []).map(it => `  • ${it.item_name}: ${fmt(it.qty)} عدد`).join('\n');
+  const stockNote = sale_like ? 'به انبار برمی‌گردند (افزایش موجودی)' : 'از انبار کم می‌شوند (کاهش موجودی)';
+  const summary = `آیا مطمئنی می‌خوای فاکتور ${inv?.number || invoiceId} رو حذف کنی؟\n\n`
+    + `کالاهای این فاکتور:\n${itemsSummary || '  (بدون قلم)'}\n`
+    + `این تعدادها ${stockNote}.\n`
+    + `جمع کل فاکتور: ${fmtRial(inv?.total || 0)} ریال — حساب طرف‌حساب و صندوق هم به حالت قبل از این فاکتور برمی‌گردند.\n\n`
+    + `این کار قابل بازگشت نیست.`;
+  if (!confirm(summary)) return;
   const res = await api('DELETE', `/invoices/${invoiceId}`, { username: state.user.username });
   if (res && res.ok) {
     toast('فاکتور حذف شد', 'success');
@@ -2869,9 +2887,15 @@ async function loadCash() {
   attachRialWordsPreview($('#cash-amount'), 'cash-amount-words');
   attachThousandsFormatting($('#cash-closing-counted'));
   attachRialWordsPreview($('#cash-closing-counted'), 'cash-closing-counted-words');
-  const data = await api('GET', '/cash');
+  const [data, pendingChecksData] = await Promise.all([api('GET', '/cash'), api('GET', '/checks?status=pending')]);
   if (!data) return;
-  $('#cash-stat').innerHTML = `<div class="stat-card accent" title="${wordsTitle(data.balance)}"><div class="stat-label">موجودی صندوق</div><div class="stat-value">${fmtRial(data.balance)} ریال</div></div>`;
+  const pendingChecks = pendingChecksData || [];
+  const pendingReceived = pendingChecks.filter(c => c.direction === 'received').reduce((s, c) => s + c.amount, 0);
+  const pendingIssued = pendingChecks.filter(c => c.direction === 'issued').reduce((s, c) => s + c.amount, 0);
+  $('#cash-stat').innerHTML = `
+    <div class="stat-card accent" title="${wordsTitle(data.balance)}"><div class="stat-label">موجودی صندوق (نقد)</div><div class="stat-value">${fmtRial(data.balance)} ریال</div></div>
+    <div class="stat-card" title="${wordsTitle(pendingReceived)}"><div class="stat-label">چک‌های دریافتی پاس‌نشده</div><div class="stat-value">${fmtRial(pendingReceived)} ریال</div></div>
+    <div class="stat-card" title="${wordsTitle(pendingIssued)}"><div class="stat-label">چک‌های پرداختی پاس‌نشده</div><div class="stat-value">${fmtRial(pendingIssued)} ریال</div></div>`;
   $('#cash-tbody').innerHTML = data.transactions.map(tx => `
     <tr><td>${toJalaliDate(tx.date, true)}</td><td>${tx.tx_type === 'in' ? 'دریافت' : 'پرداخت'}</td><td title="${wordsTitle(tx.amount)}">${fmtRial(tx.amount)}</td>
     <td>${tx.expense_category ? (EXPENSE_CATEGORY_LABELS[tx.expense_category] || tx.expense_category) : '—'}</td>
@@ -2896,9 +2920,9 @@ async function loadCashClosings() {
   const data = await api('GET', '/cash/closings');
   if (!data) return;
   $('#cash-closings-tbody').innerHTML = data.map(c => `
-    <tr><td>${toJalaliDate(c.created_at, true)}</td><td>${fmtRial(c.expected_balance)}</td><td>${fmtRial(c.counted_balance)}</td>
+    <tr><td>${toJalaliDate(c.created_at, true)}</td><td>${escHtml(c.username) || '—'}</td><td>${fmtRial(c.expected_balance)}</td><td>${fmtRial(c.counted_balance)}</td>
     <td style="color:${c.difference === 0 ? 'var(--accent)' : 'var(--danger)'}">${fmtRial(c.difference)}</td>
-    <td>${escHtml(c.note) || '—'}</td><td>${escHtml(c.username) || '—'}</td></tr>`).join('');
+    <td>${escHtml(c.note) || '—'}</td></tr>`).join('');
 }
 $('#btn-close-cash').addEventListener('click', async () => {
   if (!$('#cash-closing-counted').value.trim()) { toast('مبلغ شمارش‌شده را وارد کنید', 'danger'); return; }
@@ -3661,17 +3685,30 @@ const PERMISSION_LABELS = {
   can_sell: 'ثبت فاکتور فروش', can_purchase: 'ثبت فاکتور خرید', can_manage_items: 'مدیریت کالاها',
   can_manage_parties: 'مدیریت مشتریان/تامین‌کنندگان', can_manage_cash: 'ثبت تراکنش صندوق',
 };
+// دسترسی‌های بانک/چک برخلاف بقیه پیش‌فرضشان خاموش است — کارمند بدون تیک زدن صریح مدیر،
+// فقط می‌تواند بانک/چک را مشاهده کند، نه ثبت/ویرایش/حذف
+const STRICT_PERMISSION_LABELS = {
+  can_manage_bank: 'مدیریت بانک (ثبت/ویرایش/حذف حساب و تراکنش)',
+  can_manage_checks: 'مدیریت چک‌ها (ثبت/ویرایش/حذف)',
+};
 function openPermissionsModal(userId) {
   const u = state.usersById[userId];
   if (!u) return;
   const perms = u.permissions || {};
+  const normalRows = Object.entries(PERMISSION_LABELS).map(([key, label]) => `
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:8px">
+        <input type="checkbox" class="perm-checkbox" data-key="${key}" style="width:auto" ${perms[key] !== false ? 'checked' : ''}> ${label}
+      </label>`).join('');
+  const strictRows = Object.entries(STRICT_PERMISSION_LABELS).map(([key, label]) => `
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:8px">
+        <input type="checkbox" class="perm-checkbox" data-key="${key}" style="width:auto" ${perms[key] === true ? 'checked' : ''}> ${label}
+      </label>`).join('');
   openModal(`
     <h3>سطح دسترسی: ${escHtml(u.username)}</h3>
     <p class="muted" style="margin-bottom:10px">مواردی که تیک آن‌ها برداشته شود، برای این کاربر غیرفعال می‌شود.</p>
-    ${Object.entries(PERMISSION_LABELS).map(([key, label]) => `
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:8px">
-        <input type="checkbox" class="perm-checkbox" data-key="${key}" style="width:auto" ${perms[key] !== false ? 'checked' : ''}> ${label}
-      </label>`).join('')}
+    ${normalRows}
+    <p class="muted" style="margin-top:14px;margin-bottom:2px">دسترسی‌های زیر پیش‌فرض غیرفعال‌اند — کارمند فقط می‌تواند بانک و چک را مشاهده کند، مگر این‌ها را فعال کنی:</p>
+    ${strictRows}
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-permissions-btn">ذخیره</button></div>`);
   $('#save-permissions-btn').addEventListener('click', async () => {
     const body = { username: state.user.username };

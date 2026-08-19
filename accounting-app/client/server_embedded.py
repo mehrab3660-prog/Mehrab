@@ -80,6 +80,8 @@ def notify_telegram_async(text):
 
 WEB_DIR = os.path.join(get_bundle_dir(), "web")
 app = Flask(__name__, static_folder=WEB_DIR, static_url_path="")
+# محدودیت حجم کلی هر درخواست (شامل فایل‌های آپلودی مثل عکس کالا/لوگو/عکس فاکتور/اکسل) — ۱۵ مگابایت
+app.config["MAX_CONTENT_LENGTH"] = 15 * 1024 * 1024
 
 
 @app.after_request
@@ -87,6 +89,11 @@ def add_no_cache_headers(response):
     """جلوگیری از کش کردن صفحه توسط مرورگر، تا هر تغییری فوراً دیده بشه"""
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     return response
+
+
+@app.errorhandler(413)
+def handle_file_too_large(e):
+    return jsonify({"ok": False, "message": "حجم فایل ارسالی بیشتر از حد مجاز (۱۵ مگابایت) است"}), 413
 
 
 # ---------- احراز هویت (Session Token) ----------
@@ -174,6 +181,10 @@ def verify_totp(secret, code, window=1):
 
 # ---------- سطح دسترسی سفارشی کارمندها (فراتر از مدیر/کارمند ساده) ----------
 PERMISSION_KEYS = ("can_sell", "can_purchase", "can_manage_items", "can_manage_parties", "can_manage_cash")
+# دسترسی‌های بانک/چک برخلاف بقیه، پیش‌فرضشان برای کارمند بسته است — کارمند فقط می‌تواند
+# مشاهده کند، مگر مدیر صراحتاً این دو را برایش فعال کند
+STRICT_PERMISSION_KEYS = ("can_manage_bank", "can_manage_checks")
+ALL_PERMISSION_KEYS = PERMISSION_KEYS + STRICT_PERMISSION_KEYS
 
 
 def get_user_permissions(username):
@@ -195,6 +206,18 @@ def require_permission(key):
         return None
     perms = get_user_permissions(g.current_user["username"])
     if perms.get(key, True) is False:
+        return jsonify({"ok": False, "message": "شما اجازه دسترسی به این بخش را ندارید — از مدیر بخواهید دسترسی لازم را فعال کند"}), 403
+    return None
+
+
+def require_permission_strict(key):
+    """مثل require_permission، با این تفاوت که پیش‌فرض این دسترسی برای کارمند خاموش است —
+    فقط وقتی مدیر صراحتاً آن را روشن کرده باشد اجازه داده می‌شود. برای بانک و چک استفاده می‌شود
+    تا کارمند بدون مجوز صریح فقط بتواند مشاهده کند، نه ثبت/ویرایش/حذف."""
+    if g.current_user.get("role") == "admin":
+        return None
+    perms = get_user_permissions(g.current_user["username"])
+    if perms.get(key, False) is not True:
         return jsonify({"ok": False, "message": "شما اجازه دسترسی به این بخش را ندارید — از مدیر بخواهید دسترسی لازم را فعال کند"}), 403
     return None
 
@@ -324,9 +347,16 @@ def upload_shop_logo():
     # svg با اسکریپت داخلش می‌تواند حمله XSS ذخیره‌شده ایجاد کند
     if ext not in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
         return jsonify({"ok": False, "message": "فرمت فایل باید png، jpg، gif یا webp باشد"}), 400
+    file_bytes = file.read()
+    sniffed = sniff_image_ext(file_bytes)
+    # پسوند jpg/jpeg هر دو با محتوای واقعی jpg تطبیق دارند
+    ext_family = ".jpg" if ext == ".jpeg" else ext
+    if not sniffed or sniffed != ext_family:
+        return jsonify({"ok": False, "message": "محتوای فایل با پسوند آن مطابقت ندارد — فایل تصویر واقعی انتخاب کن"}), 400
     os.makedirs(ASSETS_DIR, exist_ok=True)
     filename = "shop_logo" + ext
-    file.save(os.path.join(ASSETS_DIR, filename))
+    with open(os.path.join(ASSETS_DIR, filename), "wb") as f:
+        f.write(file_bytes)
     s = load_shop_settings()
     s["logo_filename"] = filename
     save_shop_settings(s)
@@ -388,6 +418,100 @@ def log_security_event(username, event, details=""):
         conn.close()
     except Exception:
         pass
+
+
+# ---------- اعتبارسنجی ورودی فاکتور (فروش/خرید/مرجوعی) ----------
+def validate_invoice_items(items):
+    """تعداد و قیمت واحد هر ردیف فاکتور باید عدد معتبر، تعداد بزرگ‌تر از صفر و قیمت غیرمنفی باشد؛
+    وگرنه پیام خطا برمی‌گرداند (وگرنه None یعنی معتبر است)."""
+    if not items:
+        return "فاکتور باید حداقل یک کالا داشته باشد"
+    for it in items:
+        if not it.get("item_id"):
+            return "کالای هر ردیف فاکتور باید مشخص باشد"
+        try:
+            qty = float(it.get("qty"))
+            price = float(it.get("unit_price"))
+        except (TypeError, ValueError):
+            return "تعداد و قیمت واحد هر ردیف باید عدد باشند"
+        if qty <= 0:
+            return "تعداد هر ردیف باید بزرگ‌تر از صفر باشد"
+        if price < 0:
+            return "قیمت واحد نمی‌تواند منفی باشد"
+    return None
+
+
+def validate_invoice_amounts(d, subtotal):
+    """تخفیف و مبلغ پرداختی فاکتور را اعتبارسنجی می‌کند؛ در صورت نامعتبر بودن پیام خطا برمی‌گرداند."""
+    try:
+        discount = float(d.get("discount", 0) or 0)
+    except (TypeError, ValueError):
+        return "مبلغ تخفیف باید عدد باشد", None
+    if discount < 0:
+        return "مبلغ تخفیف نمی‌تواند منفی باشد", None
+    if "paid" in d and d.get("paid") is not None:
+        try:
+            paid = float(d.get("paid"))
+        except (TypeError, ValueError):
+            return "مبلغ پرداختی باید عدد باشد", None
+        if paid < 0:
+            return "مبلغ پرداختی نمی‌تواند منفی باشد", None
+        total = max(subtotal - discount, 0)
+        if paid > total:
+            return "مبلغ پرداختی نمی‌تواند بیشتر از مبلغ کل فاکتور باشد", None
+    return None, discount
+
+
+def validate_item_input(d):
+    """قیمت خرید/فروش، موجودی و حداقل موجودی کالا نباید منفی باشند (وگرنه پیام خطا برمی‌گرداند)."""
+    for field, label in (("purchase_price", "قیمت خرید"), ("sale_price", "قیمت فروش"),
+                          ("stock_qty", "موجودی"), ("min_stock", "حداقل موجودی")):
+        if field not in d or d.get(field) is None:
+            continue
+        try:
+            value = float(d.get(field))
+        except (TypeError, ValueError):
+            return f"{label} باید عدد باشد"
+        if value < 0:
+            return f"{label} نمی‌تواند منفی باشد"
+    return None
+
+
+# ---------- بازمحاسبه‌ی میانگین موزون قیمت خرید (avg_cost) ----------
+def recompute_item_avg_cost(dbc, item_id):
+    """avg_cost یک کالا را از صفر، با بازپخش همه‌ی فاکتورهای خرید معتبر (باطل‌نشده) آن کالا
+    به ترتیب زمان ثبت، دوباره می‌سازد. باید بعد از هر ثبت/ویرایش/حذف/ابطال فاکتور خرید که
+    این کالا را دربر می‌گیرد صدا زده شود، تا بهای تمام‌شده و سود همیشه درست بمانند."""
+    purchases = dbc.execute("""
+        SELECT ii.qty, ii.unit_price FROM invoice_items ii
+        JOIN invoices i ON ii.invoice_id = i.id
+        WHERE ii.item_id=? AND i.invoice_type='purchase' AND i.voided=0
+        ORDER BY i.id ASC
+    """, (item_id,)).fetchall()
+    running_qty = 0.0
+    running_avg = None
+    for p in purchases:
+        q, price = p["qty"], p["unit_price"]
+        if running_qty > 0 and running_avg is not None:
+            running_avg = (running_qty * running_avg + q * price) / (running_qty + q)
+        else:
+            running_avg = price
+        running_qty += q
+    dbc.execute("UPDATE items SET avg_cost=? WHERE id=?", (running_avg, item_id))
+
+
+def sniff_image_ext(data):
+    """نوع واقعی فایل تصویر را از روی بایت‌های ابتدایی‌اش تشخیص می‌دهد (نه از روی پسوند نام فایل
+    که به‌راحتی قابل جعل است) — png/jpg/gif/webp را پوشش می‌دهد."""
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return ".png"
+    if data[:3] == b"\xff\xd8\xff":
+        return ".jpg"
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return ".gif"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return ".webp"
+    return None
 
 
 # ---------- ورود ----------
@@ -503,6 +627,9 @@ def add_item():
     if err:
         return err
     d = request.json
+    item_error = validate_item_input(d)
+    if item_error:
+        return jsonify({"ok": False, "message": item_error}), 400
     conn = get_connection()
     try:
         conn.execute("""INSERT INTO items (code, name, category_id, unit, purchase_price, sale_price, stock_qty, min_stock, brand)
@@ -524,6 +651,9 @@ def update_item(item_id):
     if err:
         return err
     d = request.json
+    item_error = validate_item_input(d)
+    if item_error:
+        return jsonify({"ok": False, "message": item_error}), 400
     conn = get_connection()
     try:
         conn.execute("""UPDATE items SET code=?, name=?, category_id=?, unit=?, purchase_price=?,
@@ -601,6 +731,11 @@ def upload_item_photo(item_id):
     # svg با اسکریپت داخلش می‌تواند حمله XSS ذخیره‌شده ایجاد کند
     if ext not in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
         return jsonify({"ok": False, "message": "فرمت فایل باید png، jpg، gif یا webp باشد"}), 400
+    file_bytes = file.read()
+    sniffed = sniff_image_ext(file_bytes)
+    ext_family = ".jpg" if ext == ".jpeg" else ext
+    if not sniffed or sniffed != ext_family:
+        return jsonify({"ok": False, "message": "محتوای فایل با پسوند آن مطابقت ندارد — فایل تصویر واقعی انتخاب کن"}), 400
     conn = get_connection()
     item = conn.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
     if not item:
@@ -609,7 +744,8 @@ def upload_item_photo(item_id):
     os.makedirs(ASSETS_DIR, exist_ok=True)
     filename = f"item_{item_id}_{secrets.token_hex(4)}{ext}"
     old_photo = item["photo_filename"]
-    file.save(os.path.join(ASSETS_DIR, filename))
+    with open(os.path.join(ASSETS_DIR, filename), "wb") as f:
+        f.write(file_bytes)
     conn.execute("UPDATE items SET photo_filename=? WHERE id=?", (filename, item_id))
     conn.commit()
     conn.close()
@@ -701,12 +837,27 @@ def party_payment(party_id):
     ورودی: {"amount": مبلغ, "description": "..."}
     """
     d = request.json
-    amount = d["amount"]
+    try:
+        amount = float(d.get("amount"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "message": "مبلغ باید عدد باشد"}), 400
+    if amount <= 0:
+        return jsonify({"ok": False, "message": "مبلغ پرداخت باید بزرگ‌تر از صفر باشد"}), 400
+
     conn = get_connection()
     party = conn.execute("SELECT * FROM parties WHERE id=?", (party_id,)).fetchone()
     if not party:
         conn.close()
         return jsonify({"ok": False, "message": "طرف حساب پیدا نشد"}), 404
+
+    # مانده‌ی واقعی قابل تسویه در همین جهت (بدهی مشتری به ما، یا بدهی ما به تامین‌کننده)
+    outstanding = party["balance"] if party["type"] == "customer" else -party["balance"]
+    if outstanding <= 0:
+        conn.close()
+        return jsonify({"ok": False, "message": "مانده‌ای برای تسویه با این طرف‌حساب باقی نمانده است"}), 400
+    if amount > outstanding + 1:  # ۱ واحد رواداری برای گرد شدن اعداد اعشاری
+        conn.close()
+        return jsonify({"ok": False, "message": f"مبلغ پرداخت نمی‌تواند بیشتر از مانده فعلی ({outstanding:,.0f} تومان) باشد"}), 400
 
     if party["type"] == "customer":
         new_balance = party["balance"] - amount   # دریافت وجه، بدهی مشتری کم می‌شود
@@ -828,12 +979,18 @@ def add_invoice():
     if err:
         return err
 
+    items_error = validate_invoice_items(d.get("items"))
+    if items_error:
+        return jsonify({"ok": False, "message": items_error}), 400
+    subtotal = sum(it["qty"] * it["unit_price"] for it in d["items"])
+    amounts_error, discount = validate_invoice_amounts(d, subtotal)
+    if amounts_error:
+        return jsonify({"ok": False, "message": amounts_error}), 400
+
     conn = get_connection()
     c = conn.cursor()
 
     is_return = invoice_type in ("sale_return", "purchase_return")
-    discount = d.get("discount", 0) or 0
-    subtotal = sum(it["qty"] * it["unit_price"] for it in d["items"])
     total = max(subtotal - discount, 0)
     paid = total if d.get("payment_type") == "cash" else d.get("paid", 0)
 
@@ -898,16 +1055,10 @@ def add_invoice():
         else:
             c.execute("UPDATE items SET stock_qty = stock_qty + ? WHERE id=?", (it["qty"], it["item_id"]))
             if invoice_type == "purchase":
-                # میانگین موزون قیمت خرید: هر بار که خرید جدید می‌آید، با موجودی قبلی ترکیب می‌شود
-                # تا هزینه‌ی واقعی‌تری برای محاسبه‌ی سود به‌دست بیاید (نه فقط آخرین قیمت خرید)
-                row = c.execute("SELECT stock_qty, avg_cost, purchase_price FROM items WHERE id=?", (it["item_id"],)).fetchone()
-                old_qty = (row["stock_qty"] or 0) - it["qty"]  # موجودی قبل از این خرید (چون بالا آپدیت شد)
-                old_cost = row["avg_cost"] if row["avg_cost"] is not None else row["purchase_price"]
-                if old_qty > 0 and old_cost is not None:
-                    new_avg = (old_qty * old_cost + it["qty"] * it["unit_price"]) / (old_qty + it["qty"])
-                else:
-                    new_avg = it["unit_price"]
-                c.execute("UPDATE items SET avg_cost=? WHERE id=?", (new_avg, it["item_id"]))
+                # میانگین موزون قیمت خرید: بعد از افزوده‌شدن ردیف این فاکتور به invoice_items،
+                # از صفر با بازپخش همه‌ی خریدهای معتبر این کالا دوباره محاسبه می‌شود — همان تابعی
+                # که بعد از ویرایش/حذف/ابطال فاکتور خرید هم استفاده می‌شود تا عدد همیشه یکدست بماند
+                recompute_item_avg_cost(c, it["item_id"])
 
     # به‌روزرسانی حساب طرف‌حساب در صورت نسیه (برای مرجوعی، اثر معکوس اعمال می‌شود)
     if d.get("party_id") and d.get("payment_type") in ("credit",):
@@ -938,7 +1089,7 @@ def add_invoice():
 
     conn.commit()
     conn.close()
-    log_action(d.get("username"), f"ثبت فاکتور {invoice_number}", f"جمع کل: {total:,.0f} تومان")
+    log_action(g.current_user["username"], f"ثبت فاکتور {invoice_number}", f"جمع کل: {total:,.0f} تومان")
     return jsonify({"ok": True, "invoice_id": invoice_id, "invoice_number": invoice_number, "total": total})
 
 
@@ -966,9 +1117,15 @@ def update_invoice(invoice_id):
         return jsonify({"ok": False, "message": "فاکتور پیدا نشد"}), 404
 
     new_items = d.get("items") or []
-    if not new_items:
+    items_error = validate_invoice_items(new_items)
+    if items_error:
         conn.close()
-        return jsonify({"ok": False, "message": "فاکتور باید حداقل یک کالا داشته باشد"}), 400
+        return jsonify({"ok": False, "message": items_error}), 400
+    new_subtotal_check = sum(it["qty"] * it["unit_price"] for it in new_items)
+    amounts_error, _discount_check = validate_invoice_amounts(d, new_subtotal_check)
+    if amounts_error:
+        conn.close()
+        return jsonify({"ok": False, "message": amounts_error}), 400
 
     invoice_type = invoice["invoice_type"]  # نوع فاکتور از طریق ویرایش قابل تغییر نیست
     sale_like = invoice_type in ("sale", "purchase_return")
@@ -1067,10 +1224,16 @@ def update_invoice(invoice_id):
         conn.execute("INSERT INTO cash_transactions (date, tx_type, amount, description, invoice_id) VALUES (?,?,?,?,?)",
                      (now(), tx_type, paid, f"فاکتور {label} شماره {invoice['number']} (ویرایش‌شده)", invoice_id))
 
+    # بازمحاسبه‌ی avg_cost همه‌ی کالاهایی که در اقلام قدیم یا جدید این فاکتور خرید بودند
+    if invoice_type == "purchase":
+        affected_item_ids = {it["item_id"] for it in old_items} | {it["item_id"] for it in new_items}
+        for item_id in affected_item_ids:
+            recompute_item_avg_cost(conn, item_id)
+
     conn.commit()
     conn.close()
-    log_action(d.get("username"), "ویرایش فاکتور", f'فاکتور شماره {invoice["number"] or invoice_id}{checks_note}')
-    log_security_event(d.get("username"), "ویرایش فاکتور",
+    log_action(g.current_user["username"], "ویرایش فاکتور", f'فاکتور شماره {invoice["number"] or invoice_id}{checks_note}')
+    log_security_event(g.current_user["username"], "ویرایش فاکتور",
                         f'فاکتور شماره {invoice["number"] or invoice_id} — جمع کل جدید: {total:,.0f} تومان{checks_note}')
     return jsonify({"ok": True, "invoice_id": invoice_id, "invoice_number": invoice["number"], "total": total})
 
@@ -1124,11 +1287,17 @@ def delete_invoice(invoice_id):
     # ۴. حذف خود فاکتور و ردیف‌هایش
     conn.execute("DELETE FROM invoice_items WHERE invoice_id=?", (invoice_id,))
     conn.execute("DELETE FROM invoices WHERE id=?", (invoice_id,))
+
+    # ۵. بازمحاسبه‌ی avg_cost کالاهایی که در این فاکتور خرید بودند
+    if invoice_type == "purchase":
+        for item_id in {it["item_id"] for it in items}:
+            recompute_item_avg_cost(conn, item_id)
+
     conn.commit()
     conn.close()
 
-    log_action(d.get("username"), "حذف فاکتور", f'فاکتور شماره {invoice["number"] or invoice_id}{checks_note}')
-    log_security_event(d.get("username"), "حذف فاکتور", f'فاکتور شماره {invoice["number"] or invoice_id} — مبلغ {invoice["total"]:,.0f}{checks_note}')
+    log_action(g.current_user["username"], "حذف فاکتور", f'فاکتور شماره {invoice["number"] or invoice_id}{checks_note}')
+    log_security_event(g.current_user["username"], "حذف فاکتور", f'فاکتور شماره {invoice["number"] or invoice_id} — مبلغ {invoice["total"]:,.0f}{checks_note}')
     return jsonify({"ok": True, "message": f"فاکتور و همه موارد مرتبط حذف شد{checks_note}"})
 
 
@@ -1186,6 +1355,12 @@ def void_invoice(invoice_id):
         "UPDATE invoices SET voided=1, void_reason=?, voided_by=?, voided_at=? WHERE id=?",
         (reason, g.current_user["username"], now(), invoice_id)
     )
+
+    # بازمحاسبه‌ی avg_cost کالاهایی که در این فاکتور خرید بودند
+    if invoice_type == "purchase":
+        for item_id in {it["item_id"] for it in items}:
+            recompute_item_avg_cost(conn, item_id)
+
     conn.commit()
     conn.close()
 
@@ -1206,6 +1381,9 @@ def get_bank_accounts():
 
 @app.route("/bank-accounts", methods=["POST"])
 def add_bank_account():
+    err = require_permission_strict("can_manage_bank")
+    if err:
+        return err
     d = request.json
     if not d.get("name"):
         return jsonify({"ok": False, "message": "نام حساب الزامی است"}), 400
@@ -1214,12 +1392,15 @@ def add_bank_account():
                  (d["name"], d.get("bank_name", ""), d.get("account_number", ""), d.get("iban", ""), d.get("balance", 0) or 0, now()))
     conn.commit()
     conn.close()
-    log_action(d.get("username"), "افزودن حساب بانکی", d["name"])
+    log_action(g.current_user["username"], "افزودن حساب بانکی", d["name"])
     return jsonify({"ok": True})
 
 
 @app.route("/bank-accounts/<int:account_id>", methods=["PUT"])
 def update_bank_account(account_id):
+    err = require_permission_strict("can_manage_bank")
+    if err:
+        return err
     d = request.json
     if not d.get("name"):
         return jsonify({"ok": False, "message": "نام حساب الزامی است"}), 400
@@ -1233,6 +1414,9 @@ def update_bank_account(account_id):
 
 @app.route("/bank-accounts/<int:account_id>", methods=["DELETE"])
 def delete_bank_account(account_id):
+    err = require_permission_strict("can_manage_bank")
+    if err:
+        return err
     conn = get_connection()
     acc = conn.execute("SELECT * FROM bank_accounts WHERE id=?", (account_id,)).fetchone()
     if acc and acc["balance"] != 0:
@@ -1268,9 +1452,15 @@ BANK_WITHDRAWAL_DEST_LABELS = {
 @app.route("/bank-accounts/<int:account_id>/transaction", methods=["POST"])
 def bank_account_transaction(account_id):
     """واریز یا برداشت مستقیم از یک حساب بانکی (بدون ارتباط با صندوق)"""
+    err = require_permission_strict("can_manage_bank")
+    if err:
+        return err
     d = request.json
     tx_type = d.get("tx_type")  # deposit یا withdrawal
-    amount = d.get("amount", 0)
+    try:
+        amount = float(d.get("amount", 0))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "message": "مبلغ باید عدد باشد"}), 400
     if tx_type not in ("deposit", "withdrawal") or amount <= 0:
         return jsonify({"ok": False, "message": "اطلاعات تراکنش نامعتبر است"}), 400
 
@@ -1295,10 +1485,10 @@ def bank_account_transaction(account_id):
     sign = 1 if tx_type == "deposit" else -1
     conn.execute("UPDATE bank_accounts SET balance = balance + ? WHERE id=?", (sign * amount, account_id))
     conn.execute("INSERT INTO bank_transactions (account_id, date, tx_type, amount, description, username, category) VALUES (?,?,?,?,?,?,?)",
-                 (account_id, now(), tx_type, amount, desc, d.get("username"), category))
+                 (account_id, now(), tx_type, amount, desc, g.current_user["username"], category))
     conn.commit()
     conn.close()
-    log_action(d.get("username"), "تراکنش بانکی",
+    log_action(g.current_user["username"], "تراکنش بانکی",
                f'{"واریز" if tx_type == "deposit" else "برداشت"} {amount:,.0f} تومان — {acc["name"]}'
                + (f' ({category_label})' if category_label else ''))
     return jsonify({"ok": True})
@@ -1323,8 +1513,14 @@ def bank_transfer():
     ورودی: {"from_type": "cash"|"bank", "from_id": null یا شماره حساب,
              "to_type": "cash"|"bank", "to_id": null یا شماره حساب, "amount": عدد, "description": "..."}
     """
+    err = require_permission_strict("can_manage_bank")
+    if err:
+        return err
     d = request.json
-    amount = d.get("amount", 0)
+    try:
+        amount = float(d.get("amount", 0))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "message": "مبلغ باید عدد باشد"}), 400
     from_type, to_type = d.get("from_type"), d.get("to_type")
     if amount <= 0 or from_type == to_type == "cash":
         return jsonify({"ok": False, "message": "اطلاعات انتقال نامعتبر است"}), 400
@@ -1362,7 +1558,7 @@ def bank_transfer():
     else:
         conn.execute("UPDATE bank_accounts SET balance = balance - ? WHERE id=?", (amount, d.get("from_id")))
         conn.execute("INSERT INTO bank_transactions (account_id, date, tx_type, amount, description, username) VALUES (?,?,?,?,?,?)",
-                     (d.get("from_id"), now(), "transfer_out", amount, desc_out, d.get("username")))
+                     (d.get("from_id"), now(), "transfer_out", amount, desc_out, g.current_user["username"]))
 
     # افزودن به مقصد
     if to_type == "cash":
@@ -1371,11 +1567,11 @@ def bank_transfer():
     else:
         conn.execute("UPDATE bank_accounts SET balance = balance + ? WHERE id=?", (amount, d.get("to_id")))
         conn.execute("INSERT INTO bank_transactions (account_id, date, tx_type, amount, description, username) VALUES (?,?,?,?,?,?)",
-                     (d.get("to_id"), now(), "transfer_in", amount, desc_in, d.get("username")))
+                     (d.get("to_id"), now(), "transfer_in", amount, desc_in, g.current_user["username"]))
 
     conn.commit()
     conn.close()
-    log_action(d.get("username"), "انتقال وجه", f'{amount:,.0f} تومان — از «{from_label}» به «{to_label}»')
+    log_action(g.current_user["username"], "انتقال وجه", f'{amount:,.0f} تومان — از «{from_label}» به «{to_label}»')
     return jsonify({"ok": True})
 
 
@@ -1404,7 +1600,7 @@ def add_cash():
                  (now(), d["tx_type"], d["amount"], d.get("description", ""), expense_category))
     conn.commit()
     conn.close()
-    log_action(d.get("username"), "ثبت تراکنش صندوق",
+    log_action(g.current_user["username"], "ثبت تراکنش صندوق",
                f'{"دریافت" if d["tx_type"]=="in" else "پرداخت"}: {d["amount"]:,.0f} تومان'
                + (f' ({expense_category})' if expense_category else ''))
     return jsonify({"ok": True})
@@ -1439,14 +1635,14 @@ def add_cash_closing():
     conn.execute(
         "INSERT INTO cash_closings (date, expected_balance, counted_balance, difference, note, username, created_at) "
         "VALUES (?,?,?,?,?,?,?)",
-        (d.get("date") or now()[:10], expected, counted, difference, d.get("note", ""), d.get("username"), now())
+        (d.get("date") or now()[:10], expected, counted, difference, d.get("note", ""), g.current_user["username"], now())
     )
     conn.commit()
     conn.close()
-    log_action(d.get("username"), "بستن روزانه صندوق",
+    log_action(g.current_user["username"], "بستن روزانه صندوق",
                f'محاسبه‌شده: {expected:,.0f} — شمرده‌شده: {counted:,.0f} — اختلاف: {difference:,.0f} تومان')
     if abs(difference) > 0:
-        log_security_event(d.get("username"), "اختلاف در بستن صندوق",
+        log_security_event(g.current_user["username"], "اختلاف در بستن صندوق",
                             f'اختلاف {difference:,.0f} تومان (محاسبه‌شده: {expected:,.0f}، شمرده‌شده: {counted:,.0f})')
     return jsonify({"ok": True, "expected_balance": expected, "difference": difference})
 
@@ -1491,7 +1687,7 @@ def set_installments(invoice_id):
                      (invoice_id, i["due_date"], i["amount"]))
     conn.commit()
     conn.close()
-    log_action(d.get("username"), "تعریف اقساط فاکتور", f'فاکتور شماره {invoice["number"] or invoice_id} — {len(installments)} قسط')
+    log_action(g.current_user["username"], "تعریف اقساط فاکتور", f'فاکتور شماره {invoice["number"] or invoice_id} — {len(installments)} قسط')
     return jsonify({"ok": True})
 
 
@@ -1516,7 +1712,7 @@ def pay_installment(installment_id):
     conn.execute("UPDATE invoices SET paid = paid + ? WHERE id=?", (inst["amount"], invoice["id"]))
     conn.commit()
     conn.close()
-    log_action(d.get("username"), "پرداخت قسط", f'فاکتور شماره {invoice["number"] or invoice["id"]} — مبلغ {inst["amount"]:,.0f} تومان')
+    log_action(g.current_user["username"], "پرداخت قسط", f'فاکتور شماره {invoice["number"] or invoice["id"]} — مبلغ {inst["amount"]:,.0f} تومان')
     return jsonify({"ok": True})
 
 
@@ -1535,10 +1731,19 @@ def apply_stocktake():
         return jsonify({"ok": False, "message": "لیست شمارش خالی است"}), 400
     conn = get_connection()
     changes = []
+    rejected = []
     for item_id_str, counted_qty in counts.items():
         item_id = int(item_id_str)
         item = conn.execute("SELECT name, stock_qty FROM items WHERE id=?", (item_id,)).fetchone()
         if not item:
+            continue
+        try:
+            counted_qty = float(counted_qty)
+        except (TypeError, ValueError):
+            rejected.append(f'{item["name"]}: تعداد نامعتبر')
+            continue
+        if counted_qty < 0:
+            rejected.append(f'{item["name"]}: موجودی منفی قابل ثبت نیست')
             continue
         old_qty = item["stock_qty"]
         if old_qty != counted_qty:
@@ -1547,9 +1752,9 @@ def apply_stocktake():
     conn.commit()
     conn.close()
     if changes:
-        log_action(d.get("username"), "انبارگردانی", "؛ ".join(changes))
-        log_security_event(d.get("username"), "اصلاح موجودی (انبارگردانی)", "؛ ".join(changes))
-    return jsonify({"ok": True, "changed_count": len(changes)})
+        log_action(g.current_user["username"], "انبارگردانی", "؛ ".join(changes))
+        log_security_event(g.current_user["username"], "اصلاح موجودی (انبارگردانی)", "؛ ".join(changes))
+    return jsonify({"ok": True, "changed_count": len(changes), "rejected": rejected})
 
 
 @app.route("/warranty-claims", methods=["GET"])
@@ -1576,10 +1781,10 @@ def add_warranty_claim():
         INSERT INTO warranty_claims (item_id, serial_number, party_id, invoice_id, issue_description, status, created_at, username)
         VALUES (?,?,?,?,?,?,?,?)
     """, (d.get("item_id"), d.get("serial_number"), d.get("party_id"), d.get("invoice_id"),
-          d.get("issue_description", ""), "received", now(), d.get("username")))
+          d.get("issue_description", ""), "received", now(), g.current_user["username"]))
     conn.commit()
     conn.close()
-    log_action(d.get("username"), "ثبت درخواست گارانتی/تعمیر", d.get("issue_description", ""))
+    log_action(g.current_user["username"], "ثبت درخواست گارانتی/تعمیر", d.get("issue_description", ""))
     return jsonify({"ok": True})
 
 
@@ -1599,7 +1804,7 @@ def update_warranty_claim(claim_id):
     )
     conn.commit()
     conn.close()
-    log_action(d.get("username"), "به‌روزرسانی درخواست گارانتی/تعمیر", f"وضعیت: {status}")
+    log_action(g.current_user["username"], "به‌روزرسانی درخواست گارانتی/تعمیر", f"وضعیت: {status}")
     return jsonify({"ok": True})
 
 
@@ -1725,9 +1930,16 @@ def get_checks():
 
 @app.route("/checks", methods=["POST"])
 def add_check():
+    err = require_permission_strict("can_manage_checks")
+    if err:
+        return err
     d = request.json
-    if not d.get("amount") or not d.get("due_date") or d.get("direction") not in ("received", "issued"):
-        return jsonify({"ok": False, "message": "مبلغ، تاریخ سررسید و نوع چک الزامی است"}), 400
+    try:
+        amount_ok = float(d.get("amount")) > 0
+    except (TypeError, ValueError):
+        amount_ok = False
+    if not amount_ok or not d.get("due_date") or d.get("direction") not in ("received", "issued"):
+        return jsonify({"ok": False, "message": "مبلغ (بزرگ‌تر از صفر)، تاریخ سررسید و نوع چک الزامی است"}), 400
     conn = get_connection()
     conn.execute("""INSERT INTO checks (party_id, invoice_id, amount, due_date, status, direction, description)
                      VALUES (?,?,?,?,?,?,?)""",
@@ -1743,7 +1955,16 @@ def update_check(check_id):
     """ویرایش چک (طرف حساب/مبلغ/سررسید/نوع/توضیحات) و/یا تغییر وضعیت (pending -> cashed یا bounced).
     هر فیلدی که در بدنه‌ی درخواست نیاید، مقدار قبلی‌اش حفظ می‌شود — پس همین مسیر هم برای
     تغییر سریع وضعیت (فقط با فرستادن status) و هم برای ویرایش کامل کاربرد دارد."""
+    err = require_permission_strict("can_manage_checks")
+    if err:
+        return err
     d = request.json
+    if "amount" in d and d.get("amount") is not None:
+        try:
+            if float(d["amount"]) <= 0:
+                return jsonify({"ok": False, "message": "مبلغ چک باید بزرگ‌تر از صفر باشد"}), 400
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "message": "مبلغ چک باید عدد باشد"}), 400
     conn = get_connection()
     check = conn.execute("SELECT * FROM checks WHERE id=?", (check_id,)).fetchone()
     if not check:
@@ -1772,6 +1993,9 @@ def update_check(check_id):
 
 @app.route("/checks/<int:check_id>", methods=["DELETE"])
 def delete_check(check_id):
+    err = require_permission_strict("can_manage_checks")
+    if err:
+        return err
     conn = get_connection()
     conn.execute("DELETE FROM checks WHERE id=?", (check_id,))
     conn.commit()
@@ -1944,11 +2168,12 @@ def update_user_permissions(user_id):
         return err
     d = request.json or {}
     perms = {k: bool(d.get(k, True)) for k in PERMISSION_KEYS}
+    perms.update({k: bool(d.get(k, False)) for k in STRICT_PERMISSION_KEYS})
     conn = get_connection()
     conn.execute("UPDATE users SET permissions=? WHERE id=?", (json.dumps(perms), user_id))
     conn.commit()
     conn.close()
-    log_security_event(d.get("username"), "تغییر سطح دسترسی کاربر", f"کاربر شماره {user_id}: {perms}")
+    log_security_event(g.current_user["username"], "تغییر سطح دسترسی کاربر", f"کاربر شماره {user_id}: {perms}")
     return jsonify({"ok": True})
 
 
@@ -1958,6 +2183,8 @@ def add_user():
     if err:
         return err
     d = request.json
+    if len(d.get("password") or "") < 8:
+        return jsonify({"ok": False, "message": "رمز عبور باید حداقل ۸ کاراکتر باشد"}), 400
     conn = get_connection()
     try:
         conn.execute("INSERT INTO users (username, password, role) VALUES (?,?,?)",
@@ -1965,7 +2192,7 @@ def add_user():
         conn.commit()
         ok = True
         msg = "کاربر اضافه شد"
-        log_security_event(d.get("username"), "افزودن کاربر جدید", f'کاربر: {d["username"]}')
+        log_security_event(g.current_user["username"], "افزودن کاربر جدید", f'کاربر: {d["username"]}')
     except Exception as e:
         ok = False
         msg = "این نام کاربری قبلاً استفاده شده" if "UNIQUE" in str(e) else str(e)
@@ -1979,13 +2206,15 @@ def update_user(user_id):
     if err:
         return err
     d = request.json
+    if d.get("password") and len(d["password"]) < 8:
+        return jsonify({"ok": False, "message": "رمز عبور باید حداقل ۸ کاراکتر باشد"}), 400
     conn = get_connection()
     if d.get("password"):
         # وقتی مدیر رمز یکی دیگر رو عوض می‌کنه، اون رمز یه رمز موقته — کاربر باید بعد از
         # اولین ورود خودش یه رمز تازه انتخاب کنه
         conn.execute("UPDATE users SET password=?, role=?, must_change_password=1 WHERE id=?",
                      (generate_password_hash(d["password"]), d.get("role", "employee"), user_id))
-        log_security_event(d.get("username"), "تغییر رمز عبور", f"کاربر شماره {user_id}")
+        log_security_event(g.current_user["username"], "تغییر رمز عبور", f"کاربر شماره {user_id}")
     else:
         conn.execute("UPDATE users SET role=? WHERE id=?", (d.get("role", "employee"), user_id))
     conn.commit()
@@ -2002,8 +2231,8 @@ def change_own_password():
     """
     d = request.json or {}
     new_password = d.get("new_password") or ""
-    if len(new_password) < 4:
-        return jsonify({"ok": False, "message": "رمز عبور جدید باید حداقل ۴ کاراکتر باشد"}), 400
+    if len(new_password) < 8:
+        return jsonify({"ok": False, "message": "رمز عبور جدید باید حداقل ۸ کاراکتر باشد"}), 400
     username = g.current_user["username"]
     conn = get_connection()
     conn.execute("UPDATE users SET password=?, must_change_password=0 WHERE username=?",
@@ -2100,7 +2329,7 @@ def backup_restore():
 
     do_backup()  # نسخه احتیاطی از وضعیت فعلی قبل از بازنویسی
     shutil.copy2(src, DB_PATH)
-    log_action(d.get("username"), "بازیابی بکاپ", filename)
+    log_action(g.current_user["username"], "بازیابی بکاپ", filename)
     return jsonify({"ok": True, "message": f'دیتابیس از نسخه «{filename}» بازیابی شد. سرور و کلاینت را ببندید و دوباره باز کنید.'})
 
 
@@ -2517,6 +2746,15 @@ def analyze_invoice_photo():
     method = request.form.get("method", "ai")
     image_bytes = file.read()
 
+    if ext == ".pdf":
+        if image_bytes[:4] != b"%PDF":
+            return jsonify({"ok": False, "message": "محتوای فایل با پسوند pdf مطابقت ندارد"}), 400
+    else:
+        sniffed = sniff_image_ext(image_bytes)
+        ext_family = ".jpg" if ext == ".jpeg" else ext
+        if not sniffed or sniffed != ext_family:
+            return jsonify({"ok": False, "message": "محتوای فایل با پسوند آن مطابقت ندارد — عکس واقعی انتخاب کن"}), 400
+
     if method == "offline":
         ok, data = invoice_ocr_free.analyze_invoice_image_offline(image_bytes, is_pdf=(ext == ".pdf"))
         if not ok:
@@ -2558,6 +2796,12 @@ def build_assistant_data_snapshot(role):
     cash_balance = conn.execute("""SELECT
         COALESCE(SUM(CASE WHEN tx_type='in' THEN amount ELSE -amount END),0) as bal
         FROM cash_transactions""").fetchone()["bal"]
+    recent_invoices = conn.execute("""
+        SELECT invoices.number, invoices.invoice_type, invoices.date, invoices.total, invoices.paid,
+               invoices.payment_type, invoices.voided, parties.name as party_name
+        FROM invoices LEFT JOIN parties ON invoices.party_id = parties.id
+        ORDER BY invoices.id DESC LIMIT 200
+    """).fetchall()
     conn.close()
 
     # همه‌ی مبلغ‌ها (که داخلی به تومان ذخیره می‌شن) اینجا به ریال تبدیل می‌شن، چون کل رابط
@@ -2579,6 +2823,9 @@ def build_assistant_data_snapshot(role):
             {**dict(r), "balance": round(r["balance"] * 10)} for r in bank_accounts
         ],
         "موجودی_صندوق_ریال": round((cash_balance or 0) * 10),
+        "۲۰۰_فاکتور_اخیر (فروش/خرید/مرجوعی، مبلغ به ریال — فقط برای جست‌وجو و مشاهده، این دستیار خودش قادر به حذف یا ویرایش فاکتور نیست)": [
+            {**dict(r), "total": round(r["total"] * 10), "paid": round(r["paid"] * 10)} for r in recent_invoices
+        ],
     }
     return json.dumps(snapshot, ensure_ascii=False)
 
@@ -2627,14 +2874,14 @@ def apply_bulk_prices():
             "INSERT INTO price_history (item_id, old_purchase_price, old_sale_price, new_purchase_price, new_sale_price, changed_at, note, username) "
             "VALUES (?,?,?,?,?,?,?,?)",
             (ch["item_id"], item["purchase_price"], item["sale_price"],
-             ch["new_purchase_price"], ch["new_sale_price"], now(), d.get("note", ""), d.get("username"))
+             ch["new_purchase_price"], ch["new_sale_price"], now(), d.get("note", ""), g.current_user["username"])
         )
         conn.execute("UPDATE items SET purchase_price=?, sale_price=? WHERE id=?",
                      (ch["new_purchase_price"], ch["new_sale_price"], ch["item_id"]))
         count += 1
     conn.commit()
     conn.close()
-    log_action(d.get("username"), "افزایش/تغییر گروهی قیمت", f"{count} کالا تغییر کرد — {d.get('note', '')}")
+    log_action(g.current_user["username"], "افزایش/تغییر گروهی قیمت", f"{count} کالا تغییر کرد — {d.get('note', '')}")
     return jsonify({"ok": True, "updated_count": count})
 
 
@@ -2674,13 +2921,13 @@ def revert_price_history(history_id):
         "INSERT INTO price_history (item_id, old_purchase_price, old_sale_price, new_purchase_price, new_sale_price, changed_at, note, username) "
         "VALUES (?,?,?,?,?,?,?,?)",
         (h["item_id"], item["purchase_price"], item["sale_price"],
-         h["old_purchase_price"], h["old_sale_price"], now(), "بازگردانی به نسخه قبلی", d.get("username"))
+         h["old_purchase_price"], h["old_sale_price"], now(), "بازگردانی به نسخه قبلی", g.current_user["username"])
     )
     conn.execute("UPDATE items SET purchase_price=?, sale_price=? WHERE id=?",
                  (h["old_purchase_price"], h["old_sale_price"], h["item_id"]))
     conn.commit()
     conn.close()
-    log_action(d.get("username"), "بازگردانی قیمت", f'کالا: {item["name"]}')
+    log_action(g.current_user["username"], "بازگردانی قیمت", f'کالا: {item["name"]}')
     return jsonify({"ok": True})
 
 
