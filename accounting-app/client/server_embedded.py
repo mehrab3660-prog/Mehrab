@@ -2004,12 +2004,41 @@ def delete_check(check_id):
 
 
 # ---------- پشتیبان‌گیری ----------
+BACKUP_RETENTION_COUNT = 5
+
+
+def _prune_old_backups():
+    """فقط BACKUP_RETENTION_COUNT نسخه‌ی آخر را نگه می‌دارد و بقیه را پاک می‌کند."""
+    try:
+        names = sorted(
+            f for f in os.listdir(BACKUP_DIR)
+            if f.startswith("accounting_") and f.endswith(".db")
+        )
+    except FileNotFoundError:
+        return
+    excess = len(names) - BACKUP_RETENTION_COUNT
+    for old_name in names[:max(excess, 0)]:
+        try:
+            os.remove(os.path.join(BACKUP_DIR, old_name))
+        except OSError:
+            pass
+
+
 def do_backup():
     if not os.path.exists(DB_PATH):
         return None
     stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     dest = os.path.join(BACKUP_DIR, f"accounting_{stamp}.db")
-    shutil.copy2(DB_PATH, dest)
+    fd, tmp_path = tempfile.mkstemp(prefix=".accounting_tmp_", suffix=".db", dir=BACKUP_DIR)
+    os.close(fd)
+    try:
+        shutil.copy2(DB_PATH, tmp_path)
+        os.replace(tmp_path, dest)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise
+    _prune_old_backups()
     return dest
 
 
