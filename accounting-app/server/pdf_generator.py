@@ -2,18 +2,17 @@
 """
 تولید فاکتور PDF با پشتیبانی از متن فارسی (راست‌به‌چپ)
 
-برای نمایش درست حروف فارسی در PDF باید یک فونت یونیکد فارسی (مثلاً Vazir.ttf)
-داخل پوشه fonts/ کنار همین فایل قرار بگیرد. فونت رایگان Vazir را می‌توانید از
-گیت‌هاب پروژه‌اش دانلود و در client/fonts/Vazir.ttf قرار دهید.
-اگر فونت پیدا نشود، برنامه باز هم کار می‌کند ولی حروف فارسی ممکن است درست نمایش داده نشود.
+برای نمایش درست حروف فارسی در PDF از فونت یونیکد فارسی Estedad.ttf استفاده می‌شود
+که همراه خود برنامه (کنار همین فایل، در پوشه fonts/) بسته‌بندی شده است.
+اگر به هر دلیلی این فایل پیدا نشود، برنامه باز هم کار می‌کند ولی حروف فارسی ممکن است درست نمایش داده نشود.
 """
 import os
 
 from paths import get_base_dir
 
 FONT_DIR = os.path.join(get_base_dir(), "fonts")
-FONT_PATH = os.path.join(FONT_DIR, "Vazir.ttf")
-FONT_NAME = "Vazir"
+FONT_PATH = os.path.join(FONT_DIR, "Estedad.ttf")
+FONT_NAME = "Estedad"
 
 try:
     from reportlab.lib.pagesizes import A5, A4

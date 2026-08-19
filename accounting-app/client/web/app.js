@@ -1148,7 +1148,7 @@ function drawBarChart(canvas, labels, values, opts = {}) {
 
   if (!values.length) {
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-2');
-    ctx.font = '13px Vazirmatn, Tahoma';
+    ctx.font = '13px Estedad, Tahoma';
     ctx.textAlign = 'center';
     ctx.fillText('داده‌ای برای نمایش وجود ندارد', cssWidth / 2, cssHeight / 2);
     return;
@@ -1177,7 +1177,7 @@ function drawBarChart(canvas, labels, values, opts = {}) {
       ctx.fillRect(x, zeroY, barW, h);
     }
     ctx.fillStyle = textColor;
-    ctx.font = '11px Vazirmatn, Tahoma';
+    ctx.font = '11px Estedad, Tahoma';
     ctx.textAlign = 'center';
     ctx.fillText(labels[i], x + barW / 2, cssHeight - 8);
   });
@@ -1206,7 +1206,7 @@ function drawDonutChart(canvas, values, colors) {
 
   if (total <= 0) {
     ctx.fillStyle = styles.getPropertyValue('--text-2');
-    ctx.font = '13px Vazirmatn, Tahoma'; ctx.textAlign = 'center';
+    ctx.font = '13px Estedad, Tahoma'; ctx.textAlign = 'center';
     ctx.fillText('داده‌ای موجود نیست', cx, cy);
     return;
   }
@@ -1227,7 +1227,7 @@ function drawDonutChart(canvas, values, colors) {
   ctx.fillStyle = styles.getPropertyValue('--surface');
   ctx.fill();
   ctx.fillStyle = styles.getPropertyValue('--text');
-  ctx.font = 'bold 14px Vazirmatn, Tahoma';
+  ctx.font = 'bold 14px Estedad, Tahoma';
   ctx.textAlign = 'center';
   ctx.fillText(fmtRial(total), cx, cy + 5);
 }
@@ -1247,7 +1247,7 @@ function drawLineChart(canvas, labels, series) {
   const allValues = series.flatMap(s => s.values);
   if (!allValues.length || !labels.length) {
     ctx.fillStyle = styles.getPropertyValue('--text-2');
-    ctx.font = '13px Vazirmatn, Tahoma'; ctx.textAlign = 'center';
+    ctx.font = '13px Estedad, Tahoma'; ctx.textAlign = 'center';
     ctx.fillText('داده‌ای برای نمایش وجود ندارد', cssWidth / 2, cssHeight / 2);
     return;
   }
@@ -1274,7 +1274,7 @@ function drawLineChart(canvas, labels, series) {
   });
 
   ctx.fillStyle = styles.getPropertyValue('--text-2');
-  ctx.font = '10.5px Vazirmatn, Tahoma'; ctx.textAlign = 'center';
+  ctx.font = '10.5px Estedad, Tahoma'; ctx.textAlign = 'center';
   labels.forEach((l, i) => {
     if (n > 8 && i % 2 !== 0) return; // جلوگیری از تراکم برچسب‌ها وقتی ماه زیاده
     ctx.fillText(l, padding.left + i * xStep, cssHeight - 8);
