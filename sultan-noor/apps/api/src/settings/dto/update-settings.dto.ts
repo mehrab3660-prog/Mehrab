@@ -43,4 +43,24 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsString()
   siteUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  imageSearchProvider?: string;
+
+  @IsOptional()
+  @IsString()
+  imageSearchApiKey?: string;
+
+  @IsOptional()
+  @IsString()
+  removeBgApiKey?: string;
+
+  @IsOptional()
+  @IsString()
+  imageGenerationProvider?: string;
+
+  @IsOptional()
+  @IsString()
+  imageAutopilotMonthlyBudgetToman?: string;
 }

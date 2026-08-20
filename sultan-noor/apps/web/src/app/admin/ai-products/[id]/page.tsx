@@ -6,10 +6,23 @@ import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
-import { ProductAiDraft } from "@/lib/types";
+import { ProductAiDraft, ProductAiDraftImage } from "@/lib/types";
 
 const STATUS_LABEL: Record<ProductAiDraft["status"], string> = {
   PENDING_REVIEW: "در انتظار بررسی",
+  APPROVED: "تأیید شده",
+  REJECTED: "رد شده",
+};
+
+const IMAGE_TYPE_LABEL: Record<ProductAiDraftImage["imageType"], string> = {
+  REAL_SOURCE: "یافت‌شده از اینترنت",
+  PROCESSED_REAL: "تصویر واقعی (پردازش‌شده)",
+  AI_GENERATED: "تولیدشده با هوش مصنوعی",
+  ADMIN_UPLOADED: "بارگذاری دستی",
+};
+
+const IMAGE_STATUS_LABEL: Record<ProductAiDraftImage["status"], string> = {
+  CANDIDATE: "کاندید — هنوز بررسی نشده",
   APPROVED: "تأیید شده",
   REJECTED: "رد شده",
 };
@@ -24,6 +37,9 @@ export default function AiProductDraftDetailPage() {
   const [form, setForm] = useState<Partial<ProductAiDraft>>({});
   const [saving, setSaving] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [searchingImages, setSearchingImages] = useState(false);
+  const [imageBusy, setImageBusy] = useState<Record<string, boolean>>({});
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   function load() {
     if (!accessToken || !id) return;
@@ -84,6 +100,48 @@ export default function AiProductDraftDetailPage() {
       toast(err instanceof ApiError ? err.message : "رد کردن پیش‌نویس با خطا مواجه شد.", "error");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleImageSearch() {
+    setSearchingImages(true);
+    try {
+      await api.post(`/ai-product/drafts/${id}/images/search`, undefined, accessToken);
+      toast("جستجوی تصویر انجام شد.", "success");
+      load();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "جستجوی تصویر با خطا مواجه شد.", "error");
+    } finally {
+      setSearchingImages(false);
+    }
+  }
+
+  async function handleImageAction(imageId: string, action: "approve" | "reject" | "set-main" | "regenerate") {
+    setImageBusy((prev) => ({ ...prev, [imageId]: true }));
+    try {
+      if (action === "set-main") {
+        await api.patch(`/ai-product/drafts/${id}/images/${imageId}/set-main`, undefined, accessToken);
+      } else {
+        await api.post(`/ai-product/drafts/${id}/images/${imageId}/${action}`, undefined, accessToken);
+      }
+      load();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "عملیات روی تصویر با خطا مواجه شد.", "error");
+    } finally {
+      setImageBusy((prev) => ({ ...prev, [imageId]: false }));
+    }
+  }
+
+  async function handleManualUpload(file: File) {
+    setUploadingImage(true);
+    try {
+      await api.upload(`/ai-product/drafts/${id}/images`, file, "file", accessToken);
+      toast("تصویر با موفقیت اضافه شد.", "success");
+      load();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "بارگذاری تصویر با خطا مواجه شد.", "error");
+    } finally {
+      setUploadingImage(false);
     }
   }
 
@@ -244,9 +302,128 @@ export default function AiProductDraftDetailPage() {
         </div>
       )}
 
-      <p className="mb-4 rounded-lg bg-surface p-3 text-xs text-foreground/60">
-        تصویر محصول از این طریق ساخته نمی‌شود. پس از تأیید، از صفحه‌ی «محصولات» عکس را آپلود کنید.
-      </p>
+      <div className="mb-4 rounded-lg border border-border-color p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-bold">تصویر خودکار (Image Autopilot)</h2>
+          {pending && (
+            <button
+              onClick={handleImageSearch}
+              disabled={searchingImages}
+              className="rounded-lg border border-border-color px-3 py-1 text-xs hover:border-brand hover:text-brand disabled:opacity-50"
+            >
+              {searchingImages ? "در حال جستجو..." : "جستجوی مجدد تصویر"}
+            </button>
+          )}
+        </div>
+
+        {draft.imageAutopilotNote && (!draft.images || draft.images.filter((i) => i.status !== "REJECTED").length === 0) && (
+          <p className="mb-3 rounded-lg border border-dashed border-amber-500/50 bg-amber-500/5 p-3 text-xs text-amber-500">
+            {draft.imageAutopilotNote}
+          </p>
+        )}
+
+        {draft.images && draft.images.length > 0 && (
+          <div className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {draft.images.map((img) => (
+              <div key={img.id} className={`rounded-lg border p-2 text-xs ${img.status === "REJECTED" ? "border-border-color opacity-50" : img.isMain ? "border-brand" : "border-border-color"}`}>
+                {img.thumbnailUrl || img.url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={img.thumbnailUrl ?? img.url ?? ""} alt={draft.name} className="mb-2 h-32 w-full rounded object-cover" />
+                ) : (
+                  <div className="mb-2 flex h-32 w-full items-center justify-center rounded bg-surface text-foreground/40">بدون پیش‌نمایش</div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-1">
+                  {img.isMain && <span className="rounded bg-brand/10 px-1.5 py-0.5 text-brand">تصویر اصلی</span>}
+                  <span className="rounded bg-surface px-1.5 py-0.5">{IMAGE_TYPE_LABEL[img.imageType]}</span>
+                  <span
+                    className={`rounded px-1.5 py-0.5 ${
+                      img.status === "APPROVED" ? "bg-green-500/10 text-green-500" : img.status === "REJECTED" ? "bg-red-500/10 text-red-500" : "bg-surface"
+                    }`}
+                  >
+                    {IMAGE_STATUS_LABEL[img.status]}
+                  </span>
+                </div>
+
+                {img.imageType === "AI_GENERATED" && (
+                  <p className="mt-1 rounded bg-amber-500/10 px-1.5 py-1 text-amber-500">
+                    ⚠️ این یک عکس واقعی نیست — با هوش مصنوعی ساخته شده و نباید به‌عنوان عکس واقعی محصول معرفی شود.
+                  </p>
+                )}
+
+                <div className="mt-1 space-y-0.5 text-foreground/50">
+                  {img.width && img.height && <p>ابعاد: {img.width}×{img.height}</p>}
+                  {typeof img.relevanceScore === "number" && <p>امتیاز ارتباط: {Math.round(img.relevanceScore * 100)}٪</p>}
+                  {img.sourceProvider && <p>منبع: {img.sourceProvider}{img.isOfficialSource ? " (رسمی)" : ""}</p>}
+                  {img.aiProvider && <p>سرویس تولید: {img.aiProvider}</p>}
+                  {img.rejectionReason && <p className="text-red-500">دلیل رد: {img.rejectionReason}</p>}
+                </div>
+
+                {pending && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {img.status !== "APPROVED" && (
+                      <button
+                        onClick={() => handleImageAction(img.id, "approve")}
+                        disabled={imageBusy[img.id]}
+                        className="rounded border border-border-color px-2 py-0.5 hover:border-brand hover:text-brand disabled:opacity-50"
+                      >
+                        استفاده از این تصویر
+                      </button>
+                    )}
+                    {!img.isMain && img.status !== "REJECTED" && (
+                      <button
+                        onClick={() => handleImageAction(img.id, "set-main")}
+                        disabled={imageBusy[img.id]}
+                        className="rounded border border-border-color px-2 py-0.5 hover:border-brand hover:text-brand disabled:opacity-50"
+                      >
+                        تصویر اصلی کن
+                      </button>
+                    )}
+                    {img.status !== "REJECTED" && (
+                      <button
+                        onClick={() => handleImageAction(img.id, "reject")}
+                        disabled={imageBusy[img.id]}
+                        className="rounded border border-red-500/40 px-2 py-0.5 text-red-500 disabled:opacity-50"
+                      >
+                        رد تصویر
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleImageAction(img.id, "regenerate")}
+                      disabled={imageBusy[img.id]}
+                      className="rounded border border-border-color px-2 py-0.5 hover:border-brand hover:text-brand disabled:opacity-50"
+                    >
+                      بازتولید با AI
+                    </button>
+                    {img.sourceUrl && (
+                      <a href={img.sourceUrl} target="_blank" rel="noreferrer" className="rounded border border-border-color px-2 py-0.5 hover:border-brand hover:text-brand">
+                        منبع را ببین
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {pending && (
+          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-border-color px-3 py-2 text-xs text-foreground/70 hover:border-brand">
+            {uploadingImage ? "در حال بارگذاری..." : "جایگزینی/افزودن تصویر به‌صورت دستی"}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              disabled={uploadingImage}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleManualUpload(file);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        )}
+      </div>
 
       {pending && !editing && (
         <div className="flex flex-wrap gap-2">

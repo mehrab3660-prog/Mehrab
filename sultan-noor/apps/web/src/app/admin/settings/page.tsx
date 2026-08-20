@@ -22,7 +22,12 @@ type SettingsResponse = Record<
   | "anthropicApiKey"
   | "anthropicModel"
   | "openaiApiKey"
-  | "siteUrl",
+  | "siteUrl"
+  | "imageSearchProvider"
+  | "imageSearchApiKey"
+  | "removeBgApiKey"
+  | "imageGenerationProvider"
+  | "imageAutopilotMonthlyBudgetToman",
   SettingStatus
 >;
 
@@ -250,6 +255,39 @@ export default function AdminSettingsPage() {
             status={settings.openaiApiKey}
             onSave={handleSave}
           />
+        </section>
+
+        <section>
+          <h2 className="mb-3 text-lg font-bold">تصویر خودکار محصول (Image Autopilot)</h2>
+          <p className="mb-3 text-xs text-foreground/50">
+            هر سه کلید زیر اختیاری‌اند. تا وقتی تنظیم نشوند، همان بخش نادیده گرفته می‌شود و آماده‌سازی محصول با هوش مصنوعی بدون خطا ادامه پیدا می‌کند — فقط پیام «تصویر خودکار آماده نشد» را می‌بینید و می‌توانید عکس را دستی بارگذاری کنید.
+          </p>
+          <div className="space-y-3">
+            <SettingField
+              fieldKey="imageSearchApiKey"
+              label="کلید جستجوی تصویر (Bing Image Search)"
+              helpText="برای جستجوی خودکار عکس واقعی محصول در اینترنت. اگر خالی باشد، این مرحله رد می‌شود."
+              status={settings.imageSearchApiKey}
+              onSave={handleSave}
+            />
+            <SettingField
+              fieldKey="removeBgApiKey"
+              label="کلید حذف پس‌زمینه (remove.bg)"
+              helpText="اختیاری — اگر تنظیم نشود، عکس با پس‌زمینه‌ی اصلی خودش استفاده می‌شود."
+              status={settings.removeBgApiKey}
+              onSave={handleSave}
+            />
+            <SettingField
+              fieldKey="imageAutopilotMonthlyBudgetToman"
+              label="سقف هزینه‌ی ماهانه (تومان، تخمینی)"
+              helpText="اگر خالی باشد، محدودیتی اعمال نمی‌شود. این عدد یک برآورد تقریبی است، نه صورتحساب دقیق."
+              status={settings.imageAutopilotMonthlyBudgetToman}
+              onSave={handleSave}
+            />
+          </div>
+          <p className="mt-3 text-xs text-foreground/50">
+            تولید تصویر با هوش مصنوعی (وقتی عکس واقعی پیدا نشود) از همان کلید OpenAI بالا استفاده می‌کند — نیازی به کلید جداگانه نیست.
+          </p>
         </section>
 
         <section>

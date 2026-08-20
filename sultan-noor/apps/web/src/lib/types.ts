@@ -280,6 +280,36 @@ export interface ProductAiDraft {
   status: "PENDING_REVIEW" | "APPROVED" | "REJECTED";
   rejectionReason?: string | null;
   publishedProductId?: string | null;
+  imageAutopilotNote?: string | null;
+  images?: ProductAiDraftImage[];
+  createdAt: string;
+}
+
+export interface ProductAiDraftImage {
+  id: string;
+  draftId: string;
+  imageType: "REAL_SOURCE" | "PROCESSED_REAL" | "AI_GENERATED" | "ADMIN_UPLOADED";
+  status: "CANDIDATE" | "APPROVED" | "REJECTED";
+  isMain: boolean;
+  role?: string | null;
+  url?: string | null;
+  thumbnailUrl?: string | null;
+  webpUrl?: string | null;
+  avifUrl?: string | null;
+  sourceUrl?: string | null;
+  sourceProvider?: string | null;
+  attribution?: string | null;
+  isOfficialSource: boolean;
+  width?: number | null;
+  height?: number | null;
+  fileSizeBytes?: number | null;
+  format?: string | null;
+  relevanceScore?: number | null;
+  rejectionReason?: string | null;
+  aiProvider?: string | null;
+  aiPromptVersion?: string | null;
+  aiPrompt?: string | null;
+  generatedAt?: string | null;
   createdAt: string;
 }
 

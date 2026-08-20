@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { ProductsService, slugify } from '../catalog/products/products.service';
 import { AuditLogService } from '../audit/audit-log.service';
+import { AiImageAutopilotService } from '../ai-image/ai-image-autopilot.service';
 import { ApproveProductDraftDto, PrepareProductDraftDto, ProductDraftFieldsDto } from './dto/ai-product.dto';
 
 // The model must never invent a spec it isn't confident about — it must say
@@ -76,6 +77,7 @@ export class AiProductService {
     private settings: SettingsService,
     private products: ProductsService,
     private auditLog: AuditLogService,
+    private aiImage: AiImageAutopilotService,
   ) {}
 
   listDrafts(status?: string) {
@@ -86,12 +88,15 @@ export class AiProductService {
   }
 
   async getDraft(id: string) {
-    const draft = await this.prisma.productAiDraft.findUnique({ where: { id } });
+    const draft = await this.prisma.productAiDraft.findUnique({
+      where: { id },
+      include: { images: { orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }] } },
+    });
     if (!draft) throw new NotFoundException('پیش‌نویس یافت نشد');
     return draft;
   }
 
-  async prepare(dto: PrepareProductDraftDto, userId?: string) {
+  async prepare(dto: PrepareProductDraftDto, userId?: string, baseUrl?: string) {
     const apiKey = await this.settings.resolve('anthropicApiKey');
     if (!apiKey) {
       throw new BadRequestException('برای این قابلیت باید کلید API هوش مصنوعی در بخش تنظیمات وارد شود.');
@@ -158,7 +163,15 @@ export class AiProductService {
     });
 
     await this.auditLog.record({ userId, action: 'ai_product.prepare', entityType: 'ProductAiDraft', entityId: draft.id, after: draft });
-    return draft;
+
+    // Image Autopilot (Sprint 2) — best-effort, never throws, never blocks
+    // the text draft that was just created above. On any failure it leaves
+    // draft.imageAutopilotNote set instead, and staff can upload manually.
+    if (baseUrl) {
+      await this.aiImage.runForDraft(draft.id, baseUrl);
+      return this.getDraft(draft.id);
+    }
+    return { ...draft, images: [] };
   }
 
   async update(id: string, dto: ProductDraftFieldsDto, userId?: string) {
@@ -218,6 +231,17 @@ export class AiProductService {
       dto.faq ?? before.faq,
     );
 
+    // Every non-rejected draft image becomes part of the published product —
+    // an explicitly REJECTED image can never end up here (see
+    // AiImageAutopilotService.rejectImage). Main-first ordering matches
+    // ProductsService.create()'s imageUrls[0] = position 0 = primary image
+    // convention, so no second publishing path is needed for images either.
+    const draftImages = await this.prisma.productAiDraftImage.findMany({
+      where: { draftId: id, status: { not: 'REJECTED' } },
+      orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }],
+    });
+    const imageUrls = draftImages.map((img) => img.url).filter((url): url is string => !!url);
+
     const product = await this.products.create({
       name,
       slug: slugify(name),
@@ -228,6 +252,7 @@ export class AiProductService {
       basePrice: Number(before.ownerPrice),
       metaTitle: dto.seoTitle ?? before.seoTitle ?? undefined,
       metaDescription: dto.seoDescription ?? before.seoDescription ?? undefined,
+      imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
       variants: [
         {
           // Deterministic from the draft id so re-approving the same draft
@@ -239,6 +264,20 @@ export class AiProductService {
         },
       ],
     });
+
+    if (draftImages.length > 0) {
+      await this.prisma.productAiDraftImage.updateMany({
+        where: { id: { in: draftImages.map((img) => img.id) } },
+        data: { status: 'APPROVED' },
+      });
+      await this.auditLog.record({
+        userId,
+        action: 'ai_image.published',
+        entityType: 'Product',
+        entityId: product.id,
+        after: { imageCount: draftImages.length },
+      });
+    }
 
     const draft = await this.prisma.productAiDraft.update({
       where: { id },

@@ -25,6 +25,13 @@ async function bootstrap() {
   app.useStaticAssets(process.env.REVIEW_IMAGE_STORAGE_DIR ?? path.join(process.cwd(), 'storage', 'reviews'), {
     prefix: '/api/review-images/',
   });
+  // AI Image Autopilot drafts (Sprint 2) — same public-static pattern as
+  // product/review images above. Draft images live here until a draft is
+  // approved, at which point their URLs are copied into a real Product's
+  // images the same way manually-pasted imageUrls already are.
+  app.useStaticAssets(process.env.AI_DRAFT_IMAGE_STORAGE_DIR ?? path.join(process.cwd(), 'storage', 'ai-drafts'), {
+    prefix: '/api/draft-images/',
+  });
 
   app.use(
     helmet({

@@ -12,7 +12,12 @@ type SettingKey =
   | 'anthropicApiKey'
   | 'anthropicModel'
   | 'openaiApiKey'
-  | 'siteUrl';
+  | 'siteUrl'
+  | 'imageSearchProvider'
+  | 'imageSearchApiKey'
+  | 'removeBgApiKey'
+  | 'imageGenerationProvider'
+  | 'imageAutopilotMonthlyBudgetToman';
 
 // Maps each DB-backed setting to the env var it falls back to when unset —
 // existing .env-based deployments keep working unchanged.
@@ -27,9 +32,23 @@ const ENV_FALLBACK: Record<SettingKey, string> = {
   anthropicModel: 'ANTHROPIC_MODEL',
   openaiApiKey: 'OPENAI_API_KEY',
   siteUrl: 'WEB_ORIGIN',
+  imageSearchProvider: 'IMAGE_SEARCH_PROVIDER',
+  imageSearchApiKey: 'IMAGE_SEARCH_API_KEY',
+  removeBgApiKey: 'REMOVE_BG_API_KEY',
+  imageGenerationProvider: 'IMAGE_GENERATION_PROVIDER',
+  imageAutopilotMonthlyBudgetToman: 'IMAGE_AUTOPILOT_MONTHLY_BUDGET_TOMAN',
 };
 
-const SECRET_KEYS: SettingKey[] = ['zarinpalMerchantId', 'idpayApiKey', 'smsApiKey', 'melipayamakApiKey', 'anthropicApiKey', 'openaiApiKey'];
+const SECRET_KEYS: SettingKey[] = [
+  'zarinpalMerchantId',
+  'idpayApiKey',
+  'smsApiKey',
+  'melipayamakApiKey',
+  'anthropicApiKey',
+  'openaiApiKey',
+  'imageSearchApiKey',
+  'removeBgApiKey',
+];
 
 function mask(value: string): string {
   return value.length <= 4 ? '••••' : `••••${value.slice(-4)}`;

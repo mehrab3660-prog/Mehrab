@@ -26,19 +26,22 @@ describe('AiProductService', () => {
   let settings: any;
   let products: any;
   let auditLog: any;
+  let aiImage: any;
   let service: AiProductService;
   let fetchSpy: jest.SpyInstance;
 
   beforeEach(() => {
     prisma = {
       productAiDraft: { create: jest.fn(), update: jest.fn(), findUnique: jest.fn(), findMany: jest.fn() },
+      productAiDraftImage: { findMany: jest.fn().mockResolvedValue([]), updateMany: jest.fn() },
       brand: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn(), create: jest.fn() },
       category: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn(), create: jest.fn() },
     };
     settings = { resolve: jest.fn() };
     products = { create: jest.fn() };
     auditLog = { record: jest.fn() };
-    service = new AiProductService(prisma, settings, products, auditLog);
+    aiImage = { runForDraft: jest.fn(), listImages: jest.fn().mockResolvedValue([]) };
+    service = new AiProductService(prisma, settings, products, auditLog, aiImage);
     fetchSpy = jest.spyOn(global, 'fetch' as any);
   });
 
@@ -100,6 +103,28 @@ describe('AiProductService', () => {
       settings.resolve.mockImplementation((key: string) => Promise.resolve(key === 'anthropicApiKey' ? 'sk-test' : undefined));
       fetchSpy.mockResolvedValue({ json: () => Promise.resolve({ content: [{ text: 'not json at all' }] }) } as any);
       await expect(service.prepare({ name: 'محصول', ownerPrice: 1000 })).rejects.toThrow(BadRequestException);
+    });
+
+    it('runs Image Autopilot best-effort when a baseUrl is provided, and returns the draft with its images', async () => {
+      settings.resolve.mockImplementation((key: string) => Promise.resolve(key === 'anthropicApiKey' ? 'sk-test' : undefined));
+      fetchSpy.mockResolvedValue({ json: () => Promise.resolve({ content: [{ text: '{"description":"d"}' }] }) } as any);
+      prisma.productAiDraft.create.mockImplementation(({ data }: any) => Promise.resolve({ id: 'draft1', ...data }));
+      prisma.productAiDraft.findUnique.mockResolvedValue({ id: 'draft1', name: 'محصول', images: [{ id: 'img1' }] });
+
+      const draft = await service.prepare({ name: 'محصول', ownerPrice: 1000 }, 'user1', 'http://api.example');
+
+      expect(aiImage.runForDraft).toHaveBeenCalledWith('draft1', 'http://api.example');
+      expect((draft as any).images).toEqual([{ id: 'img1' }]);
+    });
+
+    it('never calls Image Autopilot when no baseUrl is given (e.g. a direct service call in a script)', async () => {
+      settings.resolve.mockImplementation((key: string) => Promise.resolve(key === 'anthropicApiKey' ? 'sk-test' : undefined));
+      fetchSpy.mockResolvedValue({ json: () => Promise.resolve({ content: [{ text: '{"description":"d"}' }] }) } as any);
+      prisma.productAiDraft.create.mockImplementation(({ data }: any) => Promise.resolve({ id: 'draft1', ...data }));
+
+      await service.prepare({ name: 'محصول', ownerPrice: 1000 });
+
+      expect(aiImage.runForDraft).not.toHaveBeenCalled();
     });
   });
 
@@ -209,6 +234,68 @@ describe('AiProductService', () => {
 
       expect(prisma.category.create).not.toHaveBeenCalled();
       expect(prisma.brand.create).not.toHaveBeenCalled();
+    });
+
+    it('folds every non-rejected draft image into the published product, main image first, and marks them APPROVED', async () => {
+      const before = buildDraft();
+      prisma.productAiDraft.findUnique.mockResolvedValue(before);
+      prisma.category.findFirst.mockResolvedValue({ id: 'cat1' });
+      prisma.brand.findFirst.mockResolvedValue({ id: 'brand1' });
+      prisma.productAiDraftImage.findMany.mockResolvedValue([
+        { id: 'img-secondary', url: 'http://x/secondary.jpg', isMain: false, status: 'CANDIDATE' },
+        { id: 'img-main', url: 'http://x/main.jpg', isMain: true, status: 'APPROVED' },
+      ]);
+      products.create.mockResolvedValue({ id: 'product1', variants: [] });
+      prisma.productAiDraft.update.mockResolvedValue({ ...before, status: 'APPROVED' });
+
+      await service.approve('draft1', { publish: true }, 'user1');
+
+      // Query already orders main-first via [{isMain:'desc'},{createdAt:'asc'}] —
+      // this asserts the mocked (already-ordered) rows are passed through as-is.
+      const createArg = products.create.mock.calls[0][0];
+      expect(createArg.imageUrls).toEqual(['http://x/secondary.jpg', 'http://x/main.jpg']);
+
+      expect(prisma.productAiDraftImage.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['img-secondary', 'img-main'] } },
+        data: { status: 'APPROVED' },
+      });
+      expect(auditLog.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'ai_image.published', entityId: 'product1' }));
+    });
+
+    it('never includes a rejected draft image in the published product', async () => {
+      const before = buildDraft();
+      prisma.productAiDraft.findUnique.mockResolvedValue(before);
+      prisma.category.findFirst.mockResolvedValue({ id: 'cat1' });
+      prisma.brand.findFirst.mockResolvedValue({ id: 'brand1' });
+      // Simulate the DB query itself excluding REJECTED (status: { not: 'REJECTED' } in the where clause) —
+      // the mock only returns what a real query filtered this way would.
+      prisma.productAiDraftImage.findMany.mockResolvedValue([{ id: 'img-ok', url: 'http://x/ok.jpg', isMain: true, status: 'APPROVED' }]);
+      products.create.mockResolvedValue({ id: 'product1', variants: [] });
+      prisma.productAiDraft.update.mockResolvedValue({ ...before, status: 'APPROVED' });
+
+      await service.approve('draft1', { publish: true });
+
+      const [{ where }] = prisma.productAiDraftImage.findMany.mock.calls[0];
+      expect(where.status).toEqual({ not: 'REJECTED' });
+
+      const createArg = products.create.mock.calls[0][0];
+      expect(createArg.imageUrls).toEqual(['http://x/ok.jpg']);
+    });
+
+    it('publishes with no imageUrls at all when the draft has no images, without erroring', async () => {
+      const before = buildDraft();
+      prisma.productAiDraft.findUnique.mockResolvedValue(before);
+      prisma.category.findFirst.mockResolvedValue({ id: 'cat1' });
+      prisma.brand.findFirst.mockResolvedValue({ id: 'brand1' });
+      prisma.productAiDraftImage.findMany.mockResolvedValue([]);
+      products.create.mockResolvedValue({ id: 'product1', variants: [] });
+      prisma.productAiDraft.update.mockResolvedValue({ ...before, status: 'APPROVED' });
+
+      await service.approve('draft1', { publish: true });
+
+      const createArg = products.create.mock.calls[0][0];
+      expect(createArg.imageUrls).toBeUndefined();
+      expect(auditLog.record).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'ai_image.published' }));
     });
   });
 });

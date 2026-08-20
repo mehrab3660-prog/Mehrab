@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import type { Request } from 'express';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -26,8 +27,8 @@ export class AiProductController {
   }
 
   @Post('prepare')
-  prepare(@Body() dto: PrepareProductDraftDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.aiProduct.prepare(dto, user.id);
+  prepare(@Body() dto: PrepareProductDraftDto, @CurrentUser() user: AuthenticatedUser, @Req() req: Request) {
+    return this.aiProduct.prepare(dto, user.id, `${req.protocol}://${req.get('host')}`);
   }
 
   @Patch('drafts/:id')
