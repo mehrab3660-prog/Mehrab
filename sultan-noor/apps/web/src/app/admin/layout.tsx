@@ -10,6 +10,7 @@ const NAV = [
   { href: "/admin", label: "داشبورد" },
   { href: "/admin/analytics", label: "گزارش پیشرفته فروش" },
   { href: "/admin/products", label: "محصولات" },
+  { href: "/admin/ai-products", label: "آماده‌سازی محصول با AI" },
   { href: "/admin/orders", label: "سفارش‌ها" },
   { href: "/admin/returns", label: "مرجوعی‌ها" },
   { href: "/admin/wholesale-leads", label: "درخواست‌های عمده‌فروشی" },

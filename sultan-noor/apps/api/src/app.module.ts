@@ -33,6 +33,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { BlogModule } from './blog/blog.module';
 import { BannersModule } from './banners/banners.module';
 import { AiAdvisorModule } from './ai-advisor/ai-advisor.module';
+import { AiProductModule } from './ai-product/ai-product.module';
 import { MediaSearchModule } from './media-search/media-search.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { SettingsModule } from './settings/settings.module';
@@ -76,6 +77,7 @@ import { WholesaleLeadsModule } from './wholesale-leads/wholesale-leads.module';
     BlogModule,
     BannersModule,
     AiAdvisorModule,
+    AiProductModule,
     MediaSearchModule,
     DashboardModule,
     StockSubscriptionsModule,

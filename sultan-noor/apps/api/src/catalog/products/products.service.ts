@@ -22,7 +22,7 @@ const IMAGE_DIR = process.env.PRODUCT_IMAGE_STORAGE_DIR ?? path.join(process.cwd
 // whitespace/punctuation), so a Persian category or brand name imported
 // from a spreadsheet gets a readable, stable slug instead of an empty
 // string (which a Latin-only slugify would produce).
-function slugify(value: string): string {
+export function slugify(value: string): string {
   const base = value
     .trim()
     .toLowerCase()
@@ -258,6 +258,8 @@ export class ProductsService implements OnApplicationBootstrap {
         basePrice: dto.basePrice,
         compareAtPrice: dto.compareAtPrice,
         minWholesaleQty: dto.minWholesaleQty,
+        metaTitle: dto.metaTitle,
+        metaDescription: dto.metaDescription,
         variants: dto.variants?.length
           ? { create: dto.variants.map((v) => ({ sku: v.sku, attributes: v.attributes, price: v.price, weightGrams: v.weightGrams })) }
           : undefined,

@@ -860,6 +860,54 @@ model AiMessage {
   createdAt      DateTime       @default(now())
 }
 
+// ────────────────────────────── AI Product Preparation Pipeline ──────────────────────────────
+
+enum ProductAiDraftStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+// Holds AI-drafted product content until a human admin explicitly approves
+// it. Nothing here is a live, visible Product — approve() is the only path
+// that ever creates or changes one, and it always requires an authenticated
+// staff action (see AiProductService.approve).
+model ProductAiDraft {
+  id       String @id @default(cuid())
+  name     String
+  brandName String?
+  modelNumber String?
+  ownerPrice Decimal @db.Decimal(14, 2)
+
+  // Everything below is what the AI proposed — always editable by staff
+  // before approval, never trusted blindly.
+  suggestedPrice Decimal? @db.Decimal(14, 2)
+  description    String?
+  specs          Json?
+  features       Json?
+  faq            Json?
+  seoTitle       String?
+  seoDescription String?
+  categoryName   String?
+  confidenceNote String? // model's own disclosure of what it is unsure about
+  sources        Json?
+
+  status          ProductAiDraftStatus @default(PENDING_REVIEW)
+  rejectionReason String?
+  // Set once approved — the resulting Product's id. Plain string (no FK) so
+  // this table stays fully additive and never constrains the Product model.
+  publishedProductId String?
+
+  createdByUserId  String?
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
 // ────────────────────────────── Runtime settings ──────────────────────────────
 
 // Single-row table (id is always 1) holding operator-configurable secrets and

@@ -261,6 +261,28 @@ export interface AdminUser {
   createdAt: string;
 }
 
+export interface ProductAiDraft {
+  id: string;
+  name: string;
+  brandName?: string | null;
+  modelNumber?: string | null;
+  ownerPrice: string;
+  suggestedPrice?: string | null;
+  description?: string | null;
+  specs?: Record<string, string> | null;
+  features?: string[] | null;
+  faq?: { q: string; a: string }[] | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  categoryName?: string | null;
+  confidenceNote?: string | null;
+  sources?: string[] | null;
+  status: "PENDING_REVIEW" | "APPROVED" | "REJECTED";
+  rejectionReason?: string | null;
+  publishedProductId?: string | null;
+  createdAt: string;
+}
+
 export interface AuditLogEntry {
   id: string;
   action: string;
