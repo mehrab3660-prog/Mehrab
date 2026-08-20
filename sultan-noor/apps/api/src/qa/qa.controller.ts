@@ -29,6 +29,13 @@ export class QaController {
     return this.qaService.createQuestion(user.id, dto);
   }
 
+  @Post('questions/:id/suggest-answer')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.STAFF)
+  suggestAnswer(@Param('id') id: string) {
+    return this.qaService.suggestAnswer(id);
+  }
+
   @Post('questions/:id/answers')
   @UseGuards(JwtAuthGuard)
   createAnswer(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: CreateAnswerDto) {
