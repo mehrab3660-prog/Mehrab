@@ -38,7 +38,10 @@ type SettingsResponse = Record<
   | "storeAiRateLimitPerMinute"
   | "storeAiAllowAddToCart"
   | "storeAiStrictCatalogOnly"
-  | "electricalConsultantEnabled",
+  | "electricalConsultantEnabled"
+  | "aiAutonomousMode"
+  | "ownerReportAiSummaryEnabled"
+  | "ownerReportAiMonthlyBudgetToman",
   SettingStatus
 >;
 
@@ -373,6 +376,42 @@ export default function AdminSettingsPage() {
             status={settings.electricalConsultantEnabled}
             onSave={handleSave}
           />
+        </section>
+
+        <section>
+          <h2 className="mb-3 text-lg font-bold">حالت خودمختار هوش مصنوعی (Autonomous Mode)</h2>
+          <p className="mb-3 text-xs text-foreground/50">
+            پیش‌فرض همیشه خاموش است — برخلاف بقیه‌ی تنظیمات این صفحه، این یکی فقط با مقدار دقیق «true» روشن می‌شود.
+            حتی وقتی روشن باشد، تغییر قیمت، تخفیف، انتشار محصول/خبر/محتوا، فعال‌سازی کمپین، تغییر موجودی، ثبت سفارش خرید و هرگونه پیام تبلیغاتی
+            همیشه نیازمند تأیید دستی مالک است و هرگز خودکار اجرا نمی‌شود.
+          </p>
+          <SettingField
+            fieldKey="aiAutonomousMode"
+            label="فعال بودن حالت خودمختار (فقط مقدار «true» آن را روشن می‌کند)"
+            helpText="فعلاً تنها اثر این حالت، اجازه‌دادن به اصلاح خودکار کم‌ریسک سئو (توضیح متا/کلمات کلیدی/alt عکس) است — و آن هم فقط وقتی «seoAutoFixEnabled» هم روشن باشد."
+            status={settings.aiAutonomousMode}
+            onSave={handleSave}
+          />
+        </section>
+
+        <section>
+          <h2 className="mb-3 text-lg font-bold">گزارش هوشمند مالک (Owner Report AI Summary)</h2>
+          <div className="space-y-3">
+            <SettingField
+              fieldKey="ownerReportAiSummaryEnabled"
+              label="فعال بودن خلاصه هوشمند گزارش روزانه (مقدار «false» برای غیرفعال کردن)"
+              helpText="این فقط اعداد واقعی محاسبه‌شده توسط بک‌اند را به فارسی ساده توضیح می‌دهد — خودش هیچ عددی نمی‌سازد."
+              status={settings.ownerReportAiSummaryEnabled}
+              onSave={handleSave}
+            />
+            <SettingField
+              fieldKey="ownerReportAiMonthlyBudgetToman"
+              label="سقف هزینه‌ی ماهانه خلاصه هوشمند گزارش (تومان، تخمینی)"
+              helpText="اگر خالی باشد، محدودیتی اعمال نمی‌شود."
+              status={settings.ownerReportAiMonthlyBudgetToman}
+              onSave={handleSave}
+            />
+          </div>
         </section>
 
         <section>

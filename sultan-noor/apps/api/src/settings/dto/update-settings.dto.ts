@@ -107,4 +107,16 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsString()
   electricalConsultantEnabled?: string;
+
+  @IsOptional()
+  @IsString()
+  aiAutonomousMode?: string;
+
+  @IsOptional()
+  @IsString()
+  ownerReportAiSummaryEnabled?: string;
+
+  @IsOptional()
+  @IsString()
+  ownerReportAiMonthlyBudgetToman?: string;
 }

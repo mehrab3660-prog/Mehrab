@@ -28,7 +28,10 @@ type SettingKey =
   | 'storeAiRateLimitPerMinute'
   | 'storeAiAllowAddToCart'
   | 'storeAiStrictCatalogOnly'
-  | 'electricalConsultantEnabled';
+  | 'electricalConsultantEnabled'
+  | 'aiAutonomousMode'
+  | 'ownerReportAiSummaryEnabled'
+  | 'ownerReportAiMonthlyBudgetToman';
 
 // Maps each DB-backed setting to the env var it falls back to when unset —
 // existing .env-based deployments keep working unchanged.
@@ -59,6 +62,9 @@ const ENV_FALLBACK: Record<SettingKey, string> = {
   storeAiAllowAddToCart: 'STORE_AI_ALLOW_ADD_TO_CART',
   storeAiStrictCatalogOnly: 'STORE_AI_STRICT_CATALOG_ONLY',
   electricalConsultantEnabled: 'ELECTRICAL_CONSULTANT_ENABLED',
+  aiAutonomousMode: 'AI_AUTONOMOUS_MODE',
+  ownerReportAiSummaryEnabled: 'OWNER_REPORT_AI_SUMMARY_ENABLED',
+  ownerReportAiMonthlyBudgetToman: 'OWNER_REPORT_AI_MONTHLY_BUDGET_TOMAN',
 };
 
 const SECRET_KEYS: SettingKey[] = [

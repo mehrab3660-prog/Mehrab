@@ -1181,6 +1181,23 @@ model AppSettings {
   // enable flag above.
   electricalConsultantEnabled String?
 
+  // AI Autonomous Mode (Sprint 8) — the ONE setting in this table that
+  // inverts the usual convention: default is OFF, so it only turns on with
+  // the literal string "true". Even when on, it only ever lets AI execute
+  // pre-approved, low-risk, non-financial, non-publishing operations —
+  // price/discount/publish/campaign/stock/purchase/promotional-message
+  // actions always require explicit owner approval regardless of this flag
+  // (enforced in code, not just documented here).
+  aiAutonomousMode String?
+
+  // Owner Daily/Weekly Report — AI Owner Summary (Sprint 8 §8). The AI here
+  // only narrates numbers the backend already computed from real data; it
+  // never computes a number itself. Standard convention: unset (or anything
+  // other than the literal string "false") = ON. Own budget pool, same
+  // parsing convention as every other AI feature's *MonthlyBudgetToman.
+  ownerReportAiSummaryEnabled     String?
+  ownerReportAiMonthlyBudgetToman String?
+
   updatedAt DateTime @updatedAt
 }
 
@@ -1423,4 +1440,53 @@ model ConsultantItemRule {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ────────────────────────────── Inventory Forecast & Reorder (Sprint 8) ──────────────────────────────
+
+enum ReorderRecommendationStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  EXECUTED
+}
+
+// One AI-suggested restock recommendation for a real, currently-published
+// product with real sales history. Computation (sell-through rate, days
+// remaining, risk level) always happens in InventoryForecastService — this
+// row is only ever created once real thresholds are actually crossed, and
+// is a saved snapshot for the approval workflow, not the live source of
+// truth (the live forecast is always recomputed fresh on read). AI is never
+// allowed to place a purchase order itself: approve() only creates a real
+// DRAFT PurchaseOrder (Sprint 1's existing purchasing system) for staff to
+// review and actually place — EXECUTED means that draft was created,
+// nothing more.
+model ReorderRecommendation {
+  id          String @id @default(cuid())
+  productId   String
+  productName String
+
+  currentStock      Int
+  avgDailySales     Float
+  daysRemaining     Float?
+  riskLevel         String // NORMAL | REVIEW | LOW | CRITICAL
+  suggestedQuantity Int
+  reasoning         String
+
+  status          ReorderRecommendationStatus @default(PENDING_REVIEW)
+  rejectionReason String?
+
+  // Set only once a real PurchaseOrder was actually created on approval —
+  // null if the product has no real supplier on file, in which case the
+  // recommendation stays a pure suggestion (never a fabricated order).
+  purchaseOrderId String?
+
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([productId])
 }

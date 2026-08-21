@@ -122,10 +122,11 @@ describe('SeoSuggestionService', () => {
       expect(aiUsage.record).toHaveBeenCalledWith('seo-generation', 'p1', false, expect.any(Number));
     });
 
-    it('auto-applies only metaDescription/searchKeywords/altText when seoAutoFixEnabled is true, never metaTitle/description/H1', async () => {
+    it('auto-applies only metaDescription/searchKeywords/altText when seoAutoFixEnabled AND aiAutonomousMode are both true, never metaTitle/description/H1', async () => {
       settings.resolve.mockImplementation((k: string) => {
         if (k === 'anthropicApiKey') return Promise.resolve('sk');
         if (k === 'seoAutoFixEnabled') return Promise.resolve('true');
+        if (k === 'aiAutonomousMode') return Promise.resolve('true');
         return Promise.resolve(undefined);
       });
       prisma.product.findUnique.mockResolvedValue(buildProduct());
@@ -155,6 +156,21 @@ describe('SeoSuggestionService', () => {
 
     it('never auto-applies anything when seoAutoFixEnabled is unset (default off)', async () => {
       settings.resolve.mockImplementation((k: string) => Promise.resolve(k === 'anthropicApiKey' ? 'sk' : undefined));
+      prisma.product.findUnique.mockResolvedValue(buildProduct());
+      fetchSpy.mockResolvedValue({ json: () => Promise.resolve({ content: [{ text: JSON.stringify({ metaDescription: 'x' }) }] }) } as any);
+      prisma.productSeoSuggestion.create.mockImplementation(({ data }: any) => Promise.resolve({ id: 's1', ...data }));
+
+      await service.generate('p1');
+
+      expect(prisma.product.update).not.toHaveBeenCalled();
+    });
+
+    it('never auto-applies when seoAutoFixEnabled is true but aiAutonomousMode is off — the store-wide master switch (§10) governs every AI auto-execution', async () => {
+      settings.resolve.mockImplementation((k: string) => {
+        if (k === 'anthropicApiKey') return Promise.resolve('sk');
+        if (k === 'seoAutoFixEnabled') return Promise.resolve('true');
+        return Promise.resolve(undefined); // aiAutonomousMode left unset = off
+      });
       prisma.product.findUnique.mockResolvedValue(buildProduct());
       fetchSpy.mockResolvedValue({ json: () => Promise.resolve({ content: [{ text: JSON.stringify({ metaDescription: 'x' }) }] }) } as any);
       prisma.productSeoSuggestion.create.mockImplementation(({ data }: any) => Promise.resolve({ id: 's1', ...data }));

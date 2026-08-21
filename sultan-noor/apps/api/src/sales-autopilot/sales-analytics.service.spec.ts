@@ -38,6 +38,38 @@ describe('SalesAnalyticsService', () => {
     });
   });
 
+  describe('weekOverWeek', () => {
+    it('reports comparisonAvailable=false and null change percentages when last week has no real orders', async () => {
+      prisma.order.findMany.mockResolvedValue([]);
+
+      const result = await service.weekOverWeek();
+
+      expect(result.comparisonAvailable).toBe(false);
+      expect(result.revenueChangePercent).toBeNull();
+      expect(result.orderCountChangePercent).toBeNull();
+    });
+
+    it('computes a real revenue/order-count change percent from two real, equal-length 7-day windows', async () => {
+      const now = new Date();
+      const day = 24 * 60 * 60 * 1000;
+      prisma.order.findMany.mockImplementation(async ({ where }: any) => {
+        const gte: Date = where.createdAt.gte;
+        // this-week window: gte = now-7d, no lte (revenueForRange passes `to` as lte)
+        const isThisWeek = Math.abs(gte.getTime() - (now.getTime() - 7 * day)) < day;
+        if (isThisWeek) return [order({ grandTotal: 200_000 }), order({ grandTotal: 200_000 })]; // 400,000 / 2 orders
+        return [order({ grandTotal: 100_000 })]; // last week: 100,000 / 1 order
+      });
+
+      const result = await service.weekOverWeek();
+
+      expect(result.comparisonAvailable).toBe(true);
+      expect(result.thisWeek.revenue).toBe(400_000);
+      expect(result.lastWeek.revenue).toBe(100_000);
+      expect(result.revenueChangePercent).toBe(300); // (400k-100k)/100k = 300%
+      expect(result.orderCountChangePercent).toBe(100); // (2-1)/1 = 100%
+    });
+  });
+
   describe('bestSellers / worstSellers', () => {
     it('ranks products by real revenue and quantity from real OrderItem rows', async () => {
       prisma.order.findMany.mockResolvedValue([order({ id: 'o1' })]);

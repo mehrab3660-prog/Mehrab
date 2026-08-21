@@ -26,6 +26,13 @@ describe('DashboardService.report', () => {
       { overview: jest.fn() } as any,
       { bestSellingLowStock: jest.fn(), crossSellPairs: jest.fn() } as any,
       { summary: jest.fn() } as any,
+      { resolve: jest.fn().mockResolvedValue(undefined) } as any,
+      { forecast: jest.fn().mockResolvedValue({ forecasts: [], insufficientData: [], windowDays: 30 }) } as any,
+      { list: jest.fn().mockResolvedValue([]) } as any,
+      { segmentCounts: jest.fn().mockResolvedValue({}) } as any,
+      { dailyReport: jest.fn().mockResolvedValue({ importantIssues: [] }) } as any,
+      { list: jest.fn().mockResolvedValue({ items: [], counts: {}, total: 0 }) } as any,
+      { list: jest.fn().mockResolvedValue([]) } as any,
     );
   });
 
@@ -165,6 +172,13 @@ describe('DashboardService.aiControlCenter', () => {
   let salesAnalytics: any;
   let opportunities: any;
   let abandonedCart: any;
+  let settings: any;
+  let inventoryForecast: any;
+  let reorderRecommendation: any;
+  let customerSegmentation: any;
+  let ownerReport: any;
+  let approvalCenter: any;
+  let aiActivityLog: any;
   let service: DashboardService;
 
   beforeEach(() => {
@@ -186,7 +200,27 @@ describe('DashboardService.aiControlCenter', () => {
     salesAnalytics = { overview: jest.fn().mockResolvedValue(EMPTY_SALES_OVERVIEW) };
     opportunities = { bestSellingLowStock: jest.fn().mockResolvedValue([]), crossSellPairs: jest.fn().mockResolvedValue([]) };
     abandonedCart = { summary: jest.fn().mockResolvedValue({ count: 0, approximateValueToman: 0, frequentProducts: [], oldestAbandonedAt: null, carts: [] }) };
-    service = new DashboardService(prisma, { run: jest.fn().mockResolvedValue([]) } as any, salesAnalytics, opportunities, abandonedCart);
+    settings = { resolve: jest.fn().mockResolvedValue(undefined) };
+    inventoryForecast = { forecast: jest.fn().mockResolvedValue({ forecasts: [], insufficientData: [], windowDays: 30 }) };
+    reorderRecommendation = { list: jest.fn().mockResolvedValue([]) };
+    customerSegmentation = { segmentCounts: jest.fn().mockResolvedValue({ B2B: 0, NEW: 0, LOYAL: 0, ACTIVE: 0, LOW_ACTIVITY: 0, INACTIVE: 0, NO_ORDERS: 0 }) };
+    ownerReport = { dailyReport: jest.fn().mockResolvedValue({ importantIssues: [] }) };
+    approvalCenter = { list: jest.fn().mockResolvedValue({ items: [], counts: {}, total: 0 }) };
+    aiActivityLog = { list: jest.fn().mockResolvedValue([]) };
+    service = new DashboardService(
+      prisma,
+      { run: jest.fn().mockResolvedValue([]) } as any,
+      salesAnalytics,
+      opportunities,
+      abandonedCart,
+      settings,
+      inventoryForecast,
+      reorderRecommendation,
+      customerSegmentation,
+      ownerReport,
+      approvalCenter,
+      aiActivityLog,
+    );
   });
 
   it('only counts/lists drafts that are still PENDING_REVIEW', async () => {
@@ -256,7 +290,20 @@ describe('DashboardService.aiControlCenter', () => {
 
   it('runs the real SeoAuditService and summarizes real problems by severity, never a fabricated count', async () => {
     const seoAudit = { run: jest.fn().mockResolvedValue([{ severity: 'HIGH', entityType: 'Product', entityId: 'p1', entityName: 'x', field: 'metaTitle', message: 'm' }]) };
-    service = new DashboardService(prisma, seoAudit as any, salesAnalytics, opportunities, abandonedCart);
+    service = new DashboardService(
+      prisma,
+      seoAudit as any,
+      salesAnalytics,
+      opportunities,
+      abandonedCart,
+      settings,
+      inventoryForecast,
+      reorderRecommendation,
+      customerSegmentation,
+      ownerReport,
+      approvalCenter,
+      aiActivityLog,
+    );
 
     const result = await service.aiControlCenter();
 
@@ -369,5 +416,92 @@ describe('DashboardService.aiControlCenter', () => {
     const result = await service.aiControlCenter();
 
     expect(result.storeAi.conversion).toEqual({ trackableClicks: 2, converted: 1, rate: 0.5 });
+  });
+
+  describe('Sprint 8 Control Center Final sections (§15)', () => {
+    it('reuses InventoryForecastService real risk counts, never recomputing forecasting logic itself', async () => {
+      inventoryForecast.forecast.mockResolvedValue({
+        forecasts: [
+          { productId: 'p1', productName: 'x', currentStock: 1, avgDailySales: 1, daysRemaining: 1, riskLevel: 'CRITICAL', suggestedReorderQuantity: 5 },
+          { productId: 'p2', productName: 'y', currentStock: 5, avgDailySales: 1, daysRemaining: 5, riskLevel: 'LOW', suggestedReorderQuantity: 2 },
+        ],
+        insufficientData: [{ productId: 'p3', productName: 'z' }],
+        windowDays: 30,
+      });
+      reorderRecommendation.list.mockResolvedValue([{ id: 'r1' }]);
+
+      const result = await service.aiControlCenter();
+
+      expect(result.inventory).toEqual({ criticalCount: 1, lowCount: 1, reviewCount: 0, insufficientDataCount: 1, pendingReorderRecommendations: 1 });
+    });
+
+    it('reuses CustomerSegmentationService real segment counts, never recomputing CRM logic itself', async () => {
+      customerSegmentation.segmentCounts.mockResolvedValue({ B2B: 1, NEW: 2, LOYAL: 3, ACTIVE: 4, LOW_ACTIVITY: 5, INACTIVE: 6, NO_ORDERS: 7 });
+
+      const result = await service.aiControlCenter();
+
+      expect(result.crm.segmentCounts.LOYAL).toBe(3);
+    });
+
+    it('surfaces the real OwnerReportService daily importantIssues as todaysSuggestedActions, never a separate fabricated digest', async () => {
+      ownerReport.dailyReport.mockResolvedValue({ importantIssues: ['۲ محصول در وضعیت بحرانی موجودی هستند.'] });
+
+      const result = await service.aiControlCenter();
+
+      expect(result.todaysSuggestedActions).toEqual(['۲ محصول در وضعیت بحرانی موجودی هستند.']);
+    });
+
+    it('surfaces the real ApprovalCenterService counts, never a separately fabricated total', async () => {
+      approvalCenter.list.mockResolvedValue({ items: [], counts: { PRODUCT_DRAFT: 2 }, total: 2 });
+
+      const result = await service.aiControlCenter();
+
+      expect(result.approvals).toEqual({ counts: { PRODUCT_DRAFT: 2 }, total: 2 });
+    });
+
+    it('surfaces the real AiActivityLogService recent entries', async () => {
+      aiActivityLog.list.mockResolvedValue([{ source: 'AUDIT', label: 'x', createdAt: new Date(), userId: null, userName: null, success: null, costToman: null, approvalRelated: false, what: null }]);
+
+      const result = await service.aiControlCenter();
+
+      expect(result.recentAiActivityLog).toHaveLength(1);
+      expect(aiActivityLog.list).toHaveBeenCalledWith(15);
+    });
+
+    it('reports autonomousModeEnabled false by default (unset setting), matching the inverted-default convention', async () => {
+      const result = await service.aiControlCenter();
+      expect(result.autonomousModeEnabled).toBe(false);
+    });
+
+    it('reports autonomousModeEnabled true only when the setting is explicitly the literal string "true"', async () => {
+      settings.resolve.mockImplementation((key: string) => Promise.resolve(key === 'aiAutonomousMode' ? 'true' : undefined));
+
+      const result = await service.aiControlCenter();
+
+      expect(result.autonomousModeEnabled).toBe(true);
+    });
+
+    it('computes real per-provider AI budget spend from AiUsageLog, with monthlyBudgetToman null when no real budget is configured', async () => {
+      prisma.aiUsageLog.aggregate.mockResolvedValue({ _sum: { costToman: 5000 } });
+
+      const result = await service.aiControlCenter();
+
+      const storeAiBudget = result.aiBudget.find((b: any) => b.provider === 'store-ai')!;
+      expect(storeAiBudget.todayCostToman).toBe(5000);
+      expect(storeAiBudget.monthCostToman).toBe(5000);
+      expect(storeAiBudget.monthlyBudgetToman).toBeNull();
+      expect(storeAiBudget.remainingToman).toBeNull();
+    });
+
+    it('computes a real remaining budget once a real monthly budget is configured for that provider', async () => {
+      prisma.aiUsageLog.aggregate.mockResolvedValue({ _sum: { costToman: 30000 } });
+      settings.resolve.mockImplementation((key: string) => Promise.resolve(key === 'storeAiMonthlyBudgetToman' ? '100000' : undefined));
+
+      const result = await service.aiControlCenter();
+
+      const storeAiBudget = result.aiBudget.find((b: any) => b.provider === 'store-ai')!;
+      expect(storeAiBudget.monthlyBudgetToman).toBe(100000);
+      expect(storeAiBudget.remainingToman).toBe(70000);
+    });
   });
 });

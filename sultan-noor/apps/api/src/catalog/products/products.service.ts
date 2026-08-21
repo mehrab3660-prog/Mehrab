@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SearchService } from '../../search/search.service';
 import { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import { deleteUploadedImage, saveUploadedImage } from '../../common/utils/image-upload.util';
+import { ActivityLogService } from '../../activity/activity-log.service';
 import { CreateProductDto, ListProductsQueryDto, UpdateProductDto } from './dto/product.dto';
 
 const IMAGE_EXTENSION_MIME: Record<string, string> = {
@@ -51,6 +52,7 @@ export class ProductsService implements OnApplicationBootstrap {
   constructor(
     private prisma: PrismaService,
     private search: SearchService,
+    private activityLog: ActivityLogService,
   ) {}
 
   // Meilisearch only learns about a product on create/update — a catalog
@@ -106,6 +108,14 @@ export class ProductsService implements OnApplicationBootstrap {
     const [withStock] = await this.withStock([withRating]);
 
     if (!requester) return withStock;
+
+    // Real, non-fabricated browsing signal for Personalized Recommendations
+    // (Sprint 8) — only recorded for real logged-in customers viewing the
+    // real published catalog, never for staff previewing drafts.
+    if (!staff) {
+      this.activityLog.record({ userId: requester.id, event: 'product.view', metadata: { productId: product.id } }).catch(() => undefined);
+    }
+
     const subscription = await this.prisma.stockSubscription.findUnique({
       where: { userId_productId: { userId: requester.id, productId: product.id } },
     });

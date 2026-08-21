@@ -41,6 +41,7 @@ function buildCsvFile(csvText: string): Express.Multer.File {
 describe('ProductsService', () => {
   let prisma: any;
   let search: any;
+  let activityLog: any;
   let service: ProductsService;
 
   beforeEach(() => {
@@ -55,7 +56,8 @@ describe('ProductsService', () => {
       productImage: { count: jest.fn().mockResolvedValue(0), create: jest.fn().mockResolvedValue({}) },
     };
     search = { indexProduct: jest.fn().mockResolvedValue(undefined) };
-    service = new ProductsService(prisma, search);
+    activityLog = { record: jest.fn().mockResolvedValue(undefined) };
+    service = new ProductsService(prisma, search, activityLog);
   });
 
   describe('get() — stock aggregation', () => {

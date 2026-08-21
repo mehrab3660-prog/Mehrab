@@ -5,7 +5,30 @@ import { SeoAuditService } from '../seo-autopilot/seo-audit.service';
 import { SalesAnalyticsService } from '../sales-autopilot/sales-analytics.service';
 import { ProductOpportunitiesService } from '../sales-autopilot/product-opportunities.service';
 import { AbandonedCartInsightService } from '../sales-autopilot/abandoned-cart-insight.service';
+import { SettingsService } from '../settings/settings.service';
+import { InventoryForecastService } from '../inventory/inventory-forecast.service';
+import { ReorderRecommendationService } from '../inventory/reorder-recommendation.service';
+import { CustomerSegmentationService } from '../crm/customer-segmentation.service';
+import { OwnerReportService } from '../owner-report/owner-report.service';
+import { ApprovalCenterService } from '../approval-center/approval-center.service';
+import { AiActivityLogService } from '../approval-center/ai-activity-log.service';
 import { REAL_SALE_STATUSES } from '../common/constants/order-status';
+
+// Every provider key this store's AI features have ever written to the
+// shared AiUsageLog table, mapped to the real AppSettings budget key that
+// governs it — shared pools (image-*, seo/content) map to the same key
+// their own services already check against, never a duplicated threshold.
+const AI_BUDGET_PROVIDERS: { provider: string; budgetKey: Parameters<SettingsService['resolve']>[0] }[] = [
+  { provider: 'image-search', budgetKey: 'imageAutopilotMonthlyBudgetToman' },
+  { provider: 'background-removal', budgetKey: 'imageAutopilotMonthlyBudgetToman' },
+  { provider: 'image-generation', budgetKey: 'imageAutopilotMonthlyBudgetToman' },
+  { provider: 'seo-generation', budgetKey: 'seoContentMonthlyBudgetToman' },
+  { provider: 'content-generation', budgetKey: 'seoContentMonthlyBudgetToman' },
+  { provider: 'sales-recommendation', budgetKey: 'salesAiMonthlyBudgetToman' },
+  { provider: 'news-generation', budgetKey: 'newsMonthlyBudgetToman' },
+  { provider: 'store-ai', budgetKey: 'storeAiMonthlyBudgetToman' },
+  { provider: 'owner-report-summary', budgetKey: 'ownerReportAiMonthlyBudgetToman' },
+];
 
 @Injectable()
 export class DashboardService {
@@ -15,6 +38,13 @@ export class DashboardService {
     private salesAnalytics: SalesAnalyticsService,
     private opportunities: ProductOpportunitiesService,
     private abandonedCart: AbandonedCartInsightService,
+    private settings: SettingsService,
+    private inventoryForecast: InventoryForecastService,
+    private reorderRecommendation: ReorderRecommendationService,
+    private customerSegmentation: CustomerSegmentationService,
+    private ownerReport: OwnerReportService,
+    private approvalCenter: ApprovalCenterService,
+    private aiActivityLog: AiActivityLogService,
   ) {}
 
   async summary() {
@@ -269,6 +299,20 @@ export class DashboardService {
       this.consultantMetrics(startOfMonth),
     ]);
 
+    // Sprint 8 §15 "Control Center Final" — every new section below reuses
+    // an already-built Sprint 8 service; nothing here re-implements
+    // forecasting/segmentation/approval logic.
+    const [inventoryForecast, pendingReorderRecommendations, crmSegmentCounts, ownerDailyReport, approvalCenter, recentAiActivity8, aiBudget, autonomousModeRaw] = await Promise.all([
+      this.inventoryForecast.forecast(),
+      this.reorderRecommendation.list('PENDING_REVIEW'),
+      this.customerSegmentation.segmentCounts(),
+      this.ownerReport.dailyReport(),
+      this.approvalCenter.list(),
+      this.aiActivityLog.list(15),
+      this.aiBudgetOverview(),
+      this.settings.resolve('aiAutonomousMode'),
+    ]);
+
     const suggestionProductIds = pendingSeoSuggestionsRaw.map((s) => s.productId);
     const suggestionProducts = suggestionProductIds.length
       ? await this.prisma.product.findMany({ where: { id: { in: suggestionProductIds } }, select: { id: true, name: true } })
@@ -332,7 +376,66 @@ export class DashboardService {
         conversion: storeAiConversion,
       },
       consultant: consultantMetrics,
+
+      // §1/§2 real Inventory Forecast + Reorder Recommendation counts —
+      // never a guessed sell-through number (products with no real sales
+      // are already excluded by InventoryForecastService itself).
+      inventory: {
+        criticalCount: inventoryForecast.forecasts.filter((f) => f.riskLevel === 'CRITICAL').length,
+        lowCount: inventoryForecast.forecasts.filter((f) => f.riskLevel === 'LOW').length,
+        reviewCount: inventoryForecast.forecasts.filter((f) => f.riskLevel === 'REVIEW').length,
+        insufficientDataCount: inventoryForecast.insufficientData.length,
+        pendingReorderRecommendations: pendingReorderRecommendations.length,
+      },
+      // §3 real customer segment counts — computed from real Order data only.
+      crm: { segmentCounts: crmSegmentCounts },
+      // §7/§9 today's real suggested-actions digest, reused directly from
+      // OwnerReportService rather than recomputed here.
+      todaysSuggestedActions: ownerDailyReport.importantIssues,
+      // §11 unified Approval Center counts — the exact same real aggregation
+      // the /approval-center page reads from.
+      approvals: { counts: approvalCenter.counts, total: approvalCenter.total },
+      // §12 the 15 most recent real AI Activity Log entries (AiUsageLog ∪
+      // AuditLog) — same service the dedicated activity-log endpoint uses.
+      recentAiActivityLog: recentAiActivity8,
+      // §13 real per-provider AI spend today/this month against each
+      // feature's own configured budget (null = no budget configured, i.e.
+      // unlimited by choice, never a fabricated cap).
+      aiBudget,
+      // §10 Autonomous Mode's real current state — default OFF, inverted
+      // convention from every other toggle (documented in the schema).
+      autonomousModeEnabled: autonomousModeRaw === 'true',
     };
+  }
+
+  // Sprint 8 §13 — real AiUsageLog spend today + this month for every
+  // provider this store's AI features actually write to, matched against
+  // that provider's own real configured budget setting (the exact same
+  // setting its own checkBudget() reads). No fabricated numbers: a provider
+  // with zero real AiUsageLog rows reports zero, and an unset budget
+  // reports monthlyBudgetToman: null (unlimited by admin choice) rather
+  // than an invented cap.
+  private async aiBudgetOverview() {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    return Promise.all(
+      AI_BUDGET_PROVIDERS.map(async ({ provider, budgetKey }) => {
+        const [todayAgg, monthAgg, budgetRaw] = await Promise.all([
+          this.prisma.aiUsageLog.aggregate({ where: { provider, createdAt: { gte: startOfToday } }, _sum: { costToman: true } }),
+          this.prisma.aiUsageLog.aggregate({ where: { provider, createdAt: { gte: startOfMonth } }, _sum: { costToman: true } }),
+          this.settings.resolve(budgetKey),
+        ]);
+        const todayCostToman = Number(todayAgg._sum.costToman ?? 0);
+        const monthCostToman = Number(monthAgg._sum.costToman ?? 0);
+        const monthlyBudgetToman = budgetRaw && Number.isFinite(Number(budgetRaw)) && Number(budgetRaw) > 0 ? Number(budgetRaw) : null;
+        const remainingToman = monthlyBudgetToman !== null ? Math.max(0, monthlyBudgetToman - monthCostToman) : null;
+        return { provider, todayCostToman, monthCostToman, monthlyBudgetToman, remainingToman };
+      }),
+    );
   }
 
   private async monthlyAiUsageCost(): Promise<number> {

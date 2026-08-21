@@ -629,3 +629,134 @@ export interface AuditLogEntry {
   createdAt: string;
   user?: { fullName: string | null; phone: string } | null;
 }
+
+// ────────────────────────────── Sprint 8 ──────────────────────────────
+
+export type InventoryRiskLevel = "NORMAL" | "REVIEW" | "LOW" | "CRITICAL";
+
+export interface ProductForecast {
+  productId: string;
+  productName: string;
+  currentStock: number;
+  avgDailySales: number;
+  daysRemaining: number;
+  riskLevel: InventoryRiskLevel;
+  suggestedReorderQuantity: number;
+}
+
+export interface InventoryForecastResult {
+  forecasts: ProductForecast[];
+  insufficientData: { productId: string; productName: string }[];
+  windowDays: number;
+}
+
+export type ReorderRecommendationStatus = "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "EXECUTED";
+
+export interface ReorderRecommendation {
+  id: string;
+  productId: string;
+  productName: string;
+  currentStock: number;
+  avgDailySales: number;
+  daysRemaining: number | null;
+  riskLevel: string;
+  suggestedQuantity: number;
+  reasoning: string;
+  status: ReorderRecommendationStatus;
+  rejectionReason?: string | null;
+  purchaseOrderId?: string | null;
+  reviewedByUserId?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  executionNote?: string;
+}
+
+export type CustomerSegment = "B2B" | "NEW" | "LOYAL" | "ACTIVE" | "LOW_ACTIVITY" | "INACTIVE" | "NO_ORDERS";
+
+export interface CustomerSummary {
+  userId: string;
+  fullName: string | null;
+  phone: string;
+  customerType: "RETAIL" | "WHOLESALE";
+  orderCount: number;
+  totalSpend: number;
+  lastOrderAt: string | null;
+  segment: CustomerSegment;
+}
+
+export interface CustomerInsights extends CustomerSummary {
+  frequentProducts: { productId: string; name: string; quantity: number }[];
+  frequentCategories: { categoryId: string; name: string; quantity: number }[];
+  avgDaysBetweenOrders: number | null;
+  nextPurchaseEstimate: string | null;
+  predictionAvailable: boolean;
+  predictionNote: string | null;
+}
+
+export interface OwnerDailyReport {
+  date: string;
+  sales: {
+    today: { revenue: number; orderCount: number; averageOrderValue: number };
+    bestSellers: { productId: string; name: string; quantitySold: number; revenue: number }[];
+    worstSellers: { productId: string; name: string; quantitySold: number; revenue: number }[];
+  };
+  inventory: {
+    criticalCount: number;
+    lowCount: number;
+    reviewCount: number;
+    criticalProducts: ProductForecast[];
+    insufficientDataCount: number;
+  };
+  abandonedCarts: { count: number; approximateValueToman: number };
+  pendingApprovals: {
+    productDrafts: number;
+    seoSuggestions: number;
+    contentDrafts: number;
+    salesRecommendations: number;
+    newsPendingReview: number;
+    reorderRecommendations: number;
+    total: number;
+  };
+  aiActivityToday: { totalCalls: number; successCount: number; errorCount: number; costTomanToday: number };
+  unansweredQuestions: number;
+  importantIssues: string[];
+  salesDataGaps: string[];
+}
+
+export interface OwnerWeeklyReport {
+  thisWeek: { revenue: number; orderCount: number; averageOrderValue: number };
+  lastWeek: { revenue: number; orderCount: number; averageOrderValue: number };
+  revenueChangePercent: number | null;
+  orderCountChangePercent: number | null;
+  comparisonAvailable: boolean;
+  note: string | null;
+}
+
+export type ApprovalItemType = "PRODUCT_DRAFT" | "SEO_SUGGESTION" | "CONTENT_DRAFT" | "SALES_RECOMMENDATION" | "NEWS_ITEM" | "REORDER_RECOMMENDATION";
+
+export interface ApprovalItem {
+  id: string;
+  type: ApprovalItemType;
+  title: string;
+  createdAt: string;
+  status: "PENDING_REVIEW";
+}
+
+export interface ApprovalCenterList {
+  items: ApprovalItem[];
+  counts: Record<ApprovalItemType, number>;
+  total: number;
+}
+
+export interface AiActivityEntry {
+  source: "AI_USAGE" | "AUDIT";
+  label: string;
+  createdAt: string;
+  userId: string | null;
+  userName: string | null;
+  success: boolean | null;
+  costToman: number | null;
+  approvalRelated: boolean;
+  what: unknown;
+}

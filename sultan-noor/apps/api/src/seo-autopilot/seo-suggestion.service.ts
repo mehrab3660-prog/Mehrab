@@ -164,7 +164,14 @@ export class SeoSuggestionService {
 
     await this.auditLog.record({ userId, action: 'seo.suggestion_generated', entityType: 'ProductSeoSuggestion', entityId: suggestion.id, after: suggestion });
 
-    if ((await this.settings.resolve('seoAutoFixEnabled')) === 'true') {
+    // Sprint 8 §10: aiAutonomousMode is the store-wide master switch for ANY
+    // AI auto-execution — seoAutoFixEnabled alone is no longer sufficient.
+    // Both must be explicitly on (default OFF) before this ever writes to a
+    // live Product row. metaDescription/searchKeywords/alt text are not in
+    // the always-requires-approval list (price/discount/publish/stock/
+    // campaign/promotional-message/financial), so this qualifies as the
+    // kind of low-risk, pre-approved operation Autonomous Mode may execute.
+    if ((await this.settings.resolve('seoAutoFixEnabled')) === 'true' && (await this.settings.resolve('aiAutonomousMode')) === 'true') {
       await this.applyLowRiskAutoFix(suggestion, product.images.map((i) => i.id));
     }
 

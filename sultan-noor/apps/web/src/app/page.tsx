@@ -12,6 +12,7 @@ import TrustedBrands from "@/components/TrustedBrands";
 import LatestBlogPosts from "@/components/LatestBlogPosts";
 import FinalCta from "@/components/FinalCta";
 import AiAdvisorPromoCard from "@/components/AiAdvisorPromoCard";
+import PersonalizedRecommendations from "@/components/PersonalizedRecommendations";
 
 async function safeGet<T>(path: string, fallback: T): Promise<T> {
   try {
@@ -72,6 +73,8 @@ export default async function HomePage() {
           </RevealSection>
         </>
       )}
+
+      <PersonalizedRecommendations />
 
       {deals.length > 0 && (
         <>

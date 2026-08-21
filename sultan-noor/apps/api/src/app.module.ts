@@ -39,6 +39,10 @@ import { ContentAutopilotModule } from './content-autopilot/content-autopilot.mo
 import { SalesAutopilotModule } from './sales-autopilot/sales-autopilot.module';
 import { NewsModule } from './news/news.module';
 import { ElectricalConsultantModule } from './electrical-consultant/electrical-consultant.module';
+import { InventoryModule } from './inventory/inventory.module';
+import { CrmModule } from './crm/crm.module';
+import { OwnerReportModule } from './owner-report/owner-report.module';
+import { ApprovalCenterModule } from './approval-center/approval-center.module';
 import { MediaSearchModule } from './media-search/media-search.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { SettingsModule } from './settings/settings.module';
@@ -88,6 +92,10 @@ import { WholesaleLeadsModule } from './wholesale-leads/wholesale-leads.module';
     SalesAutopilotModule,
     NewsModule,
     ElectricalConsultantModule,
+    InventoryModule,
+    CrmModule,
+    OwnerReportModule,
+    ApprovalCenterModule,
     MediaSearchModule,
     DashboardModule,
     StockSubscriptionsModule,

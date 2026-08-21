@@ -9,6 +9,10 @@ const STAFF_ROLES = ["SUPER_ADMIN", "ADMIN", "STAFF", "WAREHOUSE_MANAGER"];
 const NAV = [
   { href: "/admin", label: "داشبورد" },
   { href: "/admin/ai-control-center", label: "مرکز کنترل AI" },
+  { href: "/admin/owner-report", label: "گزارش هوشمند امروز" },
+  { href: "/admin/approval-center", label: "کارهای آماده تأیید" },
+  { href: "/admin/inventory", label: "پیش‌بینی موجودی" },
+  { href: "/admin/crm", label: "مشتریان (CRM)" },
   { href: "/admin/analytics", label: "گزارش پیشرفته فروش" },
   { href: "/admin/products", label: "محصولات" },
   { href: "/admin/ai-products", label: "آماده‌سازی محصول با AI" },

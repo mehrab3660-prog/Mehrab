@@ -9,5 +9,6 @@ import { AiImageModule } from '../ai-image/ai-image.module';
   imports: [SettingsModule, ProductsModule, AiImageModule],
   controllers: [AiProductController],
   providers: [AiProductService],
+  exports: [AiProductService],
 })
 export class AiProductModule {}

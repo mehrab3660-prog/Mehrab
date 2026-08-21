@@ -53,6 +53,26 @@ export class SalesAnalyticsService {
     };
   }
 
+  // Real week-over-week comparison (Sprint 8 §9) — reuses the exact same
+  // real-order-status revenueForRange this service already uses everywhere
+  // else. Only ever compares two real, equal-length, already-elapsed
+  // windows; never invents a trend when there's nothing to compare against.
+  async weekOverWeek() {
+    const now = new Date();
+    const [thisWeek, lastWeek] = await Promise.all([this.revenueForRange(daysAgo(7), now), this.revenueForRange(daysAgo(14), daysAgo(7))]);
+
+    const revenueChangePercent = lastWeek.revenue > 0 ? Math.round(((thisWeek.revenue - lastWeek.revenue) / lastWeek.revenue) * 1000) / 10 : null;
+    const orderCountChangePercent = lastWeek.orderCount > 0 ? Math.round(((thisWeek.orderCount - lastWeek.orderCount) / lastWeek.orderCount) * 1000) / 10 : null;
+
+    return {
+      thisWeek,
+      lastWeek,
+      revenueChangePercent,
+      orderCountChangePercent,
+      comparisonAvailable: lastWeek.orderCount > 0,
+    };
+  }
+
   private async revenueForRange(from: Date, to: Date) {
     const orders = await this.prisma.order.findMany({
       where: { createdAt: { gte: from, lte: to }, status: { in: REAL_SALE_STATUSES } },
