@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SeoAuditService } from '../seo-autopilot/seo-audit.service';
 import { SalesAnalyticsService } from '../sales-autopilot/sales-analytics.service';
@@ -183,6 +184,7 @@ export class DashboardService {
       storeAiUsage,
       newsAiUsage,
       storeAiConversion,
+      consultantMetrics,
     ] = await Promise.all([
       this.prisma.productAiDraft.count({ where: { status: 'PENDING_REVIEW' } }),
       this.prisma.productAiDraft.findMany({
@@ -264,6 +266,7 @@ export class DashboardService {
       this.aiUsageByProvider('store-ai', startOfMonth),
       this.aiUsageByProvider('news-generation', startOfMonth),
       this.storeAiConversion(startOfMonth),
+      this.consultantMetrics(startOfMonth),
     ]);
 
     const suggestionProductIds = pendingSeoSuggestionsRaw.map((s) => s.productId);
@@ -328,6 +331,7 @@ export class DashboardService {
         aiErrorsThisMonth: storeAiUsage.errorCount,
         conversion: storeAiConversion,
       },
+      consultant: consultantMetrics,
     };
   }
 
@@ -354,8 +358,12 @@ export class DashboardService {
   // order containing that exact product within the following 14 days.
   // Returns null — not a 0% — when there is no real trackable data yet.
   private async storeAiConversion(startOfMonth: Date) {
+    return this.conversionFromAddToCartEvent('store_ai.add_to_cart', startOfMonth);
+  }
+
+  private async conversionFromAddToCartEvent(eventName: string, startOfMonth: Date) {
     const addToCartEvents = await this.prisma.activityLog.findMany({
-      where: { event: 'store_ai.add_to_cart', createdAt: { gte: startOfMonth }, userId: { not: null } },
+      where: { event: eventName, createdAt: { gte: startOfMonth }, userId: { not: null } },
       select: { userId: true, metadata: true, createdAt: true },
     });
     if (addToCartEvents.length === 0) return null;
@@ -374,5 +382,54 @@ export class DashboardService {
       if (match) converted++;
     }
     return { trackableClicks: addToCartEvents.length, converted, rate: converted / addToCartEvents.length };
+  }
+
+  // Smart Electrical Consultant metrics (Sprint 7 §13) — every number is a
+  // real ElectricalConsultation/ActivityLog aggregate. mostSuggestedProducts
+  // is computed by actually walking the stored, real package snapshots
+  // generated this month — never a guessed popularity ranking. The
+  // consultant never calls an LLM (its calculators are deterministic), so
+  // there is no AI cost/error figure to report here at all.
+  private async consultantMetrics(startOfMonth: Date) {
+    const [started, completed, addedToCartCount, consultationsWithPackages, conversion] = await Promise.all([
+      this.prisma.activityLog.count({ where: { event: 'consultant.consultation_started', createdAt: { gte: startOfMonth } } }),
+      this.prisma.electricalConsultation.count({ where: { status: { in: ['READY', 'CART_ADDED'] }, createdAt: { gte: startOfMonth } } }),
+      this.prisma.electricalConsultation.count({ where: { status: 'CART_ADDED', cartAddedAt: { gte: startOfMonth } } }),
+      this.prisma.electricalConsultation.findMany({
+        where: { packagesJson: { not: Prisma.JsonNull }, createdAt: { gte: startOfMonth } },
+        select: { packagesJson: true, noMatchItemKeysJson: true },
+      }),
+      this.conversionFromAddToCartEvent('consultant.add_to_cart', startOfMonth),
+    ]);
+
+    const productCounts = new Map<string, { name: string; count: number }>();
+    let noMatchRequestsCount = 0;
+    for (const row of consultationsWithPackages) {
+      const packages = row.packagesJson as unknown as Record<string, { lines: { productId: string; productName: string }[] }> | null;
+      for (const tier of Object.values(packages ?? {})) {
+        for (const line of tier.lines ?? []) {
+          const entry = productCounts.get(line.productId) ?? { name: line.productName, count: 0 };
+          entry.count += 1;
+          productCounts.set(line.productId, entry);
+        }
+      }
+      const noMatch = row.noMatchItemKeysJson as unknown as string[] | null;
+      if (noMatch && noMatch.length > 0) noMatchRequestsCount++;
+    }
+
+    const mostSuggestedProducts = Array.from(productCounts.entries())
+      .map(([productId, v]) => ({ productId, name: v.name, count: v.count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    return {
+      consultationsStartedThisMonth: started,
+      consultationsCompletedThisMonth: completed,
+      packagesGeneratedThisMonth: consultationsWithPackages.length,
+      addToCartThisMonth: addedToCartCount,
+      noMatchRequestsThisMonth: noMatchRequestsCount,
+      mostSuggestedProducts,
+      conversion,
+    };
   }
 }

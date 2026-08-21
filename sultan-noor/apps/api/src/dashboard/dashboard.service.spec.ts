@@ -181,6 +181,7 @@ describe('DashboardService.aiControlCenter', () => {
       newsItem: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
       activityLog: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
       orderItem: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
+      electricalConsultation: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
     };
     salesAnalytics = { overview: jest.fn().mockResolvedValue(EMPTY_SALES_OVERVIEW) };
     opportunities = { bestSellingLowStock: jest.fn().mockResolvedValue([]), crossSellPairs: jest.fn().mockResolvedValue([]) };
@@ -290,9 +291,34 @@ describe('DashboardService.aiControlCenter', () => {
         pendingSalesRecommendations: expect.any(Array),
         news: expect.any(Object),
         storeAi: expect.any(Object),
+        consultant: expect.any(Object),
       }),
     );
     expect(result).not.toHaveProperty('salesOpportunities');
+  });
+
+  it('computes real Smart Electrical Consultant metrics — most-suggested products and no-match count from actually stored package snapshots, never fabricated', async () => {
+    prisma.electricalConsultation.findMany.mockResolvedValue([
+      {
+        packagesJson: {
+          ECONOMIC: { lines: [{ productId: 'p1', productName: 'کلید' }, { productId: 'p2', productName: 'پریز' }] },
+          STANDARD: { lines: [{ productId: 'p1', productName: 'کلید' }] },
+        },
+        noMatchItemKeysJson: ['FUSE'],
+      },
+      { packagesJson: { ECONOMIC: { lines: [{ productId: 'p1', productName: 'کلید' }] } }, noMatchItemKeysJson: [] },
+    ]);
+
+    const result = await service.aiControlCenter();
+
+    expect(result.consultant.packagesGeneratedThisMonth).toBe(2);
+    expect(result.consultant.noMatchRequestsThisMonth).toBe(1);
+    expect(result.consultant.mostSuggestedProducts[0]).toEqual({ productId: 'p1', name: 'کلید', count: 3 });
+  });
+
+  it('returns consultant conversion as null (never a fabricated rate) when there are no trackable add-to-cart clicks yet', async () => {
+    const result = await service.aiControlCenter();
+    expect(result.consultant.conversion).toBeNull();
   });
 
   it('surfaces real News Autopilot counts (pending review, discovered, published) and its own AI cost/error pool', async () => {

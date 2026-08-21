@@ -55,6 +55,14 @@ describe('CartService.addItem', () => {
     expect(activityLog.record).toHaveBeenCalledWith({ userId: 'u1', event: 'store_ai.add_to_cart', metadata: { productId: 'p1' } });
   });
 
+  it('records a real consultant.add_to_cart event, tied to the real product id, only when the click genuinely came from the Smart Electrical Consultant', async () => {
+    prisma.productVariant.findMany.mockResolvedValue([{ id: 'v1' }]);
+
+    await service.addItem('u1', { productId: 'p1', quantity: 1, source: 'consultant' } as any);
+
+    expect(activityLog.record).toHaveBeenCalledWith({ userId: 'u1', event: 'consultant.add_to_cart', metadata: { productId: 'p1' } });
+  });
+
   it('ignores an unrecognized source value rather than crashing (DTO whitelist already rejects it at the HTTP boundary)', async () => {
     prisma.productVariant.findMany.mockResolvedValue([{ id: 'v1' }]);
 

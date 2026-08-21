@@ -103,4 +103,8 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsString()
   storeAiStrictCatalogOnly?: string;
+
+  @IsOptional()
+  @IsString()
+  electricalConsultantEnabled?: string;
 }

@@ -10,5 +10,8 @@ import { PricingModule } from '../pricing/pricing.module';
   imports: [ProductsModule, AuthModule, PricingModule],
   controllers: [CartController],
   providers: [CartService, CartRecoveryService],
+  // The Smart Electrical Consultant (Sprint 7) adds items through this same
+  // real CartService — never a second cart implementation.
+  exports: [CartService],
 })
 export class CartModule {}

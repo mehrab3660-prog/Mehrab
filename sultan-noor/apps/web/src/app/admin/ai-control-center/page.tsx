@@ -50,6 +50,9 @@ const ACTION_LABEL: Record<string, string> = {
   "news.approved": "تأیید خبر",
   "news.rejected": "رد خبر",
   "news.published": "انتشار خبر",
+  "consultant.rule_created": "افزودن قانون مشاور برق",
+  "consultant.rule_updated": "ویرایش قانون مشاور برق",
+  "consultant.rule_removed": "حذف قانون مشاور برق",
 };
 
 function actionLabel(action: string): string {
@@ -221,6 +224,38 @@ export default function AiControlCenterPage() {
           )}
         </div>
       </div>
+
+      <h2 className="mb-3 mt-2 font-bold">مشاور هوشمند برق ساختمان (Smart Electrical Consultant)</h2>
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Link href="/admin/consultant-rules" className="rounded-lg border border-border-color bg-surface p-4 hover:border-brand">
+          <p className="text-sm text-foreground/50">مشاوره شروع‌شده — این ماه</p>
+          <p className="mt-1 text-xl font-extrabold text-brand">{data.consultant.consultationsStartedThisMonth}</p>
+        </Link>
+        <div className="rounded-lg border border-border-color bg-surface p-4">
+          <p className="text-sm text-foreground/50">مشاوره تکمیل‌شده (لیست ساخته‌شده)</p>
+          <p className="mt-1 text-xl font-extrabold text-green-500">{data.consultant.consultationsCompletedThisMonth}</p>
+        </div>
+        <div className="rounded-lg border border-border-color bg-surface p-4">
+          <p className="text-sm text-foreground/50">افزودن به سبد از مشاور</p>
+          <p className="mt-1 text-xl font-extrabold text-brand">{data.consultant.addToCartThisMonth}</p>
+        </div>
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
+          <p className="text-sm text-amber-500/80">درخواست بدون محصول مناسب</p>
+          <p className="mt-1 text-xl font-extrabold text-amber-500">{data.consultant.noMatchRequestsThisMonth}</p>
+        </div>
+      </div>
+      {data.consultant.mostSuggestedProducts.length > 0 && (
+        <div className="mb-6 rounded-lg border border-border-color p-4">
+          <p className="mb-2 text-sm font-bold">محصولات پرتکرار در پیشنهادهای مشاور</p>
+          <div className="flex flex-wrap gap-1.5">
+            {data.consultant.mostSuggestedProducts.map((p) => (
+              <span key={p.productId} className="rounded-full bg-surface-2 px-2.5 py-1 text-xs">
+                {p.name} × {p.count}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {data.salesDataGaps.length > 0 && (
         <div className="mb-6 rounded-lg border border-dashed border-amber-500/50 bg-amber-500/5 p-3 text-xs text-amber-500">

@@ -29,17 +29,17 @@ enum CustomerType {
 }
 
 model User {
-  id           String       @id @default(cuid())
-  phone        String       @unique
-  email        String?      @unique
-  fullName     String?
-  passwordHash String?
-  role         Role         @default(CUSTOMER)
-  customerType CustomerType @default(RETAIL)
-  companyName  String?
-  nationalId   String?
-  isActive     Boolean      @default(true)
-  isPhoneVerified Boolean   @default(false)
+  id              String         @id @default(cuid())
+  phone           String         @unique
+  email           String?        @unique
+  fullName        String?
+  passwordHash    String?
+  role            Role           @default(CUSTOMER)
+  customerType    CustomerType   @default(RETAIL)
+  companyName     String?
+  nationalId      String?
+  isActive        Boolean        @default(true)
+  isPhoneVerified Boolean        @default(false)
   customerGroupId String?
   customerGroup   CustomerGroup? @relation(fields: [customerGroupId], references: [id])
 
@@ -60,22 +60,23 @@ model User {
   referrals          User[]    @relation("Referrals")
   referralRewardedAt DateTime?
 
-  addresses     Address[]
-  carts         Cart[]
-  wishlists     Wishlist[]
-  orders        Order[]
-  reviews       Review[]
-  questions     Question[]
-  answers       Answer[]
-  notifications Notification[]
-  auditLogs     AuditLog[]
-  activityLogs  ActivityLog[]
-  otpCodes      OtpCode[]
-  aiConversations AiConversation[]
-  blogPosts     BlogPost[]
-  stockSubscriptions StockSubscription[]
-  returnRequests ReturnRequest[]
-  loyaltyTransactions LoyaltyTransaction[]
+  addresses               Address[]
+  carts                   Cart[]
+  wishlists               Wishlist[]
+  orders                  Order[]
+  reviews                 Review[]
+  questions               Question[]
+  answers                 Answer[]
+  notifications           Notification[]
+  auditLogs               AuditLog[]
+  activityLogs            ActivityLog[]
+  otpCodes                OtpCode[]
+  aiConversations         AiConversation[]
+  electricalConsultations ElectricalConsultation[]
+  blogPosts               BlogPost[]
+  stockSubscriptions      StockSubscription[]
+  returnRequests          ReturnRequest[]
+  loyaltyTransactions     LoyaltyTransaction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -91,33 +92,33 @@ enum OtpPurpose {
 }
 
 model OtpCode {
-  id        String     @id @default(cuid())
-  phone     String
-  codeHash  String
-  purpose   OtpPurpose
-  userId    String?
-  user      User?      @relation(fields: [userId], references: [id])
-  expiresAt DateTime
+  id         String     @id @default(cuid())
+  phone      String
+  codeHash   String
+  purpose    OtpPurpose
+  userId     String?
+  user       User?      @relation(fields: [userId], references: [id])
+  expiresAt  DateTime
   consumedAt DateTime?
-  attempts  Int        @default(0)
-  createdAt DateTime   @default(now())
+  attempts   Int        @default(0)
+  createdAt  DateTime   @default(now())
 
   @@index([phone, purpose])
 }
 
 model Address {
-  id         String  @id @default(cuid())
-  userId     String
-  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title      String
-  province   String
-  city       String
-  line1      String
-  line2      String?
-  postalCode String?
-  receiverName String
+  id            String  @id @default(cuid())
+  userId        String
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title         String
+  province      String
+  city          String
+  line1         String
+  line2         String?
+  postalCode    String?
+  receiverName  String
   receiverPhone String
-  isDefault  Boolean @default(false)
+  isDefault     Boolean @default(false)
 
   orders Order[]
 
@@ -127,12 +128,12 @@ model Address {
 
 // Customer groups drive B2B tiered pricing (e.g. Retail, Bronze, Silver, Gold wholesalers).
 model CustomerGroup {
-  id          String   @id @default(cuid())
-  name        String   @unique
+  id          String      @id @default(cuid())
+  name        String      @unique
   description String?
   users       User[]
   priceTiers  PriceTier[]
-  createdAt   DateTime @default(now())
+  createdAt   DateTime    @default(now())
 }
 
 // ────────────────────────────── Catalog ──────────────────────────────
@@ -171,14 +172,14 @@ model Category {
 }
 
 model Supplier {
-  id          String    @id @default(cuid())
-  name        String
-  contactName String?
-  phone       String?
-  email       String?
-  address     String?
-  isActive    Boolean   @default(true)
-  products    Product[]
+  id             String          @id @default(cuid())
+  name           String
+  contactName    String?
+  phone          String?
+  email          String?
+  address        String?
+  isActive       Boolean         @default(true)
+  products       Product[]
   purchaseOrders PurchaseOrder[]
 
   createdAt DateTime @default(now())
@@ -191,8 +192,8 @@ model Warehouse {
   address  String?
   isActive Boolean @default(true)
 
-  stocks         Stock[]
-  purchaseOrders PurchaseOrder[]
+  stocks              Stock[]
+  purchaseOrders      PurchaseOrder[]
   fulfilledOrderItems OrderItem[]
 
   createdAt DateTime @default(now())
@@ -218,18 +219,18 @@ model Product {
   supplierId  String?
   supplier    Supplier?     @relation(fields: [supplierId], references: [id])
 
-  basePrice   Decimal        @db.Decimal(14, 2)
-  compareAtPrice Decimal?    @db.Decimal(14, 2)
-  minWholesaleQty Int?       // minimum quantity required for B2B pricing to apply
+  basePrice       Decimal  @db.Decimal(14, 2)
+  compareAtPrice  Decimal? @db.Decimal(14, 2)
+  minWholesaleQty Int? // minimum quantity required for B2B pricing to apply
 
-  variants    ProductVariant[]
-  images      ProductImage[]
-  reviews     Review[]
-  questions   Question[]
-  cartItems   CartItem[]
-  wishlistItems WishlistItem[]
-  orderItems  OrderItem[]
-  priceTiers  PriceTier[]
+  variants           ProductVariant[]
+  images             ProductImage[]
+  reviews            Review[]
+  questions          Question[]
+  cartItems          CartItem[]
+  wishlistItems      WishlistItem[]
+  orderItems         OrderItem[]
+  priceTiers         PriceTier[]
   stockSubscriptions StockSubscription[]
 
   metaTitle       String?
@@ -255,19 +256,19 @@ model ProductImage {
 }
 
 model ProductVariant {
-  id        String  @id @default(cuid())
-  productId String
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  sku       String  @unique
-  attributes Json   // e.g. { "color": "red", "size": "L" }
-  price     Decimal @db.Decimal(14, 2)
+  id          String  @id @default(cuid())
+  productId   String
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku         String  @unique
+  attributes  Json // e.g. { "color": "red", "size": "L" }
+  price       Decimal @db.Decimal(14, 2)
   weightGrams Int?
-  isActive  Boolean @default(true)
+  isActive    Boolean @default(true)
 
-  stocks       Stock[]
-  cartItems    CartItem[]
-  wishlistItems WishlistItem[]
-  orderItems   OrderItem[]
+  stocks             Stock[]
+  cartItems          CartItem[]
+  wishlistItems      WishlistItem[]
+  orderItems         OrderItem[]
   purchaseOrderItems PurchaseOrderItem[]
 
   createdAt DateTime @default(now())
@@ -396,11 +397,11 @@ model WishlistItem {
 // is back — one row per (user, product); `notifiedAt` fires exactly once
 // per subscription and then the row stops matching future restocks.
 model StockSubscription {
-  id        String    @id @default(cuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  productId String
-  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
   notifiedAt DateTime?
 
   createdAt DateTime @default(now())
@@ -416,18 +417,18 @@ enum DiscountType {
 }
 
 model DiscountCode {
-  id             String       @id @default(cuid())
-  code           String       @unique
-  type           DiscountType
-  value          Decimal      @db.Decimal(14, 2)
-  minOrderTotal  Decimal?     @db.Decimal(14, 2)
-  maxUsage       Int?
+  id              String       @id @default(cuid())
+  code            String       @unique
+  type            DiscountType
+  value           Decimal      @db.Decimal(14, 2)
+  minOrderTotal   Decimal?     @db.Decimal(14, 2)
+  maxUsage        Int?
   maxUsagePerUser Int?
-  usedCount      Int          @default(0)
-  startsAt       DateTime?
-  expiresAt      DateTime?
-  isActive       Boolean      @default(true)
-  orders         Order[]
+  usedCount       Int          @default(0)
+  startsAt        DateTime?
+  expiresAt       DateTime?
+  isActive        Boolean      @default(true)
+  orders          Order[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -466,26 +467,26 @@ enum DeliverySlot {
 }
 
 model Order {
-  id             String        @id @default(cuid())
-  orderNumber    String        @unique
-  userId         String
-  user           User          @relation(fields: [userId], references: [id])
-  addressId      String
-  address        Address       @relation(fields: [addressId], references: [id])
-  status         OrderStatus   @default(PENDING_PAYMENT)
-  items          OrderItem[]
-  statusHistory  OrderStatusEvent[]
+  id            String             @id @default(cuid())
+  orderNumber   String             @unique
+  userId        String
+  user          User               @relation(fields: [userId], references: [id])
+  addressId     String
+  address       Address            @relation(fields: [addressId], references: [id])
+  status        OrderStatus        @default(PENDING_PAYMENT)
+  items         OrderItem[]
+  statusHistory OrderStatusEvent[]
 
   // Customer's chosen delivery window at checkout — both optional, since an
   // order placed without picking one just gets no scheduling preference.
-  deliveryDate   DateTime?
-  deliverySlot   DeliverySlot?
+  deliveryDate DateTime?
+  deliverySlot DeliverySlot?
 
-  subtotal       Decimal       @db.Decimal(14, 2)
-  discountTotal  Decimal       @db.Decimal(14, 2) @default(0)
-  shippingTotal  Decimal       @db.Decimal(14, 2) @default(0)
-  taxTotal       Decimal       @db.Decimal(14, 2) @default(0)
-  grandTotal     Decimal       @db.Decimal(14, 2)
+  subtotal      Decimal @db.Decimal(14, 2)
+  discountTotal Decimal @default(0) @db.Decimal(14, 2)
+  shippingTotal Decimal @default(0) @db.Decimal(14, 2)
+  taxTotal      Decimal @default(0) @db.Decimal(14, 2)
+  grandTotal    Decimal @db.Decimal(14, 2)
 
   discountCodeId String?
   discountCode   DiscountCode? @relation(fields: [discountCodeId], references: [id])
@@ -495,15 +496,15 @@ model Order {
   // once delivered. The two *AwardedAt/*ReversedAt timestamps are idempotency
   // guards — OrdersService.updateStatus can be called more than once with the
   // same status, and points must only ever be credited or clawed back once.
-  loyaltyPointsRedeemed  Int      @default(0)
-  loyaltyDiscount        Decimal  @db.Decimal(14, 2) @default(0)
-  loyaltyPointsEarned    Int      @default(0)
-  loyaltyPointsAwardedAt DateTime?
+  loyaltyPointsRedeemed   Int       @default(0)
+  loyaltyDiscount         Decimal   @default(0) @db.Decimal(14, 2)
+  loyaltyPointsEarned     Int       @default(0)
+  loyaltyPointsAwardedAt  DateTime?
   loyaltyPointsReversedAt DateTime?
 
-  invoice        Invoice?
-  payments       Payment[]
-  returnRequests ReturnRequest[]
+  invoice             Invoice?
+  payments            Payment[]
+  returnRequests      ReturnRequest[]
   loyaltyTransactions LoyaltyTransaction[]
 
   createdAt DateTime @default(now())
@@ -556,13 +557,13 @@ enum ReturnRequestStatus {
 // order. Approval/rejection is an admin decision; moving to REFUNDED also
 // flips the underlying Order/Payment to REFUNDED (see ReturnsService).
 model ReturnRequest {
-  id        String               @id @default(cuid())
+  id        String              @id @default(cuid())
   orderId   String
-  order     Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order     Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
   userId    String
-  user      User                 @relation(fields: [userId], references: [id])
+  user      User                @relation(fields: [userId], references: [id])
   reason    String
-  status    ReturnRequestStatus  @default(PENDING)
+  status    ReturnRequestStatus @default(PENDING)
   adminNote String?
   items     ReturnRequestItem[]
 
@@ -583,12 +584,12 @@ model ReturnRequestItem {
 }
 
 model Invoice {
-  id          String   @id @default(cuid())
-  orderId     String   @unique
-  order       Order    @relation(fields: [orderId], references: [id])
-  invoiceNumber String @unique
-  pdfUrl      String?
-  issuedAt    DateTime @default(now())
+  id            String   @id @default(cuid())
+  orderId       String   @unique
+  order         Order    @relation(fields: [orderId], references: [id])
+  invoiceNumber String   @unique
+  pdfUrl        String?
+  issuedAt      DateTime @default(now())
 }
 
 enum PaymentStatus {
@@ -605,15 +606,15 @@ enum PaymentGateway {
 }
 
 model Payment {
-  id         String         @id @default(cuid())
-  orderId    String
-  order      Order          @relation(fields: [orderId], references: [id])
-  gateway    PaymentGateway
-  status     PaymentStatus  @default(INITIATED)
-  amount     Decimal        @db.Decimal(14, 2)
-  authority  String?        // gateway transaction/authority reference
-  refId      String?        // gateway settlement reference
-  raw        Json?
+  id        String         @id @default(cuid())
+  orderId   String
+  order     Order          @relation(fields: [orderId], references: [id])
+  gateway   PaymentGateway
+  status    PaymentStatus  @default(INITIATED)
+  amount    Decimal        @db.Decimal(14, 2)
+  authority String? // gateway transaction/authority reference
+  refId     String? // gateway settlement reference
+  raw       Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -653,16 +654,16 @@ model LoyaltyTransaction {
 // ────────────────────────────── Reviews & Q&A ──────────────────────────────
 
 model Review {
-  id        String   @id @default(cuid())
-  productId String
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  rating    Int
-  title     String?
-  body      String?
-  isApproved Boolean @default(false)
-  images    ReviewImage[]
+  id         String        @id @default(cuid())
+  productId  String
+  product    Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User          @relation(fields: [userId], references: [id])
+  rating     Int
+  title      String?
+  body       String?
+  isApproved Boolean       @default(false)
+  images     ReviewImage[]
 
   createdAt DateTime @default(now())
 
@@ -678,26 +679,26 @@ model ReviewImage {
 }
 
 model Question {
-  id        String    @id @default(cuid())
-  productId String
-  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User      @relation(fields: [userId], references: [id])
-  body      String
-  isPublished Boolean @default(true)
-  answers   Answer[]
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  body        String
+  isPublished Boolean  @default(true)
+  answers     Answer[]
 
   createdAt DateTime @default(now())
 }
 
 model Answer {
-  id         String   @id @default(cuid())
-  questionId String
-  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  userId     String
-  user       User     @relation(fields: [userId], references: [id])
-  body       String
-  isFromStaff Boolean @default(false)
+  id          String   @id @default(cuid())
+  questionId  String
+  question    Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  body        String
+  isFromStaff Boolean  @default(false)
 
   createdAt DateTime @default(now())
 }
@@ -743,14 +744,14 @@ enum NotificationType {
 }
 
 model Notification {
-  id        String           @id @default(cuid())
-  userId    String
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type      NotificationType
-  title     String
-  body      String?
-  data      Json?
-  readAt    DateTime?
+  id     String           @id @default(cuid())
+  userId String
+  user   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type   NotificationType
+  title  String
+  body   String?
+  data   Json?
+  readAt DateTime?
 
   createdAt DateTime @default(now())
 
@@ -760,16 +761,16 @@ model Notification {
 // ────────────────────────────── Content: Blog & Banners ──────────────────────────────
 
 model BlogPost {
-  id          String   @id @default(cuid())
-  title       String
-  slug        String   @unique
-  excerpt     String?
-  content     String
+  id            String    @id @default(cuid())
+  title         String
+  slug          String    @unique
+  excerpt       String?
+  content       String
   coverImageUrl String?
-  authorId    String
-  author      User     @relation(fields: [authorId], references: [id])
-  isPublished Boolean  @default(false)
-  publishedAt DateTime?
+  authorId      String
+  author        User      @relation(fields: [authorId], references: [id])
+  isPublished   Boolean   @default(false)
+  publishedAt   DateTime?
 
   // SEO (Sprint 4) — optional, additive; falls back to title/excerpt in the
   // frontend when unset, same as before this field existed.
@@ -815,7 +816,7 @@ model AuditLog {
   id         String   @id @default(cuid())
   userId     String?
   user       User?    @relation(fields: [userId], references: [id])
-  action     String   // e.g. "product.update", "order.refund"
+  action     String // e.g. "product.update", "order.refund"
   entityType String
   entityId   String?
   before     Json?
@@ -831,7 +832,7 @@ model ActivityLog {
   id        String   @id @default(cuid())
   userId    String?
   user      User?    @relation(fields: [userId], references: [id])
-  event     String   // e.g. "auth.login", "search.query", "product.view"
+  event     String // e.g. "auth.login", "search.query", "product.view"
   metadata  Json?
   ipAddress String?
   userAgent String?
@@ -844,10 +845,10 @@ model ActivityLog {
 // ────────────────────────────── AI Shopping Advisor ──────────────────────────────
 
 model AiConversation {
-  id        String      @id @default(cuid())
-  userId    String?
-  user      User?       @relation(fields: [userId], references: [id])
-  messages  AiMessage[]
+  id       String      @id @default(cuid())
+  userId   String?
+  user     User?       @relation(fields: [userId], references: [id])
+  messages AiMessage[]
 
   // Set when the customer asks to talk to a human — staff then see this
   // conversation in their queue and can reply as AiMessageRole.STAFF.
@@ -855,7 +856,7 @@ model AiConversation {
   escalatedAt DateTime?
   resolvedAt  DateTime?
 
-  createdAt DateTime    @default(now())
+  createdAt DateTime @default(now())
 
   @@index([escalatedAt])
 }
@@ -889,11 +890,11 @@ enum ProductAiDraftStatus {
 // that ever creates or changes one, and it always requires an authenticated
 // staff action (see AiProductService.approve).
 model ProductAiDraft {
-  id       String @id @default(cuid())
-  name     String
-  brandName String?
+  id          String  @id @default(cuid())
+  name        String
+  brandName   String?
   modelNumber String?
-  ownerPrice Decimal @db.Decimal(14, 2)
+  ownerPrice  Decimal @db.Decimal(14, 2)
 
   // Everything below is what the AI proposed — always editable by staff
   // before approval, never trusted blindly.
@@ -908,8 +909,8 @@ model ProductAiDraft {
   confidenceNote String? // model's own disclosure of what it is unsure about
   sources        Json?
 
-  status          ProductAiDraftStatus @default(PENDING_REVIEW)
-  rejectionReason String?
+  status             ProductAiDraftStatus @default(PENDING_REVIEW)
+  rejectionReason    String?
   // Set once approved — the resulting Product's id. Plain string (no FK) so
   // this table stays fully additive and never constrains the Product model.
   publishedProductId String?
@@ -1000,14 +1001,14 @@ model ProductAiDraftImage {
 // background removal, generation) — lets AiImageAutopilotService enforce
 // AppSettings.imageAutopilotMonthlyBudgetToman before making another call.
 model AiUsageLog {
-  id         String   @id @default(cuid())
-  provider   String // e.g. "image-search", "background-removal", "image-generation"
-  operation  String
-  draftId    String?
-  costToman  Decimal? @db.Decimal(12, 2)
-  success    Boolean
-  note       String?
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  provider  String // e.g. "image-search", "background-removal", "image-generation"
+  operation String
+  draftId   String?
+  costToman Decimal? @db.Decimal(12, 2)
+  success   Boolean
+  note      String?
+  createdAt DateTime @default(now())
 
   @@index([provider, createdAt])
 }
@@ -1037,7 +1038,7 @@ model ProductSeoSuggestion {
   faq                   Json?
   altTextSuggestions    Json? // { [productImageId]: altText }
   internalLinks         Json? // [{ label, url }], restricted to real existing site URLs
-  sources                Json?
+  sources               Json?
   confidenceNote        String?
 
   status          SeoSuggestionStatus @default(PENDING_REVIEW)
@@ -1122,7 +1123,7 @@ model ContentDraft {
 // Each service falls back to its env var when the corresponding column here
 // is null, so nothing breaks for deployments that still prefer env-based config.
 model AppSettings {
-  id                   Int      @id @default(1)
+  id                   Int     @id @default(1)
   zarinpalMerchantId   String?
   idpayApiKey          String?
   smsApiKey            String?
@@ -1168,12 +1169,17 @@ model AppSettings {
   // whether the chat UI *offers* an add-to-cart action on a product card;
   // the real POST /cart/items endpoint always enforces its own auth/stock
   // rules regardless of this flag.
-  storeAiEnabled              String? // "true"/"false"; unset = on (same convention as seoAutoFixEnabled's inverse — see resolveStoreAiSettings)
-  storeAiMaxResults           String? // parsed as int; default 5 when unset
-  storeAiMonthlyBudgetToman   String?
-  storeAiRateLimitPerMinute   String? // parsed as int; default 10 per user when unset
-  storeAiAllowAddToCart       String? // "true"/"false"; unset = on
-  storeAiStrictCatalogOnly    String? // "true"/"false"; unset = on (the required production default)
+  storeAiEnabled            String? // "true"/"false"; unset = on (same convention as seoAutoFixEnabled's inverse — see resolveStoreAiSettings)
+  storeAiMaxResults         String? // parsed as int; default 5 when unset
+  storeAiMonthlyBudgetToman String?
+  storeAiRateLimitPerMinute String? // parsed as int; default 10 per user when unset
+  storeAiAllowAddToCart     String? // "true"/"false"; unset = on
+  storeAiStrictCatalogOnly  String? // "true"/"false"; unset = on (the required production default)
+
+  // Smart Electrical Consultant (Sprint 7). Unset (or anything other than
+  // the literal string "false") means ON, same convention as every other
+  // enable flag above.
+  electricalConsultantEnabled String?
 
   updatedAt DateTime @updatedAt
 }
@@ -1217,17 +1223,17 @@ enum SalesRecommendationStatus {
 // tracking — there is no campaign-execution/send system in this app, and
 // Sprint 5 does not build one.
 model SalesRecommendation {
-  id       String                       @id @default(cuid())
+  id       String                      @id @default(cuid())
   type     SalesRecommendationType
-  severity SalesRecommendationSeverity  @default(MEDIUM)
+  severity SalesRecommendationSeverity @default(MEDIUM)
 
-  title           String
-  reason          String  // human-readable explanation citing real numbers
-  supportingData  Json?   // the real numbers the reason was built from
-  productIds      Json?   // string[] of real Product ids this suggestion involves
-  payload         Json?   // type-specific structured data (bundle items, discount %, campaign copy, ...)
-  confidenceNote  String?
-  sources         Json?   // for AI-generated reasoning (discount/campaign): what grounded it
+  title          String
+  reason         String // human-readable explanation citing real numbers
+  supportingData Json? // the real numbers the reason was built from
+  productIds     Json? // string[] of real Product ids this suggestion involves
+  payload        Json? // type-specific structured data (bundle items, discount %, campaign copy, ...)
+  confidenceNote String?
+  sources        Json? // for AI-generated reasoning (discount/campaign): what grounded it
 
   status          SalesRecommendationStatus @default(PENDING_REVIEW)
   rejectionReason String?
@@ -1315,12 +1321,12 @@ model NewsItem {
   suggestedImagePrompt String?
 
   imageUrl           String?
-  imageSource         NewsImageSource?
-  imageIsAiGenerated  Boolean @default(false)
-  imageAttribution    String?
+  imageSource        NewsImageSource?
+  imageIsAiGenerated Boolean          @default(false)
+  imageAttribution   String?
 
   publishedBlogPostId String?
-  rejectionReason      String?
+  rejectionReason     String?
 
   createdByUserId  String?
   reviewedByUserId String?
@@ -1332,4 +1338,89 @@ model NewsItem {
   @@index([status])
   @@index([contentHash])
   @@index([similarGroupKey])
+}
+
+// ────────────────────────────── Smart Electrical Consultant (Sprint 7) ──────────────────────────────
+
+enum ConsultationStatus {
+  COLLECTING_INFO
+  READY
+  CART_ADDED
+}
+
+// One customer's structured need-analysis + generated shopping packages.
+// Deliberately structured fields (not a free chat transcript like
+// AiConversation) — the consultant is a guided wizard, not open chat.
+// Only the fields the customer actually answers are filled in; nothing is
+// ever guessed to fill a gap. packagesJson is a point-in-time snapshot for
+// display/history only — price and stock are always re-validated for real
+// against the Catalog at generatePackages()/addToCart() time, never trusted
+// from this stored snapshot.
+model ElectricalConsultation {
+  id     String             @id @default(cuid())
+  userId String?
+  user   User?              @relation(fields: [userId], references: [id])
+  status ConsultationStatus @default(COLLECTING_INFO)
+
+  areaSqm      Int?
+  bedrooms     Int?
+  livingRooms  Int?
+  kitchens     Int?
+  bathrooms    Int?
+  otherRooms   Int?
+  hasStaircase Boolean?
+  buildingType String?
+
+  // Freeform customer preference text (e.g. "پریزها سفید باشند") plus the
+  // structured filters parsed from it — parsing is rule-based (see
+  // preference-parser.ts), never left to free LLM interpretation.
+  preferencesText  String?
+  preferredBrandId String?
+  cheapestOnly     Boolean @default(false)
+  higherQuality    Boolean @default(false)
+
+  // { ECONOMIC: PackageLine[], STANDARD: PackageLine[], PROFESSIONAL: PackageLine[] },
+  // only the tiers that had at least one real matching product are present.
+  packagesJson        Json?
+  selectedTier        String?
+  cartAddedAt         DateTime?
+  // Item keys the calculator asked for but no real, in-stock Sultan Noor
+  // product could be found for — real, honest "no match" signal for the AI
+  // Control Center, never fabricated.
+  noMatchItemKeysJson Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+// Admin-configured calculation rule for one shopping-list item type (§12).
+// If no active rule exists for an item key, the consultant simply omits
+// that item from the list — it never invents a product/category mapping on
+// its own. categoryId/priorityBrandIds are plain ids (no relation), same
+// convention as NewsItem.sourceId — kept independent of Category/Brand
+// lifecycle so this rule survives even if the admin later renames things.
+model ConsultantItemRule {
+  id      String @id @default(cuid())
+  itemKey String @unique
+  label   String
+
+  categoryId String? // real Category to search within; null = catalog-wide keyword search only
+  keywords   String? // comma-separated fallback search keywords when categoryId is unset or too narrow
+
+  minQuantity      Int     @default(0)
+  maxQuantity      Int?
+  priorityBrandIds String? // comma-separated Brand ids, most-preferred first — drives the PROFESSIONAL/STANDARD tier pick
+
+  // Optional curated allow-list of real Product ids — when set, only these
+  // (still re-validated live for price/stock/PUBLISHED status) are eligible,
+  // narrowing the rule beyond category/keywords.
+  allowedProductIdsJson Json?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

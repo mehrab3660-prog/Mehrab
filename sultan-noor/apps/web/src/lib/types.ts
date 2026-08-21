@@ -96,6 +96,84 @@ export interface NewsItem {
   updatedAt: string;
 }
 
+export type ConsultationStatus = "COLLECTING_INFO" | "READY" | "CART_ADDED";
+export type ConsultantTier = "ECONOMIC" | "STANDARD" | "PROFESSIONAL";
+
+export interface ElectricalConsultation {
+  id: string;
+  userId: string | null;
+  status: ConsultationStatus;
+  areaSqm: number | null;
+  bedrooms: number | null;
+  livingRooms: number | null;
+  kitchens: number | null;
+  bathrooms: number | null;
+  otherRooms: number | null;
+  hasStaircase: boolean | null;
+  buildingType: string | null;
+  preferencesText: string | null;
+  preferredBrandId: string | null;
+  cheapestOnly: boolean;
+  higherQuality: boolean;
+  selectedTier: ConsultantTier | null;
+  cartAddedAt: string | null;
+  packagesJson?: ConsultantPackages | null;
+  noMatchItemKeysJson?: string[] | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Every field here is always built server-side from a real, currently
+// hydrated Catalog product — the same structural guarantee as the
+// Store-only AI Product Seller's product cards (Sprint 6).
+export interface ConsultantPackageLine {
+  itemKey: string;
+  label: string;
+  productId: string;
+  productName: string;
+  slug: string;
+  brandName: string | null;
+  variantId: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  reason: string;
+  requestedQuantity: number;
+}
+
+export type ConsultantPackages = Partial<Record<ConsultantTier, { lines: ConsultantPackageLine[]; total: number }>>;
+
+export interface ConsultationStepResponse {
+  consultation: ElectricalConsultation;
+  missingFields: string[];
+  nextQuestion: string | null;
+  readyToGenerate: boolean;
+  requestedBrandName?: string | null;
+  brandRecognized?: boolean;
+}
+
+export interface GeneratePackagesResponse {
+  consultation: ElectricalConsultation;
+  packages: ConsultantPackages;
+  noMatchItemKeys: string[];
+  safetyDisclaimer: string;
+}
+
+export interface ConsultantItemRule {
+  id: string;
+  itemKey: string;
+  label: string;
+  categoryId: string | null;
+  keywords: string | null;
+  minQuantity: number;
+  maxQuantity: number | null;
+  priorityBrandIds: string | null;
+  allowedProductIdsJson: string[] | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ProductImage {
   id: string;
   url: string;
@@ -480,6 +558,15 @@ export interface AiControlCenterData {
     addToCartThisMonth: number;
     aiCostThisMonthToman: number;
     aiErrorsThisMonth: number;
+    conversion: { trackableClicks: number; converted: number; rate: number } | null;
+  };
+  consultant: {
+    consultationsStartedThisMonth: number;
+    consultationsCompletedThisMonth: number;
+    packagesGeneratedThisMonth: number;
+    addToCartThisMonth: number;
+    noMatchRequestsThisMonth: number;
+    mostSuggestedProducts: { productId: string; name: string; count: number }[];
     conversion: { trackableClicks: number; converted: number; rate: number } | null;
   };
 }

@@ -53,12 +53,14 @@ export class CartService {
     // clock the recovery cron reads).
     await this.prisma.cart.update({ where: { id: cart.id }, data: { abandonedReminderSentAt: null } });
 
-    // Real, non-fabricated usage signal for the Store-only AI Control
-    // Center (Sprint 6) — records only when the click genuinely came from
-    // the AI chat's "افزودن به سبد" button. Never affects the add itself:
-    // auth/stock/price were already fully validated above regardless.
+    // Real, non-fabricated usage signal for the Store-only AI / Smart
+    // Consultant Control Center sections — records only when the click
+    // genuinely came from that flow's "افزودن به سبد" button. Never affects
+    // the add itself: auth/stock/price were already fully validated above.
     if (dto.source === 'ai_advisor') {
       await this.activityLog.record({ userId, event: 'store_ai.add_to_cart', metadata: { productId: dto.productId } });
+    } else if (dto.source === 'consultant') {
+      await this.activityLog.record({ userId, event: 'consultant.add_to_cart', metadata: { productId: dto.productId } });
     }
 
     return this.getCart(userId);

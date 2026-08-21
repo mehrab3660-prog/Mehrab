@@ -38,6 +38,7 @@ import { SeoAutopilotModule } from './seo-autopilot/seo-autopilot.module';
 import { ContentAutopilotModule } from './content-autopilot/content-autopilot.module';
 import { SalesAutopilotModule } from './sales-autopilot/sales-autopilot.module';
 import { NewsModule } from './news/news.module';
+import { ElectricalConsultantModule } from './electrical-consultant/electrical-consultant.module';
 import { MediaSearchModule } from './media-search/media-search.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { SettingsModule } from './settings/settings.module';
@@ -86,6 +87,7 @@ import { WholesaleLeadsModule } from './wholesale-leads/wholesale-leads.module';
     ContentAutopilotModule,
     SalesAutopilotModule,
     NewsModule,
+    ElectricalConsultantModule,
     MediaSearchModule,
     DashboardModule,
     StockSubscriptionsModule,

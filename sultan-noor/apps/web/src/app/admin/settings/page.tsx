@@ -37,7 +37,8 @@ type SettingsResponse = Record<
   | "storeAiMonthlyBudgetToman"
   | "storeAiRateLimitPerMinute"
   | "storeAiAllowAddToCart"
-  | "storeAiStrictCatalogOnly",
+  | "storeAiStrictCatalogOnly"
+  | "electricalConsultantEnabled",
   SettingStatus
 >;
 
@@ -361,6 +362,17 @@ export default function AdminSettingsPage() {
               onSave={handleSave}
             />
           </div>
+        </section>
+
+        <section>
+          <h2 className="mb-3 text-lg font-bold">مشاور هوشمند برق ساختمان (Smart Electrical Consultant)</h2>
+          <SettingField
+            fieldKey="electricalConsultantEnabled"
+            label="فعال بودن مشاور هوشمند برق (مقدار «false» برای غیرفعال کردن)"
+            helpText="این مشاور هیچ تماسی با AI/LLM ندارد — کاملاً بر پایه‌ی محاسبات قطعی و کاتالوگ واقعی سلطان نور کار می‌کند. قوانین محاسبه از صفحه «قوانین مشاور هوشمند برق» تنظیم می‌شوند."
+            status={settings.electricalConsultantEnabled}
+            onSave={handleSave}
+          />
         </section>
 
         <section>

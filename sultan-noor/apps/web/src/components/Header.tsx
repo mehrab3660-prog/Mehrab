@@ -14,6 +14,7 @@ import MobileDrawer from "./MobileDrawer";
 
 const NAV_LINKS = [
   { href: "/", label: "خانه" },
+  { href: "/consultant", label: "مشاور هوشمند برق" },
   { href: "/blog", label: "وبلاگ" },
   { href: "/about", label: "درباره ما" },
   { href: "/contact", label: "تماس با ما" },
