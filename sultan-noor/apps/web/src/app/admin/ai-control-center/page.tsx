@@ -28,6 +28,16 @@ const ACTION_LABEL: Record<string, string> = {
   "ai_image.published": "انتشار تصاویر محصول",
   "ai_image.none_available": "عدم موفقیت تصویر خودکار",
   "ai_image.autopilot_failed": "خطای غیرمنتظره در تصویر خودکار",
+  "seo.suggestion_generated": "ساخت پیشنهاد سئو",
+  "seo.suggestion_edited": "ویرایش پیشنهاد سئو",
+  "seo.suggestion_approved": "تأیید پیشنهاد سئو",
+  "seo.suggestion_rejected": "رد پیشنهاد سئو",
+  "seo.auto_fix_applied": "اصلاح خودکار سئو (کم‌ریسک)",
+  "content.generated": "تولید محتوا",
+  "content.edited": "ویرایش محتوا",
+  "content.approved_as_draft": "تأیید محتوا به‌عنوان پیش‌نویس",
+  "content.published": "انتشار محتوا",
+  "content.rejected": "رد محتوا",
 };
 
 function actionLabel(action: string): string {
@@ -72,6 +82,33 @@ export default function AiControlCenterPage() {
           <p className="text-sm text-foreground/50">موجودی رو به اتمام</p>
           <p className="mt-1 text-xl font-extrabold text-red-500">{data.lowStockVariants.length}</p>
         </div>
+      </div>
+
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Link href="/admin/seo" className="rounded-lg border border-red-500/40 bg-red-500/5 p-4 hover:border-red-500">
+          <p className="text-sm text-red-500/80">مشکلات سئو</p>
+          <p className="mt-1 text-xl font-extrabold text-red-500">{data.seoProblemsCount}</p>
+          <p className="mt-1 text-xs text-red-500/70">
+            بالا: {data.seoProblemsBySeverity.HIGH} — متوسط: {data.seoProblemsBySeverity.MEDIUM} — پایین: {data.seoProblemsBySeverity.LOW}
+          </p>
+        </Link>
+        <Link href="/admin/seo" className="rounded-lg border border-border-color bg-surface p-4 hover:border-brand">
+          <p className="text-sm text-foreground/50">پیشنهاد سئو در انتظار تأیید</p>
+          <p className="mt-1 text-xl font-extrabold text-brand">{data.pendingSeoSuggestions.length}</p>
+        </Link>
+        <Link href="/admin/content" className="rounded-lg border border-border-color bg-surface p-4 hover:border-brand">
+          <p className="text-sm text-foreground/50">محتوای در انتظار تأیید</p>
+          <p className="mt-1 text-xl font-extrabold text-brand">{data.pendingContentDrafts.length}</p>
+        </Link>
+        <div className="rounded-lg border border-border-color bg-surface p-4">
+          <p className="text-sm text-foreground/50">محصولات بدون سئو کامل</p>
+          <p className="mt-1 text-xl font-extrabold text-amber-500">{data.productsNeedingSeoCount}</p>
+        </div>
+      </div>
+
+      <div className="mb-6 rounded-lg border border-border-color bg-surface p-4">
+        <p className="text-sm text-foreground/50">هزینه تخمینی هوش مصنوعی (سئو و محتوا) — این ماه</p>
+        <p className="mt-1 text-xl font-extrabold">{data.aiUsageCostThisMonthToman.toLocaleString("fa-IR")} تومان</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -132,6 +169,36 @@ export default function AiControlCenterPage() {
                     {s.productName} <span className="text-foreground/40">({s.sku})</span>
                   </span>
                   <span className="font-bold text-red-500">{s.quantity} عدد</span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section>
+          <h2 className="mb-3 font-bold">پیشنهادهای سئو در انتظار تأیید</h2>
+          {data.pendingSeoSuggestions.length === 0 ? (
+            <p className="text-sm text-foreground/50">موردی وجود ندارد.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {data.pendingSeoSuggestions.map((s) => (
+                <Link key={s.id} href={`/admin/seo/${s.id}`} className="block rounded-lg border border-border-color p-2 text-sm hover:border-brand">
+                  {s.productName}
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section>
+          <h2 className="mb-3 font-bold">محتوای در انتظار تأیید</h2>
+          {data.pendingContentDrafts.length === 0 ? (
+            <p className="text-sm text-foreground/50">موردی وجود ندارد.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {data.pendingContentDrafts.map((c) => (
+                <Link key={c.id} href={`/admin/content/${c.id}`} className="block rounded-lg border border-border-color p-2 text-sm hover:border-brand">
+                  {c.title || c.topic}
                 </Link>
               ))}
             </div>

@@ -17,6 +17,14 @@ export class CreateBlogPostDto {
   @IsOptional()
   @IsString()
   coverImageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  metaTitle?: string;
+
+  @IsOptional()
+  @IsString()
+  metaDescription?: string;
 }
 
 export class UpdateBlogPostDto {
@@ -43,4 +51,12 @@ export class UpdateBlogPostDto {
   @IsOptional()
   @IsBoolean()
   isPublished?: boolean;
+
+  @IsOptional()
+  @IsString()
+  metaTitle?: string;
+
+  @IsOptional()
+  @IsString()
+  metaDescription?: string;
 }

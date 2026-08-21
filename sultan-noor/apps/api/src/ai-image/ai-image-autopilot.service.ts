@@ -416,7 +416,9 @@ export class AiImageAutopilotService {
 
   // The budget is a single combined monthly pool across every image
   // operation (search + background removal + generation) — the operation
-  // name is accepted only so call sites stay self-documenting.
+  // name is accepted only so call sites stay self-documenting. Scoped to
+  // just the image-* providers so it stays independent of the separate
+  // SEO/Content Autopilot budget pool that shares this same AiUsageLog table.
   private async checkBudget(_operation: keyof typeof APPROXIMATE_COST_TOMAN): Promise<boolean> {
     const budgetRaw = await this.settings.resolve('imageAutopilotMonthlyBudgetToman');
     if (!budgetRaw) return true; // no budget configured yet = not opted into cost control
@@ -427,7 +429,7 @@ export class AiImageAutopilotService {
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
     const usage = await this.prisma.aiUsageLog.aggregate({
-      where: { createdAt: { gte: startOfMonth } },
+      where: { createdAt: { gte: startOfMonth }, provider: { in: Object.keys(APPROXIMATE_COST_TOMAN) } },
       _sum: { costToman: true },
     });
     const spent = Number(usage._sum.costToman ?? 0);

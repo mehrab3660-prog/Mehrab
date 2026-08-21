@@ -17,7 +17,9 @@ type SettingKey =
   | 'imageSearchApiKey'
   | 'removeBgApiKey'
   | 'imageGenerationProvider'
-  | 'imageAutopilotMonthlyBudgetToman';
+  | 'imageAutopilotMonthlyBudgetToman'
+  | 'seoAutoFixEnabled'
+  | 'seoContentMonthlyBudgetToman';
 
 // Maps each DB-backed setting to the env var it falls back to when unset —
 // existing .env-based deployments keep working unchanged.
@@ -37,6 +39,8 @@ const ENV_FALLBACK: Record<SettingKey, string> = {
   removeBgApiKey: 'REMOVE_BG_API_KEY',
   imageGenerationProvider: 'IMAGE_GENERATION_PROVIDER',
   imageAutopilotMonthlyBudgetToman: 'IMAGE_AUTOPILOT_MONTHLY_BUDGET_TOMAN',
+  seoAutoFixEnabled: 'SEO_AUTO_FIX_ENABLED',
+  seoContentMonthlyBudgetToman: 'SEO_CONTENT_MONTHLY_BUDGET_TOMAN',
 };
 
 const SECRET_KEYS: SettingKey[] = [

@@ -160,6 +160,10 @@ model Category {
   isActive Boolean    @default(true)
   products Product[]
 
+  // Category landing-page copy (Sprint 4 Content Autopilot can propose and,
+  // once approved, publish into this field) — optional, page works without it.
+  description String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -767,6 +771,11 @@ model BlogPost {
   isPublished Boolean  @default(false)
   publishedAt DateTime?
 
+  // SEO (Sprint 4) — optional, additive; falls back to title/excerpt in the
+  // frontend when unset, same as before this field existed.
+  metaTitle       String?
+  metaDescription String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -996,6 +1005,108 @@ model AiUsageLog {
   @@index([provider, createdAt])
 }
 
+// ────────────────────────────── SEO + Content Autopilot (Sprint 4) ──────────────────────────────
+
+enum SeoSuggestionStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+// One AI-drafted SEO suggestion set for a real, live Product. Plain string
+// productId (no relation) — same trade-off as ProductAiDraft.publishedProductId:
+// keeps this table fully additive and never constrains the Product model.
+// Nothing here touches the live Product until approve() applies it, and even
+// then only the fields the admin actually accepted.
+model ProductSeoSuggestion {
+  id        String @id @default(cuid())
+  productId String
+
+  metaTitle             String?
+  metaDescription       String?
+  searchKeywords        String?
+  h1Suggestion          String? // informational only — NEVER auto-applied to Product.name
+  descriptionSuggestion String?
+  faq                   Json?
+  altTextSuggestions    Json? // { [productImageId]: altText }
+  internalLinks         Json? // [{ label, url }], restricted to real existing site URLs
+  sources                Json?
+  confidenceNote        String?
+
+  status          SeoSuggestionStatus @default(PENDING_REVIEW)
+  rejectionReason String?
+  appliedFields   Json? // which fields were actually applied on approve — audit trail
+
+  createdByUserId  String?
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@index([status])
+}
+
+enum ContentDraftType {
+  BLOG_POST
+  BUYING_GUIDE
+  COMPARISON
+  FAQ
+  EDUCATIONAL_ARTICLE
+  PRODUCT_INTRO
+  CATEGORY_CONTENT
+}
+
+enum ContentDraftStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  PUBLISHED
+}
+
+// AI-drafted site content. Publishing is always type-specific but always
+// reuses an existing system: BLOG_POST/BUYING_GUIDE/COMPARISON/FAQ/
+// EDUCATIONAL_ARTICLE become a real BlogPost row (the same table/admin flow
+// blog posts already use); PRODUCT_INTRO writes into that Product's own
+// description; CATEGORY_CONTENT writes into that Category's own
+// description. No second publishing system. productId/categoryId are plain
+// strings (no relation), same additive-only trade-off as ProductAiDraft.
+model ContentDraft {
+  id   String           @id @default(cuid())
+  type ContentDraftType
+
+  topic    String
+  keywords String?
+
+  title                String?
+  excerpt              String?
+  body                 String?
+  faq                  Json?
+  metaTitle            String?
+  metaDescription      String?
+  suggestedImagePrompt String?
+  internalLinks        Json? // [{ label, url }], restricted to real existing site URLs
+  sources              Json?
+
+  productId  String?
+  categoryId String?
+
+  status              ContentDraftStatus @default(PENDING_REVIEW)
+  rejectionReason     String?
+  publishedBlogPostId String?
+
+  createdByUserId  String?
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([type])
+}
+
 // ────────────────────────────── Runtime settings ──────────────────────────────
 
 // Single-row table (id is always 1) holding operator-configurable secrets and
@@ -1023,6 +1134,14 @@ model AppSettings {
   removeBgApiKey                   String?
   imageGenerationProvider          String? // defaults to "openai" (DALL·E) when a key is present
   imageAutopilotMonthlyBudgetToman String? // parsed as a number where used; stored as text like every other setting
+
+  // SEO + Content Autopilot (Sprint 4)
+  // Gates only the LOW-RISK auto-apply path (meta description refinement,
+  // search keywords, image alt text) in SeoSuggestionService — title, H1,
+  // slug/URL, price, and technical specs are NEVER auto-applied regardless
+  // of this setting; they always require explicit admin approval.
+  seoAutoFixEnabled            String? // "true"/"false" as text, like every other setting; unset = off
+  seoContentMonthlyBudgetToman String? // separate pool from Image Autopilot's budget, same parsing convention
 
   updatedAt DateTime @updatedAt
 }

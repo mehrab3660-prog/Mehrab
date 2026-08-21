@@ -313,6 +313,58 @@ export interface ProductAiDraftImage {
   createdAt: string;
 }
 
+export interface SeoProblem {
+  severity: "HIGH" | "MEDIUM" | "LOW";
+  entityType: "Product" | "Category" | "BlogPost";
+  entityId: string;
+  entityName: string;
+  field: string;
+  message: string;
+}
+
+export interface ProductSeoSuggestion {
+  id: string;
+  productId: string;
+  metaTitle?: string | null;
+  metaDescription?: string | null;
+  searchKeywords?: string | null;
+  h1Suggestion?: string | null;
+  descriptionSuggestion?: string | null;
+  faq?: { q: string; a: string }[] | null;
+  altTextSuggestions?: Record<string, string> | null;
+  internalLinks?: { label: string; url: string }[] | null;
+  sources?: string[] | null;
+  confidenceNote?: string | null;
+  status: "PENDING_REVIEW" | "APPROVED" | "REJECTED";
+  rejectionReason?: string | null;
+  appliedFields?: string[] | null;
+  createdAt: string;
+}
+
+export type ContentDraftType = "BLOG_POST" | "BUYING_GUIDE" | "COMPARISON" | "FAQ" | "EDUCATIONAL_ARTICLE" | "PRODUCT_INTRO" | "CATEGORY_CONTENT";
+
+export interface ContentDraft {
+  id: string;
+  type: ContentDraftType;
+  topic: string;
+  keywords?: string | null;
+  title?: string | null;
+  excerpt?: string | null;
+  body?: string | null;
+  faq?: { q: string; a: string }[] | null;
+  metaTitle?: string | null;
+  metaDescription?: string | null;
+  suggestedImagePrompt?: string | null;
+  internalLinks?: { label: string; url: string }[] | null;
+  sources?: string[] | null;
+  productId?: string | null;
+  categoryId?: string | null;
+  status: "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "PUBLISHED";
+  rejectionReason?: string | null;
+  publishedBlogPostId?: string | null;
+  createdAt: string;
+}
+
 export interface AiControlCenterData {
   pendingDraftsCount: number;
   pendingDrafts: { id: string; name: string; createdAt: string }[];
@@ -320,6 +372,13 @@ export interface AiControlCenterData {
   unansweredQuestions: { id: string; body: string; createdAt: string; product: { id: string; name: string; slug: string } }[];
   lowStockVariants: { quantity: number; sku: string; productId: string; productName: string }[];
   recentAiActivity: { action: string; entityType: string; entityId?: string | null; createdAt: string; user?: { fullName: string | null; phone: string } | null }[];
+  seoProblemsCount: number;
+  seoProblemsBySeverity: { HIGH: number; MEDIUM: number; LOW: number };
+  seoProblemsSample: SeoProblem[];
+  pendingSeoSuggestions: { id: string; productId: string; productName: string; createdAt: string }[];
+  pendingContentDrafts: { id: string; type: ContentDraftType; topic: string; title: string | null; createdAt: string }[];
+  productsNeedingSeoCount: number;
+  aiUsageCostThisMonthToman: number;
 }
 
 export interface AuditLogEntry {

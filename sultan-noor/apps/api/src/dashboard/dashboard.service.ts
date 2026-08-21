@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { SeoAuditService } from '../seo-autopilot/seo-audit.service';
 
 // Orders that actually represent real, counted sales — excludes carts that
 // never paid (PENDING_PAYMENT) and orders that didn't ultimately happen
@@ -10,7 +11,10 @@ const REAL_SALE_STATUSES: OrderStatus[] = ['PROCESSING', 'SHIPPED', 'DELIVERED']
 
 @Injectable()
 export class DashboardService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private seoAudit: SeoAuditService,
+  ) {}
 
   async summary() {
     const [totalOrders, totalRevenue, totalUsers, totalProducts, lowStock, pendingReviews, ordersByStatus] = await Promise.all([
@@ -141,13 +145,25 @@ export class DashboardService {
   }
 
   // A single, read-only view over signals that already exist elsewhere in
-  // the app (AI drafts, unanswered questions, low stock, the audit log) —
-  // deliberately does not invent "sales opportunities" or "SEO problems"
-  // widgets, since no real data source for those exists yet (see Sprint
-  // 3+ of the AI roadmap). Nothing here is itself an AI action; it only
-  // surfaces what a human still needs to look at.
+  // the app (AI drafts, unanswered questions, low stock, the audit log,
+  // SEO problems, pending SEO/content review) — never fabricates a "sales
+  // opportunity" or any other widget with no real data source behind it.
+  // Nothing here is itself an AI action; it only surfaces what a human
+  // still needs to look at.
   async aiControlCenter() {
-    const [pendingDraftsCount, pendingDrafts, draftsNeedingAttention, unansweredQuestions, lowStock, recentAiActivity] = await Promise.all([
+    const [
+      pendingDraftsCount,
+      pendingDrafts,
+      draftsNeedingAttention,
+      unansweredQuestions,
+      lowStock,
+      recentAiActivity,
+      seoProblems,
+      pendingSeoSuggestionsRaw,
+      pendingContentDrafts,
+      productsNeedingSeoCount,
+      aiUsageThisMonth,
+    ] = await Promise.all([
       this.prisma.productAiDraft.count({ where: { status: 'PENDING_REVIEW' } }),
       this.prisma.productAiDraft.findMany({
         where: { status: 'PENDING_REVIEW' },
@@ -174,12 +190,37 @@ export class DashboardService {
         take: 10,
       }),
       this.prisma.auditLog.findMany({
-        where: { action: { startsWith: 'ai_' } },
+        where: { OR: [{ action: { startsWith: 'ai_' } }, { action: { startsWith: 'seo.' } }, { action: { startsWith: 'content.' } }] },
         select: { action: true, entityType: true, entityId: true, createdAt: true, user: { select: { fullName: true, phone: true } } },
         orderBy: { createdAt: 'desc' },
         take: 20,
       }),
+      this.seoAudit.run(),
+      this.prisma.productSeoSuggestion.findMany({
+        where: { status: 'PENDING_REVIEW' },
+        select: { id: true, productId: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
+      this.prisma.contentDraft.findMany({
+        where: { status: 'PENDING_REVIEW' },
+        select: { id: true, type: true, topic: true, title: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
+      this.prisma.product.count({ where: { status: 'PUBLISHED', OR: [{ metaTitle: null }, { metaDescription: null }] } }),
+      this.monthlyAiUsageCost(),
     ]);
+
+    const suggestionProductIds = pendingSeoSuggestionsRaw.map((s) => s.productId);
+    const suggestionProducts = suggestionProductIds.length
+      ? await this.prisma.product.findMany({ where: { id: { in: suggestionProductIds } }, select: { id: true, name: true } })
+      : [];
+    const productNameById = new Map(suggestionProducts.map((p) => [p.id, p.name]));
+    const pendingSeoSuggestions = pendingSeoSuggestionsRaw.map((s) => ({ ...s, productName: productNameById.get(s.productId) ?? 'محصول حذف‌شده' }));
+
+    const seoProblemsBySeverity = { HIGH: 0, MEDIUM: 0, LOW: 0 };
+    for (const p of seoProblems) seoProblemsBySeverity[p.severity]++;
 
     return {
       pendingDraftsCount,
@@ -193,6 +234,21 @@ export class DashboardService {
         productName: s.productVariant.product.name,
       })),
       recentAiActivity,
+      seoProblemsCount: seoProblems.length,
+      seoProblemsBySeverity,
+      seoProblemsSample: seoProblems.slice(0, 10),
+      pendingSeoSuggestions,
+      pendingContentDrafts,
+      productsNeedingSeoCount,
+      aiUsageCostThisMonthToman: aiUsageThisMonth,
     };
+  }
+
+  private async monthlyAiUsageCost(): Promise<number> {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    const usage = await this.prisma.aiUsageLog.aggregate({ where: { createdAt: { gte: startOfMonth } }, _sum: { costToman: true } });
+    return Number(usage._sum.costToman ?? 0);
   }
 }

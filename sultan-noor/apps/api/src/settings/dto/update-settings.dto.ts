@@ -63,4 +63,12 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsString()
   imageAutopilotMonthlyBudgetToman?: string;
+
+  @IsOptional()
+  @IsString()
+  seoAutoFixEnabled?: string;
+
+  @IsOptional()
+  @IsString()
+  seoContentMonthlyBudgetToman?: string;
 }

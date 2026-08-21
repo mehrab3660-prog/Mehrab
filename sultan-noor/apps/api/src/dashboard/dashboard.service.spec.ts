@@ -20,7 +20,7 @@ describe('DashboardService.report', () => {
       order: { findMany: jest.fn().mockResolvedValue([]), groupBy: jest.fn().mockResolvedValue([]) },
       orderItem: { findMany: jest.fn().mockResolvedValue([]) },
     };
-    service = new DashboardService(prisma);
+    service = new DashboardService(prisma, { run: jest.fn().mockResolvedValue([]) } as any);
   });
 
   it('only counts PROCESSING/SHIPPED/DELIVERED orders as revenue, never PENDING_PAYMENT/CANCELLED/REFUNDED', async () => {
@@ -155,8 +155,12 @@ describe('DashboardService.aiControlCenter', () => {
       question: { findMany: jest.fn().mockResolvedValue([]) },
       stock: { findMany: jest.fn().mockResolvedValue([]) },
       auditLog: { findMany: jest.fn().mockResolvedValue([]) },
+      productSeoSuggestion: { findMany: jest.fn().mockResolvedValue([]) },
+      contentDraft: { findMany: jest.fn().mockResolvedValue([]) },
+      product: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
+      aiUsageLog: { aggregate: jest.fn().mockResolvedValue({ _sum: { costToman: 0 } }) },
     };
-    service = new DashboardService(prisma);
+    service = new DashboardService(prisma, { run: jest.fn().mockResolvedValue([]) } as any);
   });
 
   it('only counts/lists drafts that are still PENDING_REVIEW', async () => {
@@ -191,14 +195,45 @@ describe('DashboardService.aiControlCenter', () => {
     expect(result.lowStockVariants).toEqual([{ quantity: 2, sku: 'SKU-1', productId: 'p1', productName: 'کلید مینیاتوری' }]);
   });
 
-  it('only pulls ai_*-prefixed audit log actions, not every admin action', async () => {
+  it('only pulls ai_*/seo.*/content.*-prefixed audit log actions, not every admin action', async () => {
     await service.aiControlCenter();
 
     const where = prisma.auditLog.findMany.mock.calls[0][0].where;
-    expect(where).toEqual({ action: { startsWith: 'ai_' } });
+    expect(where).toEqual({
+      OR: [{ action: { startsWith: 'ai_' } }, { action: { startsWith: 'seo.' } }, { action: { startsWith: 'content.' } }],
+    });
   });
 
-  it('never fabricates sales-opportunity or SEO-problem data — only returns real, existing signals', async () => {
+  it('resolves pending SEO suggestions to their real product name via a real Product lookup, not a fabricated one', async () => {
+    prisma.productSeoSuggestion.findMany.mockResolvedValue([{ id: 's1', productId: 'p1', createdAt: new Date() }]);
+    prisma.product.findMany.mockResolvedValue([{ id: 'p1', name: 'کلید مینیاتوری' }]);
+
+    const result = await service.aiControlCenter();
+
+    expect(result.pendingSeoSuggestions).toEqual([expect.objectContaining({ id: 's1', productName: 'کلید مینیاتوری' })]);
+  });
+
+  it('falls back to an honest placeholder when a suggestion points at a since-deleted product', async () => {
+    prisma.productSeoSuggestion.findMany.mockResolvedValue([{ id: 's1', productId: 'gone', createdAt: new Date() }]);
+    prisma.product.findMany.mockResolvedValue([]);
+
+    const result = await service.aiControlCenter();
+
+    expect(result.pendingSeoSuggestions[0].productName).toBe('محصول حذف‌شده');
+  });
+
+  it('runs the real SeoAuditService and summarizes real problems by severity, never a fabricated count', async () => {
+    const seoAudit = { run: jest.fn().mockResolvedValue([{ severity: 'HIGH', entityType: 'Product', entityId: 'p1', entityName: 'x', field: 'metaTitle', message: 'm' }]) };
+    service = new DashboardService(prisma, seoAudit as any);
+
+    const result = await service.aiControlCenter();
+
+    expect(seoAudit.run).toHaveBeenCalled();
+    expect(result.seoProblemsCount).toBe(1);
+    expect(result.seoProblemsBySeverity).toEqual({ HIGH: 1, MEDIUM: 0, LOW: 0 });
+  });
+
+  it('never fabricates a sales-opportunity widget — only real, existing signals are returned', async () => {
     const result = await service.aiControlCenter();
 
     expect(result).toEqual(
@@ -209,9 +244,13 @@ describe('DashboardService.aiControlCenter', () => {
         unansweredQuestions: expect.any(Array),
         lowStockVariants: expect.any(Array),
         recentAiActivity: expect.any(Array),
+        seoProblemsCount: expect.any(Number),
+        pendingSeoSuggestions: expect.any(Array),
+        pendingContentDrafts: expect.any(Array),
+        productsNeedingSeoCount: expect.any(Number),
+        aiUsageCostThisMonthToman: expect.any(Number),
       }),
     );
     expect(result).not.toHaveProperty('salesOpportunities');
-    expect(result).not.toHaveProperty('seoProblems');
   });
 });
