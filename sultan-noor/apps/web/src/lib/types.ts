@@ -20,6 +20,82 @@ export interface AiConversation {
   user?: { id: string; fullName: string | null; phone: string } | null;
 }
 
+// The only product shape the Store-only AI Product Seller ever returns —
+// always built server-side from a real, current Catalog lookup, never from
+// parsed LLM text (Sprint 6).
+export interface AiProductCard {
+  id: string;
+  name: string;
+  slug: string;
+  brand: string | null;
+  price: number;
+  inStock: boolean;
+  stock: number;
+  imageUrl: string | null;
+  avgRating: number | null;
+  reviewCount: number;
+}
+
+export interface AiAskResponse {
+  conversationId: string;
+  reply: string | null;
+  suggestedProducts: AiProductCard[];
+  relatedProducts?: AiProductCard[];
+  awaitingStaff: boolean;
+  allowAddToCart?: boolean;
+}
+
+export type NewsItemStatus = "DISCOVERED" | "VERIFIED" | "AI_DRAFT" | "PENDING_REVIEW" | "APPROVED" | "PUBLISHED" | "REJECTED";
+
+export interface NewsSource {
+  id: string;
+  name: string;
+  feedUrl: string;
+  category: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NewsFaqItem {
+  q: string;
+  a: string;
+}
+
+export interface NewsItem {
+  id: string;
+  sourceId: string;
+  sourceName: string;
+  sourceUrl: string;
+  rawTitle: string;
+  rawSummary: string | null;
+  publishedAt: string | null;
+  discoveredAt: string;
+  status: NewsItemStatus;
+  duplicateOfId: string | null;
+  similarGroupKey: string | null;
+  confidenceNote: string | null;
+  draftTitle: string | null;
+  draftExcerpt: string | null;
+  draftBody: string | null;
+  category: string | null;
+  tags: string | null;
+  seoTitle: string | null;
+  metaDescription: string | null;
+  keywords: string | null;
+  faq: NewsFaqItem[] | null;
+  confirmingSources: string[] | null;
+  suggestedImagePrompt: string | null;
+  imageUrl: string | null;
+  imageSource: "SOURCE" | "SOURCE_SEARCH" | "AI_GENERATED" | null;
+  imageIsAiGenerated: boolean;
+  imageAttribution: string | null;
+  publishedBlogPostId: string | null;
+  rejectionReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ProductImage {
   id: string;
   url: string;
@@ -389,6 +465,23 @@ export interface AiControlCenterData {
   abandonedCarts: { count: number; approximateValueToman: number };
   pendingSalesRecommendations: { id: string; type: SalesRecommendationType; title: string; severity: SalesRecommendationSeverity; createdAt: string }[];
   salesDataGaps: string[];
+  news: {
+    pendingReviewCount: number;
+    pendingReview: { id: string; draftTitle: string | null; rawTitle: string; category: string | null; createdAt: string }[];
+    discoveredCount: number;
+    publishedCount: number;
+    aiCostThisMonthToman: number;
+    aiErrorsThisMonth: number;
+  };
+  storeAi: {
+    productQueriesThisMonth: number;
+    searchSuccessThisMonth: number;
+    noResultSearchesThisMonth: number;
+    addToCartThisMonth: number;
+    aiCostThisMonthToman: number;
+    aiErrorsThisMonth: number;
+    conversion: { trackableClicks: number; converted: number; rate: number } | null;
+  };
 }
 
 export type SalesRecommendationType = "CROSS_SELL" | "BUNDLE" | "DISCOUNT" | "CAMPAIGN" | "ABANDONED_CART";

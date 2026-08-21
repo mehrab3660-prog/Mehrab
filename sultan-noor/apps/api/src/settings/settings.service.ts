@@ -20,7 +20,14 @@ type SettingKey =
   | 'imageAutopilotMonthlyBudgetToman'
   | 'seoAutoFixEnabled'
   | 'seoContentMonthlyBudgetToman'
-  | 'salesAiMonthlyBudgetToman';
+  | 'salesAiMonthlyBudgetToman'
+  | 'newsMonthlyBudgetToman'
+  | 'storeAiEnabled'
+  | 'storeAiMaxResults'
+  | 'storeAiMonthlyBudgetToman'
+  | 'storeAiRateLimitPerMinute'
+  | 'storeAiAllowAddToCart'
+  | 'storeAiStrictCatalogOnly';
 
 // Maps each DB-backed setting to the env var it falls back to when unset —
 // existing .env-based deployments keep working unchanged.
@@ -43,6 +50,13 @@ const ENV_FALLBACK: Record<SettingKey, string> = {
   seoAutoFixEnabled: 'SEO_AUTO_FIX_ENABLED',
   seoContentMonthlyBudgetToman: 'SEO_CONTENT_MONTHLY_BUDGET_TOMAN',
   salesAiMonthlyBudgetToman: 'SALES_AI_MONTHLY_BUDGET_TOMAN',
+  newsMonthlyBudgetToman: 'NEWS_MONTHLY_BUDGET_TOMAN',
+  storeAiEnabled: 'STORE_AI_ENABLED',
+  storeAiMaxResults: 'STORE_AI_MAX_RESULTS',
+  storeAiMonthlyBudgetToman: 'STORE_AI_MONTHLY_BUDGET_TOMAN',
+  storeAiRateLimitPerMinute: 'STORE_AI_RATE_LIMIT_PER_MINUTE',
+  storeAiAllowAddToCart: 'STORE_AI_ALLOW_ADD_TO_CART',
+  storeAiStrictCatalogOnly: 'STORE_AI_STRICT_CATALOG_ONLY',
 };
 
 const SECRET_KEYS: SettingKey[] = [

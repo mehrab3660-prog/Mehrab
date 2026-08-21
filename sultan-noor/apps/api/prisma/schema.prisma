@@ -776,6 +776,13 @@ model BlogPost {
   metaTitle       String?
   metaDescription String?
 
+  // News Autopilot (Sprint 6) — optional, additive. category is a single
+  // free-text label ("برق صنعتی", "هوشمندسازی", ...); tags is a comma-
+  // separated list, same convention as Product.searchKeywords. Ordinary
+  // hand-written blog posts simply leave these unset.
+  category String?
+  tags     String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -1149,6 +1156,25 @@ model AppSettings {
   // never touch this budget.
   salesAiMonthlyBudgetToman String?
 
+  // News Autopilot (Sprint 6) — own budget pool, same parsing convention.
+  // Discovery/verification are rule-based; only draft translation/rewriting
+  // calls the AI provider.
+  newsMonthlyBudgetToman String?
+
+  // Store-only AI Product Seller (Sprint 6). storeAiStrictCatalogOnly unset
+  // (or any value other than the literal string "false") means STRICT ON —
+  // production must never silently run in a non-strict mode just because
+  // nobody has touched this setting yet. storeAiAllowAddToCart gates only
+  // whether the chat UI *offers* an add-to-cart action on a product card;
+  // the real POST /cart/items endpoint always enforces its own auth/stock
+  // rules regardless of this flag.
+  storeAiEnabled              String? // "true"/"false"; unset = on (same convention as seoAutoFixEnabled's inverse — see resolveStoreAiSettings)
+  storeAiMaxResults           String? // parsed as int; default 5 when unset
+  storeAiMonthlyBudgetToman   String?
+  storeAiRateLimitPerMinute   String? // parsed as int; default 10 per user when unset
+  storeAiAllowAddToCart       String? // "true"/"false"; unset = on
+  storeAiStrictCatalogOnly    String? // "true"/"false"; unset = on (the required production default)
+
   updatedAt DateTime @updatedAt
 }
 
@@ -1215,4 +1241,95 @@ model SalesRecommendation {
 
   @@index([status])
   @@index([type])
+}
+
+// ────────────────────────────── Electrical News Autopilot (Sprint 6) ──────────────────────────────
+
+// An admin-configured RSS/Atom feed the discovery job reads from — never a
+// scraped or bypassed page. Fetching is always a plain, robots.txt-respecting
+// GET of a feed URL the admin themselves added; there is no HTML scraping,
+// no login/paywall bypass, and no crawling beyond the feed itself.
+model NewsSource {
+  id       String  @id @default(cuid())
+  name     String
+  feedUrl  String
+  category String? // free-text hint, e.g. "روشنایی", "خانه هوشمند" — informational only
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum NewsItemStatus {
+  DISCOVERED
+  VERIFIED
+  AI_DRAFT
+  PENDING_REVIEW
+  APPROVED
+  PUBLISHED
+  REJECTED
+}
+
+enum NewsImageSource {
+  SOURCE
+  SOURCE_SEARCH
+  AI_GENERATED
+}
+
+// One discovered article, carried through discovery -> verification ->
+// AI draft -> admin approval -> publish. Plain string sourceId (no relation)
+// mirrors every other Sprint 3-5 draft model — no back-reference needed on
+// NewsSource. duplicateOfId points at the NewsItem this one was recognized
+// as a duplicate/near-duplicate of (also a plain string), so a later admin
+// can trace why it was set aside without deleting the row.
+model NewsItem {
+  id          String @id @default(cuid())
+  sourceId    String
+  sourceName  String
+  sourceUrl   String // the original article URL — always kept, always shown
+  contentHash String // sha256 of sourceUrl, for cheap exact-duplicate detection
+
+  rawTitle     String
+  rawSummary   String?
+  language     String? // best-effort tag ("fa", "en", ...) from the feed, informational only
+  publishedAt  DateTime? // the source's own claimed publish date
+  discoveredAt DateTime  @default(now())
+
+  status          NewsItemStatus @default(DISCOVERED)
+  duplicateOfId   String?
+  similarGroupKey String? // normalized-title key used to cluster near-duplicates for admin review
+  confidenceNote  String? // e.g. "تاریخ انتشار در منبع ثبت نشده" — uncertainties the AI/verification step flagged
+
+  // AI-drafted fields (Sultan Noor's own rewritten/translated content —
+  // never the source text verbatim). All null until generateDraft() runs.
+  draftTitle           String?
+  draftExcerpt         String?
+  draftBody            String?
+  category             String?
+  tags                 String?
+  seoTitle             String?
+  metaDescription      String?
+  keywords             String?
+  faq                  Json?
+  confirmingSources    Json? // [{ url, title }] — independent sources that corroborate this story, if any were found
+  suggestedImagePrompt String?
+
+  imageUrl           String?
+  imageSource         NewsImageSource?
+  imageIsAiGenerated  Boolean @default(false)
+  imageAttribution    String?
+
+  publishedBlogPostId String?
+  rejectionReason      String?
+
+  createdByUserId  String?
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([contentHash])
+  @@index([similarGroupKey])
 }

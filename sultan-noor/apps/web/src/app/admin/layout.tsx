@@ -14,6 +14,7 @@ const NAV = [
   { href: "/admin/ai-products", label: "آماده‌سازی محصول با AI" },
   { href: "/admin/seo", label: "سئو خودکار" },
   { href: "/admin/content", label: "تولید محتوا با AI" },
+  { href: "/admin/news", label: "اخبار برق (AI)" },
   { href: "/admin/sales-analytics", label: "تحلیل فروش" },
   { href: "/admin/sales-recommendations", label: "پیشنهادهای فروش AI" },
   { href: "/admin/orders", label: "سفارش‌ها" },

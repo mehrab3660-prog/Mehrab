@@ -75,4 +75,32 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsString()
   salesAiMonthlyBudgetToman?: string;
+
+  @IsOptional()
+  @IsString()
+  newsMonthlyBudgetToman?: string;
+
+  @IsOptional()
+  @IsString()
+  storeAiEnabled?: string;
+
+  @IsOptional()
+  @IsString()
+  storeAiMaxResults?: string;
+
+  @IsOptional()
+  @IsString()
+  storeAiMonthlyBudgetToman?: string;
+
+  @IsOptional()
+  @IsString()
+  storeAiRateLimitPerMinute?: string;
+
+  @IsOptional()
+  @IsString()
+  storeAiAllowAddToCart?: string;
+
+  @IsOptional()
+  @IsString()
+  storeAiStrictCatalogOnly?: string;
 }

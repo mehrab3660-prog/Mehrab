@@ -44,6 +44,12 @@ const ACTION_LABEL: Record<string, string> = {
   "sales.recommendation_approved": "تأیید پیشنهاد فروش",
   "sales.recommendation_rejected": "رد پیشنهاد فروش",
   "sales.campaign_activated": "فعال‌سازی کمپین",
+  "news.discovery_run": "بررسی منابع خبری",
+  "news.draft_generated": "تولید پیش‌نویس خبر",
+  "news.edited": "ویرایش خبر",
+  "news.approved": "تأیید خبر",
+  "news.rejected": "رد خبر",
+  "news.published": "انتشار خبر",
 };
 
 function actionLabel(action: string): string {
@@ -153,6 +159,67 @@ export default function AiControlCenterPage() {
           <p className="text-sm text-foreground/50">پیشنهادهای AI در انتظار تأیید</p>
           <p className="mt-1 text-xl font-extrabold text-brand">{data.pendingSalesRecommendations.length}</p>
         </Link>
+      </div>
+
+      <h2 className="mb-3 mt-2 font-bold">اخبار برق (News Autopilot)</h2>
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Link href="/admin/news" className="rounded-lg border border-border-color bg-surface p-4 hover:border-brand">
+          <p className="text-sm text-foreground/50">خبر در انتظار بررسی</p>
+          <p className="mt-1 text-xl font-extrabold text-brand">{data.news.pendingReviewCount}</p>
+        </Link>
+        <Link href="/admin/news" className="rounded-lg border border-border-color bg-surface p-4 hover:border-brand">
+          <p className="text-sm text-foreground/50">خبر کشف‌شده (بررسی‌نشده)</p>
+          <p className="mt-1 text-xl font-extrabold">{data.news.discoveredCount}</p>
+        </Link>
+        <Link href="/admin/news" className="rounded-lg border border-border-color bg-surface p-4 hover:border-brand">
+          <p className="text-sm text-foreground/50">خبر منتشرشده (کل)</p>
+          <p className="mt-1 text-xl font-extrabold text-green-500">{data.news.publishedCount}</p>
+        </Link>
+        <div className="rounded-lg border border-border-color bg-surface p-4">
+          <p className="text-sm text-foreground/50">هزینه AI اخبار — این ماه</p>
+          <p className="mt-1 text-xl font-extrabold">{data.news.aiCostThisMonthToman.toLocaleString("fa-IR")} تومان</p>
+          {data.news.aiErrorsThisMonth > 0 && <p className="mt-1 text-xs text-red-500">{data.news.aiErrorsThisMonth} خطای AI</p>}
+        </div>
+      </div>
+
+      <h2 className="mb-3 mt-2 font-bold">دستیار فروش هوشمند فروشگاه (Store-only AI)</h2>
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-lg border border-border-color bg-surface p-4">
+          <p className="text-sm text-foreground/50">درخواست محصول — این ماه</p>
+          <p className="mt-1 text-xl font-extrabold text-brand">{data.storeAi.productQueriesThisMonth}</p>
+        </div>
+        <div className="rounded-lg border border-border-color bg-surface p-4">
+          <p className="text-sm text-foreground/50">جستجوی موفق</p>
+          <p className="mt-1 text-xl font-extrabold text-green-500">{data.storeAi.searchSuccessThisMonth}</p>
+        </div>
+        <div className="rounded-lg border border-border-color bg-surface p-4">
+          <p className="text-sm text-foreground/50">جستجوی بدون نتیجه</p>
+          <p className="mt-1 text-xl font-extrabold text-amber-500">{data.storeAi.noResultSearchesThisMonth}</p>
+        </div>
+        <div className="rounded-lg border border-border-color bg-surface p-4">
+          <p className="text-sm text-foreground/50">افزودن به سبد از طریق چت</p>
+          <p className="mt-1 text-xl font-extrabold text-brand">{data.storeAi.addToCartThisMonth}</p>
+        </div>
+      </div>
+      <div className="mb-6 grid gap-4 sm:grid-cols-2">
+        <div className="rounded-lg border border-border-color bg-surface p-4">
+          <p className="text-sm text-foreground/50">هزینه استدلال AI فروشگاه — این ماه</p>
+          <p className="mt-1 text-xl font-extrabold">{data.storeAi.aiCostThisMonthToman.toLocaleString("fa-IR")} تومان</p>
+          {data.storeAi.aiErrorsThisMonth > 0 && <p className="mt-1 text-xs text-red-500">{data.storeAi.aiErrorsThisMonth} خطای AI</p>}
+        </div>
+        <div className="rounded-lg border border-border-color bg-surface p-4">
+          <p className="text-sm text-foreground/50">نرخ تبدیل افزودن‌به‌سبد از چت (فقط کاربران واردشده)</p>
+          {data.storeAi.conversion ? (
+            <p className="mt-1 text-xl font-extrabold text-brand">
+              {(data.storeAi.conversion.rate * 100).toFixed(0)}٪{" "}
+              <span className="text-xs font-normal text-foreground/40">
+                ({data.storeAi.conversion.converted} از {data.storeAi.conversion.trackableClicks})
+              </span>
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-foreground/40">هنوز داده کافی برای محاسبه نرخ تبدیل وجود ندارد.</p>
+          )}
+        </div>
       </div>
 
       {data.salesDataGaps.length > 0 && (

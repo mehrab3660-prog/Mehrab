@@ -151,6 +151,10 @@ export class DashboardService {
   // Nothing here is itself an AI action; it only surfaces what a human
   // still needs to look at.
   async aiControlCenter() {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
     const [
       pendingDraftsCount,
       pendingDrafts,
@@ -168,6 +172,17 @@ export class DashboardService {
       crossSellPairs,
       abandonedCartSummary,
       pendingSalesRecommendations,
+      pendingNewsReviewCount,
+      pendingNewsReview,
+      newsDiscoveredCount,
+      newsPublishedCount,
+      storeAiProductQueries,
+      storeAiSearchSuccess,
+      storeAiNoResult,
+      storeAiAddToCart,
+      storeAiUsage,
+      newsAiUsage,
+      storeAiConversion,
     ] = await Promise.all([
       this.prisma.productAiDraft.count({ where: { status: 'PENDING_REVIEW' } }),
       this.prisma.productAiDraft.findMany({
@@ -195,7 +210,15 @@ export class DashboardService {
         take: 10,
       }),
       this.prisma.auditLog.findMany({
-        where: { OR: [{ action: { startsWith: 'ai_' } }, { action: { startsWith: 'seo.' } }, { action: { startsWith: 'content.' } }] },
+        where: {
+          OR: [
+            { action: { startsWith: 'ai_' } },
+            { action: { startsWith: 'seo.' } },
+            { action: { startsWith: 'content.' } },
+            { action: { startsWith: 'sales.' } },
+            { action: { startsWith: 'news.' } },
+          ],
+        },
         select: { action: true, entityType: true, entityId: true, createdAt: true, user: { select: { fullName: true, phone: true } } },
         orderBy: { createdAt: 'desc' },
         take: 20,
@@ -225,6 +248,22 @@ export class DashboardService {
         orderBy: { createdAt: 'desc' },
         take: 10,
       }),
+      this.prisma.newsItem.count({ where: { status: 'PENDING_REVIEW' } }),
+      this.prisma.newsItem.findMany({
+        where: { status: 'PENDING_REVIEW' },
+        select: { id: true, draftTitle: true, rawTitle: true, category: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
+      this.prisma.newsItem.count({ where: { status: 'DISCOVERED' } }),
+      this.prisma.newsItem.count({ where: { status: 'PUBLISHED' } }),
+      this.prisma.activityLog.count({ where: { event: 'store_ai.product_query', createdAt: { gte: startOfMonth } } }),
+      this.prisma.activityLog.count({ where: { event: 'store_ai.search_success', createdAt: { gte: startOfMonth } } }),
+      this.prisma.activityLog.count({ where: { event: 'store_ai.search_no_result', createdAt: { gte: startOfMonth } } }),
+      this.prisma.activityLog.count({ where: { event: 'store_ai.add_to_cart', createdAt: { gte: startOfMonth } } }),
+      this.aiUsageByProvider('store-ai', startOfMonth),
+      this.aiUsageByProvider('news-generation', startOfMonth),
+      this.storeAiConversion(startOfMonth),
     ]);
 
     const suggestionProductIds = pendingSeoSuggestionsRaw.map((s) => s.productId);
@@ -267,6 +306,28 @@ export class DashboardService {
       abandonedCarts: { count: abandonedCartSummary.count, approximateValueToman: abandonedCartSummary.approximateValueToman },
       pendingSalesRecommendations,
       salesDataGaps: salesOverview.dataGaps,
+      news: {
+        pendingReviewCount: pendingNewsReviewCount,
+        pendingReview: pendingNewsReview,
+        discoveredCount: newsDiscoveredCount,
+        publishedCount: newsPublishedCount,
+        aiCostThisMonthToman: newsAiUsage.costToman,
+        aiErrorsThisMonth: newsAiUsage.errorCount,
+      },
+      // Store-only AI Product Seller metrics (Sprint 6) — every number here
+      // is a real ActivityLog/AiUsageLog aggregate, never an estimate. When
+      // there isn't yet real data to compute a rate from (e.g. no logged-in
+      // add-to-cart clicks this month), conversion is null rather than a
+      // fabricated 0% or 100%.
+      storeAi: {
+        productQueriesThisMonth: storeAiProductQueries,
+        searchSuccessThisMonth: storeAiSearchSuccess,
+        noResultSearchesThisMonth: storeAiNoResult,
+        addToCartThisMonth: storeAiAddToCart,
+        aiCostThisMonthToman: storeAiUsage.costToman,
+        aiErrorsThisMonth: storeAiUsage.errorCount,
+        conversion: storeAiConversion,
+      },
     };
   }
 
@@ -276,5 +337,42 @@ export class DashboardService {
     startOfMonth.setHours(0, 0, 0, 0);
     const usage = await this.prisma.aiUsageLog.aggregate({ where: { createdAt: { gte: startOfMonth } }, _sum: { costToman: true } });
     return Number(usage._sum.costToman ?? 0);
+  }
+
+  private async aiUsageByProvider(provider: string, startOfMonth: Date): Promise<{ costToman: number; errorCount: number }> {
+    const [costAgg, errorCount] = await Promise.all([
+      this.prisma.aiUsageLog.aggregate({ where: { createdAt: { gte: startOfMonth }, provider }, _sum: { costToman: true } }),
+      this.prisma.aiUsageLog.count({ where: { createdAt: { gte: startOfMonth }, provider, success: false } }),
+    ]);
+    return { costToman: Number(costAgg._sum.costToman ?? 0), errorCount };
+  }
+
+  // Real conversion signal, never a fabricated rate: an AI "Add to Cart"
+  // click only counts as trackable when it came from a logged-in user (a
+  // guest click can't honestly be tied to a later order), and only counts
+  // as converted when that same user's account shows a real, paid/shipped
+  // order containing that exact product within the following 14 days.
+  // Returns null — not a 0% — when there is no real trackable data yet.
+  private async storeAiConversion(startOfMonth: Date) {
+    const addToCartEvents = await this.prisma.activityLog.findMany({
+      where: { event: 'store_ai.add_to_cart', createdAt: { gte: startOfMonth }, userId: { not: null } },
+      select: { userId: true, metadata: true, createdAt: true },
+    });
+    if (addToCartEvents.length === 0) return null;
+
+    let converted = 0;
+    for (const event of addToCartEvents) {
+      const productId = (event.metadata as any)?.productId;
+      if (!productId || !event.userId) continue;
+      const windowEnd = new Date(event.createdAt.getTime() + 14 * 24 * 60 * 60 * 1000);
+      const match = await this.prisma.orderItem.findFirst({
+        where: {
+          productId,
+          order: { userId: event.userId, status: { in: REAL_SALE_STATUSES }, createdAt: { gte: event.createdAt, lte: windowEnd } },
+        },
+      });
+      if (match) converted++;
+    }
+    return { trackableClicks: addToCartEvents.length, converted, rate: converted / addToCartEvents.length };
   }
 }

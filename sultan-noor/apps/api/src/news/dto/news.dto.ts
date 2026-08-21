@@ -1,72 +1,47 @@
 import { IsBoolean, IsOptional, IsString } from 'class-validator';
 
-export class CreateBlogPostDto {
+export class CreateNewsSourceDto {
   @IsString()
-  title: string;
+  name: string;
 
   @IsString()
-  slug: string;
-
-  @IsOptional()
-  @IsString()
-  excerpt?: string;
-
-  @IsString()
-  content: string;
-
-  @IsOptional()
-  @IsString()
-  coverImageUrl?: string;
-
-  @IsOptional()
-  @IsString()
-  metaTitle?: string;
-
-  @IsOptional()
-  @IsString()
-  metaDescription?: string;
+  feedUrl: string;
 
   @IsOptional()
   @IsString()
   category?: string;
-
-  @IsOptional()
-  @IsString()
-  tags?: string;
 }
 
-export class UpdateBlogPostDto {
+export class UpdateNewsSourceDto {
   @IsOptional()
   @IsString()
-  title?: string;
+  name?: string;
 
   @IsOptional()
   @IsString()
-  slug?: string;
+  feedUrl?: string;
 
   @IsOptional()
   @IsString()
-  excerpt?: string;
-
-  @IsOptional()
-  @IsString()
-  content?: string;
-
-  @IsOptional()
-  @IsString()
-  coverImageUrl?: string;
+  category?: string;
 
   @IsOptional()
   @IsBoolean()
-  isPublished?: boolean;
+  isActive?: boolean;
+}
+
+export class UpdateNewsItemDto {
+  @IsOptional()
+  @IsString()
+  draftTitle?: string;
 
   @IsOptional()
   @IsString()
-  metaTitle?: string;
+  draftExcerpt?: string;
 
   @IsOptional()
   @IsString()
-  metaDescription?: string;
+  draftBody?: string;
 
   @IsOptional()
   @IsString()
@@ -75,4 +50,22 @@ export class UpdateBlogPostDto {
   @IsOptional()
   @IsString()
   tags?: string;
+
+  @IsOptional()
+  @IsString()
+  seoTitle?: string;
+
+  @IsOptional()
+  @IsString()
+  metaDescription?: string;
+
+  @IsOptional()
+  @IsString()
+  keywords?: string;
+}
+
+export class RejectNewsItemDto {
+  @IsOptional()
+  @IsString()
+  reason?: string;
 }

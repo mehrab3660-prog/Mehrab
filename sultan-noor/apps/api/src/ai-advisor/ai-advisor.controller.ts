@@ -23,7 +23,7 @@ export class AiAdvisorController {
   // the global per-IP limit so this endpoint alone can't run up the bill.
   @Throttle({ default: { limit: 15, ttl: 60000 } })
   ask(@Body() dto: AskAdvisorDto, @Req() req: any) {
-    return this.aiAdvisorService.ask(req.user?.id, dto);
+    return this.aiAdvisorService.ask(req.user?.id, dto, { ipAddress: req.ip, userAgent: req.get?.('user-agent') });
   }
 
   // Polled by the chat widget to pick up staff replies once escalated —

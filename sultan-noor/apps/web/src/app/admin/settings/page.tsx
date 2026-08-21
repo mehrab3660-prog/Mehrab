@@ -27,7 +27,17 @@ type SettingsResponse = Record<
   | "imageSearchApiKey"
   | "removeBgApiKey"
   | "imageGenerationProvider"
-  | "imageAutopilotMonthlyBudgetToman",
+  | "imageAutopilotMonthlyBudgetToman"
+  | "seoAutoFixEnabled"
+  | "seoContentMonthlyBudgetToman"
+  | "salesAiMonthlyBudgetToman"
+  | "newsMonthlyBudgetToman"
+  | "storeAiEnabled"
+  | "storeAiMaxResults"
+  | "storeAiMonthlyBudgetToman"
+  | "storeAiRateLimitPerMinute"
+  | "storeAiAllowAddToCart"
+  | "storeAiStrictCatalogOnly",
   SettingStatus
 >;
 
@@ -288,6 +298,69 @@ export default function AdminSettingsPage() {
           <p className="mt-3 text-xs text-foreground/50">
             تولید تصویر با هوش مصنوعی (وقتی عکس واقعی پیدا نشود) از همان کلید OpenAI بالا استفاده می‌کند — نیازی به کلید جداگانه نیست.
           </p>
+        </section>
+
+        <section>
+          <h2 className="mb-3 text-lg font-bold">اخبار برق (News Autopilot)</h2>
+          <SettingField
+            fieldKey="newsMonthlyBudgetToman"
+            label="سقف هزینه‌ی ماهانه تولید خبر با AI (تومان، تخمینی)"
+            helpText="اگر خالی باشد، محدودیتی اعمال نمی‌شود. این عدد یک برآورد تقریبی است، نه صورتحساب دقیق."
+            status={settings.newsMonthlyBudgetToman}
+            onSave={handleSave}
+          />
+        </section>
+
+        <section>
+          <h2 className="mb-3 text-lg font-bold">دستیار فروش هوشمند فروشگاه (Store-only AI)</h2>
+          <p className="mb-3 text-xs text-foreground/50">
+            این دستیار فقط و فقط از کاتالوگ واقعی سلطان نور محصول پیشنهاد می‌دهد و هرگز محصولی از فروشگاه دیگری (آمازون، دیجی‌کالا، ترب و...) معرفی نمی‌کند.
+            «فقط کاتالوگ» به‌صورت پیش‌فرض همیشه فعال است، حتی اگر این مقادیر را تنظیم نکنید.
+          </p>
+          <div className="space-y-3">
+            <SettingField
+              fieldKey="storeAiEnabled"
+              label="فعال بودن دستیار فروش (مقدار «false» برای غیرفعال کردن)"
+              helpText="اگر خالی باشد یا هر مقداری غیر از «false» باشد، دستیار فعال است."
+              status={settings.storeAiEnabled}
+              onSave={handleSave}
+            />
+            <SettingField
+              fieldKey="storeAiStrictCatalogOnly"
+              label="فقط کاتالوگ واقعی — بدون استدلال آزاد AI (مقدار «false» برای اجازه‌ی استدلال AI در مقایسه‌ها)"
+              helpText="پیش‌فرض تولید همیشه فعال (روشن) است. حتی وقتی خاموش شود، پیشنهاد محصولات هرگز از کاتالوگ واقعی خارج نمی‌شود — این فقط اجازه می‌دهد AI برای مقایسه‌ی چند محصول واقعی توضیح بنویسد."
+              status={settings.storeAiStrictCatalogOnly}
+              onSave={handleSave}
+            />
+            <SettingField
+              fieldKey="storeAiMaxResults"
+              label="حداکثر تعداد محصول پیشنهادی در هر پاسخ"
+              helpText="پیش‌فرض: ۵"
+              status={settings.storeAiMaxResults}
+              onSave={handleSave}
+            />
+            <SettingField
+              fieldKey="storeAiRateLimitPerMinute"
+              label="حداکثر تعداد درخواست مجاز در دقیقه (برای هر کاربر/IP)"
+              helpText="پیش‌فرض: ۱۰"
+              status={settings.storeAiRateLimitPerMinute}
+              onSave={handleSave}
+            />
+            <SettingField
+              fieldKey="storeAiAllowAddToCart"
+              label="نمایش دکمه «افزودن به سبد» در چت (مقدار «false» برای مخفی کردن)"
+              helpText="این فقط دکمه را در چت کنترل می‌کند؛ افزودن واقعی همیشه از طریق API واقعی سبد خرید و با بررسی مجدد موجودی/قیمت انجام می‌شود."
+              status={settings.storeAiAllowAddToCart}
+              onSave={handleSave}
+            />
+            <SettingField
+              fieldKey="storeAiMonthlyBudgetToman"
+              label="سقف هزینه‌ی ماهانه استدلال AI (تومان، تخمینی)"
+              helpText="اگر خالی باشد، محدودیتی اعمال نمی‌شود. جستجوی ساده‌ی محصول هرگز هزینه‌ی AI ندارد — این فقط برای پاسخ‌های مقایسه‌ای/توضیحی است."
+              status={settings.storeAiMonthlyBudgetToman}
+              onSave={handleSave}
+            />
+          </div>
         </section>
 
         <section>

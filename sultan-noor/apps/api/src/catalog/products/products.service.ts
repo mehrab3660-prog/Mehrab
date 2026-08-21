@@ -135,6 +135,24 @@ export class ProductsService implements OnApplicationBootstrap {
     return this.related(product.id, product.categoryId, take);
   }
 
+  // Real-time, fully-hydrated product data (current price, current stock,
+  // real rating) for a set of ids — the single source of truth the Store-
+  // only AI Product Seller (Sprint 6) reads from. Only PUBLISHED products
+  // are ever returned: a search hit for a draft/archived product must never
+  // reach a customer through the AI chat any more than through normal
+  // browsing. Silently drops ids that don't resolve to a real, published
+  // product instead of erroring — the caller decides what "not found" means.
+  async getManyByIds(ids: string[]) {
+    if (ids.length === 0) return [];
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: ids }, status: 'PUBLISHED' },
+      include: productInclude,
+    });
+    const orderById = new Map(ids.map((id, i) => [id, i]));
+    const sorted = products.sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0));
+    return this.withStock(await this.withRatings(sorted));
+  }
+
   // Real best-sellers computed from actual delivered/paid order quantities —
   // never a fabricated ranking. Products with zero sales are simply excluded.
   async bestSellers(take = 8) {

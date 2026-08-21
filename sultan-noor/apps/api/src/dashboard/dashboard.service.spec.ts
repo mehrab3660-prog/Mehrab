@@ -176,8 +176,11 @@ describe('DashboardService.aiControlCenter', () => {
       productSeoSuggestion: { findMany: jest.fn().mockResolvedValue([]) },
       contentDraft: { findMany: jest.fn().mockResolvedValue([]) },
       product: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
-      aiUsageLog: { aggregate: jest.fn().mockResolvedValue({ _sum: { costToman: 0 } }) },
+      aiUsageLog: { aggregate: jest.fn().mockResolvedValue({ _sum: { costToman: 0 } }), count: jest.fn().mockResolvedValue(0) },
       salesRecommendation: { findMany: jest.fn().mockResolvedValue([]) },
+      newsItem: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
+      activityLog: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
+      orderItem: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
     };
     salesAnalytics = { overview: jest.fn().mockResolvedValue(EMPTY_SALES_OVERVIEW) };
     opportunities = { bestSellingLowStock: jest.fn().mockResolvedValue([]), crossSellPairs: jest.fn().mockResolvedValue([]) };
@@ -217,12 +220,18 @@ describe('DashboardService.aiControlCenter', () => {
     expect(result.lowStockVariants).toEqual([{ quantity: 2, sku: 'SKU-1', productId: 'p1', productName: 'کلید مینیاتوری' }]);
   });
 
-  it('only pulls ai_*/seo.*/content.*-prefixed audit log actions, not every admin action', async () => {
+  it('only pulls ai_*/seo.*/content.*/sales.*/news.*-prefixed audit log actions, not every admin action', async () => {
     await service.aiControlCenter();
 
     const where = prisma.auditLog.findMany.mock.calls[0][0].where;
     expect(where).toEqual({
-      OR: [{ action: { startsWith: 'ai_' } }, { action: { startsWith: 'seo.' } }, { action: { startsWith: 'content.' } }],
+      OR: [
+        { action: { startsWith: 'ai_' } },
+        { action: { startsWith: 'seo.' } },
+        { action: { startsWith: 'content.' } },
+        { action: { startsWith: 'sales.' } },
+        { action: { startsWith: 'news.' } },
+      ],
     });
   });
 
@@ -279,8 +288,60 @@ describe('DashboardService.aiControlCenter', () => {
         crossSellOpportunityCount: expect.any(Number),
         abandonedCarts: expect.any(Object),
         pendingSalesRecommendations: expect.any(Array),
+        news: expect.any(Object),
+        storeAi: expect.any(Object),
       }),
     );
     expect(result).not.toHaveProperty('salesOpportunities');
+  });
+
+  it('surfaces real News Autopilot counts (pending review, discovered, published) and its own AI cost/error pool', async () => {
+    prisma.newsItem.count.mockResolvedValueOnce(3).mockResolvedValueOnce(7).mockResolvedValueOnce(12);
+    prisma.newsItem.findMany.mockResolvedValue([{ id: 'n1', draftTitle: 'خبر', rawTitle: 'خبر خام', category: 'روشنایی', createdAt: new Date() }]);
+
+    const result = await service.aiControlCenter();
+
+    expect(result.news).toEqual(
+      expect.objectContaining({
+        pendingReviewCount: 3,
+        discoveredCount: 7,
+        publishedCount: 12,
+        pendingReview: [expect.objectContaining({ id: 'n1' })],
+      }),
+    );
+  });
+
+  it('reports real Store-only AI usage counts from ActivityLog for this month, never fabricated', async () => {
+    prisma.activityLog.count
+      .mockResolvedValueOnce(20) // product_query
+      .mockResolvedValueOnce(15) // search_success
+      .mockResolvedValueOnce(5); // search_no_result
+    // add_to_cart count call happens too, but findMany drives the conversion calc
+    const result = await service.aiControlCenter();
+
+    expect(result.storeAi.productQueriesThisMonth).toBe(20);
+    expect(result.storeAi.searchSuccessThisMonth).toBe(15);
+    expect(result.storeAi.noResultSearchesThisMonth).toBe(5);
+  });
+
+  it('returns conversion as null (never a fabricated 0%) when there are no trackable AI add-to-cart clicks yet', async () => {
+    prisma.activityLog.findMany.mockResolvedValue([]);
+
+    const result = await service.aiControlCenter();
+
+    expect(result.storeAi.conversion).toBeNull();
+  });
+
+  it('computes a real conversion rate only from logged-in add-to-cart clicks that are followed by a real matching paid order', async () => {
+    const clickedAt = new Date('2026-08-01T10:00:00Z');
+    prisma.activityLog.findMany.mockResolvedValue([
+      { userId: 'u1', metadata: { productId: 'p1' }, createdAt: clickedAt },
+      { userId: 'u2', metadata: { productId: 'p2' }, createdAt: clickedAt },
+    ]);
+    prisma.orderItem.findFirst.mockResolvedValueOnce({ id: 'oi1' }).mockResolvedValueOnce(null);
+
+    const result = await service.aiControlCenter();
+
+    expect(result.storeAi.conversion).toEqual({ trackableClicks: 2, converted: 1, rate: 0.5 });
   });
 });

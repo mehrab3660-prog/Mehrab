@@ -9,7 +9,7 @@ interface CartState {
   cart: Cart | null;
   loading: boolean;
   refresh: () => Promise<void>;
-  addItem: (productId: string, quantity: number, productVariantId?: string) => Promise<void>;
+  addItem: (productId: string, quantity: number, productVariantId?: string, source?: "ai_advisor") => Promise<void>;
   updateItem: (itemId: string, quantity: number) => Promise<void>;
   removeItem: (itemId: string) => Promise<void>;
 }
@@ -39,8 +39,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     refresh();
   }, [refresh]);
 
-  const addItem: CartState["addItem"] = async (productId, quantity, productVariantId) => {
-    const data = await api.post<Cart>("/cart/items", { productId, quantity, productVariantId }, accessToken);
+  const addItem: CartState["addItem"] = async (productId, quantity, productVariantId, source) => {
+    const data = await api.post<Cart>("/cart/items", { productId, quantity, productVariantId, source }, accessToken);
     setCart(data);
   };
 

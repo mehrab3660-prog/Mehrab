@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { ProductsService } from '../catalog/products/products.service';
 import { PricingService } from '../pricing/pricing.service';
+import { ActivityLogService } from '../activity/activity-log.service';
 import { AddCartItemDto, UpdateCartItemDto } from './dto/cart.dto';
 
 const cartInclude = {
@@ -16,6 +17,7 @@ export class CartService {
     private prisma: PrismaService,
     private productsService: ProductsService,
     private pricingService: PricingService,
+    private activityLog: ActivityLogService,
   ) {}
 
   private async getOrCreateCart(userId: string) {
@@ -50,6 +52,15 @@ export class CartService {
     // again, and this write also refreshes `updatedAt` (the abandonment
     // clock the recovery cron reads).
     await this.prisma.cart.update({ where: { id: cart.id }, data: { abandonedReminderSentAt: null } });
+
+    // Real, non-fabricated usage signal for the Store-only AI Control
+    // Center (Sprint 6) — records only when the click genuinely came from
+    // the AI chat's "افزودن به سبد" button. Never affects the add itself:
+    // auth/stock/price were already fully validated above regardless.
+    if (dto.source === 'ai_advisor') {
+      await this.activityLog.record({ userId, event: 'store_ai.add_to_cart', metadata: { productId: dto.productId } });
+    }
+
     return this.getCart(userId);
   }
 
