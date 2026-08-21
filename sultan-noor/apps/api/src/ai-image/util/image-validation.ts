@@ -1,5 +1,6 @@
-import sharp, { Metadata } from 'sharp';
+import type { Metadata } from 'sharp';
 import { createHash } from 'crypto';
+import { loadSharp } from './sharp-loader';
 
 export interface ImageValidationResult {
   ok: boolean;
@@ -32,6 +33,7 @@ export async function validateImageBuffer(buffer: Buffer): Promise<ImageValidati
 
   let metadata: Metadata;
   try {
+    const sharp = loadSharp();
     metadata = await sharp(buffer, { limitInputPixels: MAX_INPUT_PIXELS }).metadata();
   } catch {
     return { ok: false, reason: 'فایل یک تصویر معتبر نیست یا قابل رمزگشایی ایمن نیست' };

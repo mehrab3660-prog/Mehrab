@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import sharp from 'sharp';
+import { loadSharp } from './util/sharp-loader';
 
 export const AI_DRAFT_IMAGE_DIR = process.env.AI_DRAFT_IMAGE_STORAGE_DIR ?? path.join(process.cwd(), 'storage', 'ai-drafts');
 export const AI_DRAFT_IMAGE_URL_PREFIX = '/api/draft-images';
@@ -45,6 +45,7 @@ export class ImageProcessingService {
     fs.mkdirSync(dir, { recursive: true });
     const id = randomUUID();
 
+    const sharp = loadSharp();
     const oriented = sharp(buffer, { limitInputPixels: 40_000_000 }).rotate();
     const resized = oriented.clone().resize({
       width: MAIN_MAX_DIMENSION,
