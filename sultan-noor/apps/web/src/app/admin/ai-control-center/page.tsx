@@ -1,0 +1,166 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { api } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import { AiControlCenterData } from "@/lib/types";
+import AdminHelp from "@/components/admin/AdminHelp";
+
+const ACTION_LABEL: Record<string, string> = {
+  "ai_product.prepare": "آماده‌سازی پیش‌نویس محصول",
+  "ai_product.edit": "ویرایش پیش‌نویس محصول",
+  "ai_product.approve": "تأیید محصول",
+  "ai_product.reject": "رد پیش‌نویس محصول",
+  "ai_image.search": "جستجوی تصویر",
+  "ai_image.search_skipped": "رد شدن جستجوی تصویر (بودجه)",
+  "ai_image.candidate_rejected": "رد کاندید تصویر",
+  "ai_image.background_removed": "حذف پس‌زمینه تصویر",
+  "ai_image.ai_generated": "تولید تصویر با هوش مصنوعی",
+  "ai_image.generation_skipped": "رد شدن تولید تصویر (بودجه)",
+  "ai_image.generation_failed": "خطا در تولید تصویر",
+  "ai_image.generation_rejected": "رد تصویر تولیدشده (نامعتبر)",
+  "ai_image.approved": "تأیید تصویر",
+  "ai_image.rejected": "رد تصویر",
+  "ai_image.set_main": "انتخاب تصویر اصلی",
+  "ai_image.regenerated": "بازتولید تصویر",
+  "ai_image.manual_upload": "بارگذاری دستی تصویر",
+  "ai_image.published": "انتشار تصاویر محصول",
+  "ai_image.none_available": "عدم موفقیت تصویر خودکار",
+  "ai_image.autopilot_failed": "خطای غیرمنتظره در تصویر خودکار",
+};
+
+function actionLabel(action: string): string {
+  return ACTION_LABEL[action] ?? action;
+}
+
+export default function AiControlCenterPage() {
+  const { accessToken } = useAuth();
+  const [data, setData] = useState<AiControlCenterData | null>(null);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    api.get<AiControlCenterData>("/dashboard/ai-control-center", accessToken).then(setData);
+  }, [accessToken]);
+
+  if (!data) return <p className="text-sm text-foreground/50">در حال بارگذاری...</p>;
+
+  return (
+    <div>
+      <h1 className="mb-6 text-2xl font-bold">مرکز کنترل هوش مصنوعی</h1>
+
+      <AdminHelp storageKey="ai-control-center">
+        <p>این صفحه فقط چیزهایی را نشان می‌دهد که همین الان در فروشگاه واقعی وجود دارند و احتمالاً باید یک نگاه به آن‌ها بیندازید — چیزی حدس زده یا ساخته نمی‌شود.</p>
+        <p>«پیش‌نویس‌های در انتظار تأیید» یعنی هوش مصنوعی یک محصول آماده کرده و منتظر بررسی و تأیید شماست. «نیاز به بررسی» یعنی تصویر خودکار برای آن‌ها آماده نشده.</p>
+        <p>«لاگ فعالیت هوش مصنوعی» فقط یک گزارش خواندنی است؛ برای جزئیات کامل به «لاگ فعالیت» در منو بروید.</p>
+      </AdminHelp>
+
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-lg border border-border-color bg-surface p-4">
+          <p className="text-sm text-foreground/50">پیش‌نویس در انتظار تأیید</p>
+          <p className="mt-1 text-xl font-extrabold text-brand">{data.pendingDraftsCount}</p>
+        </div>
+        <div className="rounded-lg border border-border-color bg-surface p-4">
+          <p className="text-sm text-foreground/50">نیاز به بررسی تصویر</p>
+          <p className="mt-1 text-xl font-extrabold text-amber-500">{data.draftsNeedingAttention.length}</p>
+        </div>
+        <div className="rounded-lg border border-border-color bg-surface p-4">
+          <p className="text-sm text-foreground/50">سوال بی‌پاسخ</p>
+          <p className="mt-1 text-xl font-extrabold text-brand">{data.unansweredQuestions.length}</p>
+        </div>
+        <div className="rounded-lg border border-border-color bg-surface p-4">
+          <p className="text-sm text-foreground/50">موجودی رو به اتمام</p>
+          <p className="mt-1 text-xl font-extrabold text-red-500">{data.lowStockVariants.length}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section>
+          <h2 className="mb-3 font-bold">پیش‌نویس‌های در انتظار تأیید</h2>
+          {data.pendingDrafts.length === 0 ? (
+            <p className="text-sm text-foreground/50">موردی وجود ندارد.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {data.pendingDrafts.map((d) => (
+                <Link key={d.id} href={`/admin/ai-products/${d.id}`} className="block rounded-lg border border-border-color p-2 text-sm hover:border-brand">
+                  {d.name}
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section>
+          <h2 className="mb-3 font-bold">پیش‌نویس‌هایی که نیاز به بررسی تصویر دارند</h2>
+          {data.draftsNeedingAttention.length === 0 ? (
+            <p className="text-sm text-foreground/50">موردی وجود ندارد.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {data.draftsNeedingAttention.map((d) => (
+                <Link key={d.id} href={`/admin/ai-products/${d.id}`} className="block rounded-lg border border-dashed border-amber-500/50 bg-amber-500/5 p-2 text-sm text-amber-500 hover:border-amber-500">
+                  {d.name} — {d.imageAutopilotNote}
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section>
+          <h2 className="mb-3 font-bold">سوالات بی‌پاسخ مشتریان</h2>
+          {data.unansweredQuestions.length === 0 ? (
+            <p className="text-sm text-foreground/50">موردی وجود ندارد.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {data.unansweredQuestions.map((q) => (
+                <Link key={q.id} href="/admin/qa" className="block rounded-lg border border-border-color p-2 text-sm hover:border-brand">
+                  <span className="font-bold">{q.product.name}</span> — {q.body}
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section>
+          <h2 className="mb-3 font-bold">محصولات با موجودی کم</h2>
+          {data.lowStockVariants.length === 0 ? (
+            <p className="text-sm text-foreground/50">موردی وجود ندارد.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {data.lowStockVariants.map((s) => (
+                <Link key={s.sku} href="/admin/warehouses" className="flex items-center justify-between rounded-lg border border-border-color p-2 text-sm hover:border-brand">
+                  <span>
+                    {s.productName} <span className="text-foreground/40">({s.sku})</span>
+                  </span>
+                  <span className="font-bold text-red-500">{s.quantity} عدد</span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      <section className="mt-6">
+        <h2 className="mb-3 font-bold">لاگ فعالیت هوش مصنوعی (اخیر)</h2>
+        {data.recentAiActivity.length === 0 ? (
+          <p className="text-sm text-foreground/50">هنوز فعالیتی ثبت نشده است.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-border-color">
+            <table className="w-full text-sm">
+              <tbody>
+                {data.recentAiActivity.map((a, i) => (
+                  <tr key={i} className="border-b border-border-color last:border-0">
+                    <td className="p-2">{actionLabel(a.action)}</td>
+                    <td className="p-2 text-foreground/50">{a.user?.fullName ?? a.user?.phone ?? "سیستم"}</td>
+                    <td className="p-2 text-left text-xs text-foreground/40" dir="ltr">
+                      {new Date(a.createdAt).toLocaleString("fa-IR")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}

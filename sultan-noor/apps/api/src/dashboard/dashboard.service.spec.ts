@@ -144,3 +144,74 @@ describe('DashboardService.report', () => {
     ]);
   });
 });
+
+describe('DashboardService.aiControlCenter', () => {
+  let prisma: any;
+  let service: DashboardService;
+
+  beforeEach(() => {
+    prisma = {
+      productAiDraft: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
+      question: { findMany: jest.fn().mockResolvedValue([]) },
+      stock: { findMany: jest.fn().mockResolvedValue([]) },
+      auditLog: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    service = new DashboardService(prisma);
+  });
+
+  it('only counts/lists drafts that are still PENDING_REVIEW', async () => {
+    await service.aiControlCenter();
+
+    expect(prisma.productAiDraft.count).toHaveBeenCalledWith({ where: { status: 'PENDING_REVIEW' } });
+    const listCall = prisma.productAiDraft.findMany.mock.calls[0][0];
+    expect(listCall.where).toEqual({ status: 'PENDING_REVIEW' });
+  });
+
+  it('only flags pending drafts that actually have an imageAutopilotNote set', async () => {
+    await service.aiControlCenter();
+
+    const attentionCall = prisma.productAiDraft.findMany.mock.calls[1][0];
+    expect(attentionCall.where).toEqual({ status: 'PENDING_REVIEW', imageAutopilotNote: { not: null } });
+  });
+
+  it('only surfaces questions with zero answers, never already-answered ones', async () => {
+    await service.aiControlCenter();
+
+    const where = prisma.question.findMany.mock.calls[0][0].where;
+    expect(where).toEqual({ answers: { none: {} } });
+  });
+
+  it('flattens low-stock variant rows into a real product name/sku/quantity shape', async () => {
+    prisma.stock.findMany.mockResolvedValue([
+      { quantity: 2, productVariant: { sku: 'SKU-1', product: { id: 'p1', name: 'کلید مینیاتوری' } } },
+    ]);
+
+    const result = await service.aiControlCenter();
+
+    expect(result.lowStockVariants).toEqual([{ quantity: 2, sku: 'SKU-1', productId: 'p1', productName: 'کلید مینیاتوری' }]);
+  });
+
+  it('only pulls ai_*-prefixed audit log actions, not every admin action', async () => {
+    await service.aiControlCenter();
+
+    const where = prisma.auditLog.findMany.mock.calls[0][0].where;
+    expect(where).toEqual({ action: { startsWith: 'ai_' } });
+  });
+
+  it('never fabricates sales-opportunity or SEO-problem data — only returns real, existing signals', async () => {
+    const result = await service.aiControlCenter();
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        pendingDraftsCount: expect.any(Number),
+        pendingDrafts: expect.any(Array),
+        draftsNeedingAttention: expect.any(Array),
+        unansweredQuestions: expect.any(Array),
+        lowStockVariants: expect.any(Array),
+        recentAiActivity: expect.any(Array),
+      }),
+    );
+    expect(result).not.toHaveProperty('salesOpportunities');
+    expect(result).not.toHaveProperty('seoProblems');
+  });
+});

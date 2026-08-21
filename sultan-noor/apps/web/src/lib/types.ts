@@ -313,6 +313,15 @@ export interface ProductAiDraftImage {
   createdAt: string;
 }
 
+export interface AiControlCenterData {
+  pendingDraftsCount: number;
+  pendingDrafts: { id: string; name: string; createdAt: string }[];
+  draftsNeedingAttention: { id: string; name: string; imageAutopilotNote: string | null; createdAt: string }[];
+  unansweredQuestions: { id: string; body: string; createdAt: string; product: { id: string; name: string; slug: string } }[];
+  lowStockVariants: { quantity: number; sku: string; productId: string; productName: string }[];
+  recentAiActivity: { action: string; entityType: string; entityId?: string | null; createdAt: string; user?: { fullName: string | null; phone: string } | null }[];
+}
+
 export interface AuditLogEntry {
   id: string;
   action: string;

@@ -25,4 +25,9 @@ export class DashboardController {
   report(@Query('from') from?: string, @Query('to') to?: string) {
     return this.dashboardService.report(from, to);
   }
+
+  @Get('ai-control-center')
+  aiControlCenter() {
+    return this.dashboardService.aiControlCenter();
+  }
 }

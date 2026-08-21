@@ -139,4 +139,60 @@ export class DashboardService {
       ordersByStatus: statusCounts.map((s) => ({ status: s.status, count: s._count._all })),
     };
   }
+
+  // A single, read-only view over signals that already exist elsewhere in
+  // the app (AI drafts, unanswered questions, low stock, the audit log) —
+  // deliberately does not invent "sales opportunities" or "SEO problems"
+  // widgets, since no real data source for those exists yet (see Sprint
+  // 3+ of the AI roadmap). Nothing here is itself an AI action; it only
+  // surfaces what a human still needs to look at.
+  async aiControlCenter() {
+    const [pendingDraftsCount, pendingDrafts, draftsNeedingAttention, unansweredQuestions, lowStock, recentAiActivity] = await Promise.all([
+      this.prisma.productAiDraft.count({ where: { status: 'PENDING_REVIEW' } }),
+      this.prisma.productAiDraft.findMany({
+        where: { status: 'PENDING_REVIEW' },
+        select: { id: true, name: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
+      this.prisma.productAiDraft.findMany({
+        where: { status: 'PENDING_REVIEW', imageAutopilotNote: { not: null } },
+        select: { id: true, name: true, imageAutopilotNote: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
+      this.prisma.question.findMany({
+        where: { answers: { none: {} } },
+        select: { id: true, body: true, createdAt: true, product: { select: { id: true, name: true, slug: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
+      this.prisma.stock.findMany({
+        where: { quantity: { lte: 5 } },
+        select: { quantity: true, productVariant: { select: { sku: true, product: { select: { id: true, name: true } } } } },
+        orderBy: { quantity: 'asc' },
+        take: 10,
+      }),
+      this.prisma.auditLog.findMany({
+        where: { action: { startsWith: 'ai_' } },
+        select: { action: true, entityType: true, entityId: true, createdAt: true, user: { select: { fullName: true, phone: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      }),
+    ]);
+
+    return {
+      pendingDraftsCount,
+      pendingDrafts,
+      draftsNeedingAttention,
+      unansweredQuestions,
+      lowStockVariants: lowStock.map((s) => ({
+        quantity: s.quantity,
+        sku: s.productVariant.sku,
+        productId: s.productVariant.product.id,
+        productName: s.productVariant.product.name,
+      })),
+      recentAiActivity,
+    };
+  }
 }
