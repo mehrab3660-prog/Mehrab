@@ -19,7 +19,8 @@ type SettingKey =
   | 'imageGenerationProvider'
   | 'imageAutopilotMonthlyBudgetToman'
   | 'seoAutoFixEnabled'
-  | 'seoContentMonthlyBudgetToman';
+  | 'seoContentMonthlyBudgetToman'
+  | 'salesAiMonthlyBudgetToman';
 
 // Maps each DB-backed setting to the env var it falls back to when unset —
 // existing .env-based deployments keep working unchanged.
@@ -41,6 +42,7 @@ const ENV_FALLBACK: Record<SettingKey, string> = {
   imageAutopilotMonthlyBudgetToman: 'IMAGE_AUTOPILOT_MONTHLY_BUDGET_TOMAN',
   seoAutoFixEnabled: 'SEO_AUTO_FIX_ENABLED',
   seoContentMonthlyBudgetToman: 'SEO_CONTENT_MONTHLY_BUDGET_TOMAN',
+  salesAiMonthlyBudgetToman: 'SALES_AI_MONTHLY_BUDGET_TOMAN',
 };
 
 const SECRET_KEYS: SettingKey[] = [

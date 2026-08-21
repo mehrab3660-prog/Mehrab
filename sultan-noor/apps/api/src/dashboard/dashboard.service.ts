@@ -1,19 +1,19 @@
 import { Injectable } from '@nestjs/common';
-import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SeoAuditService } from '../seo-autopilot/seo-audit.service';
-
-// Orders that actually represent real, counted sales — excludes carts that
-// never paid (PENDING_PAYMENT) and orders that didn't ultimately happen
-// (CANCELLED/REFUNDED). Every revenue figure in this service is scoped to
-// these statuses so nothing fabricated or reversed inflates the numbers.
-const REAL_SALE_STATUSES: OrderStatus[] = ['PROCESSING', 'SHIPPED', 'DELIVERED'];
+import { SalesAnalyticsService } from '../sales-autopilot/sales-analytics.service';
+import { ProductOpportunitiesService } from '../sales-autopilot/product-opportunities.service';
+import { AbandonedCartInsightService } from '../sales-autopilot/abandoned-cart-insight.service';
+import { REAL_SALE_STATUSES } from '../common/constants/order-status';
 
 @Injectable()
 export class DashboardService {
   constructor(
     private prisma: PrismaService,
     private seoAudit: SeoAuditService,
+    private salesAnalytics: SalesAnalyticsService,
+    private opportunities: ProductOpportunitiesService,
+    private abandonedCart: AbandonedCartInsightService,
   ) {}
 
   async summary() {
@@ -163,6 +163,11 @@ export class DashboardService {
       pendingContentDrafts,
       productsNeedingSeoCount,
       aiUsageThisMonth,
+      salesOverview,
+      criticalStockOpportunities,
+      crossSellPairs,
+      abandonedCartSummary,
+      pendingSalesRecommendations,
     ] = await Promise.all([
       this.prisma.productAiDraft.count({ where: { status: 'PENDING_REVIEW' } }),
       this.prisma.productAiDraft.findMany({
@@ -210,6 +215,16 @@ export class DashboardService {
       }),
       this.prisma.product.count({ where: { status: 'PUBLISHED', OR: [{ metaTitle: null }, { metaDescription: null }] } }),
       this.monthlyAiUsageCost(),
+      this.salesAnalytics.overview(30),
+      this.opportunities.bestSellingLowStock(),
+      this.opportunities.crossSellPairs(),
+      this.abandonedCart.summary(),
+      this.prisma.salesRecommendation.findMany({
+        where: { status: 'PENDING_REVIEW' },
+        select: { id: true, type: true, title: true, severity: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
     ]);
 
     const suggestionProductIds = pendingSeoSuggestionsRaw.map((s) => s.productId);
@@ -241,6 +256,17 @@ export class DashboardService {
       pendingContentDrafts,
       productsNeedingSeoCount,
       aiUsageCostThisMonthToman: aiUsageThisMonth,
+      salesToday: salesOverview.today,
+      salesThisMonth: salesOverview.thisMonth,
+      bestSellers: salesOverview.bestSellersByRevenue.slice(0, 5),
+      worstSellers: salesOverview.worstSellers.slice(0, 5),
+      decliningSalesProducts: salesOverview.decliningSalesProducts.slice(0, 5),
+      criticalStockOpportunities: criticalStockOpportunities.slice(0, 5),
+      crossSellOpportunityCount: crossSellPairs.length,
+      bundleOpportunityCount: crossSellPairs.filter((p) => p.coOccurrence >= 3).length,
+      abandonedCarts: { count: abandonedCartSummary.count, approximateValueToman: abandonedCartSummary.approximateValueToman },
+      pendingSalesRecommendations,
+      salesDataGaps: salesOverview.dataGaps,
     };
   }
 

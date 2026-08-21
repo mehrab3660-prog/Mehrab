@@ -38,6 +38,12 @@ const ACTION_LABEL: Record<string, string> = {
   "content.approved_as_draft": "تأیید محتوا به‌عنوان پیش‌نویس",
   "content.published": "انتشار محتوا",
   "content.rejected": "رد محتوا",
+  "sales.discount_generated": "ساخت پیشنهاد تخفیف",
+  "sales.campaign_generated": "ساخت پیشنهاد کمپین",
+  "sales.recommendation_edited": "ویرایش پیشنهاد فروش",
+  "sales.recommendation_approved": "تأیید پیشنهاد فروش",
+  "sales.recommendation_rejected": "رد پیشنهاد فروش",
+  "sales.campaign_activated": "فعال‌سازی کمپین",
 };
 
 function actionLabel(action: string): string {
@@ -107,9 +113,55 @@ export default function AiControlCenterPage() {
       </div>
 
       <div className="mb-6 rounded-lg border border-border-color bg-surface p-4">
-        <p className="text-sm text-foreground/50">هزینه تخمینی هوش مصنوعی (سئو و محتوا) — این ماه</p>
+        <p className="text-sm text-foreground/50">هزینه تخمینی هوش مصنوعی (سئو، محتوا و فروش) — این ماه</p>
         <p className="mt-1 text-xl font-extrabold">{data.aiUsageCostThisMonthToman.toLocaleString("fa-IR")} تومان</p>
       </div>
+
+      <h2 className="mb-3 mt-2 font-bold">فروش</h2>
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Link href="/admin/sales-analytics" className="rounded-lg border border-border-color bg-surface p-4 hover:border-brand">
+          <p className="text-sm text-foreground/50">فروش امروز</p>
+          <p className="mt-1 text-xl font-extrabold text-brand">{Math.round(data.salesToday.revenue).toLocaleString("fa-IR")} تومان</p>
+          <p className="mt-1 text-xs text-foreground/40">{data.salesToday.orderCount} سفارش</p>
+        </Link>
+        <Link href="/admin/sales-analytics" className="rounded-lg border border-border-color bg-surface p-4 hover:border-brand">
+          <p className="text-sm text-foreground/50">فروش این ماه</p>
+          <p className="mt-1 text-xl font-extrabold text-brand">{Math.round(data.salesThisMonth.revenue).toLocaleString("fa-IR")} تومان</p>
+          <p className="mt-1 text-xs text-foreground/40">میانگین سفارش: {Math.round(data.salesThisMonth.averageOrderValue).toLocaleString("fa-IR")} تومان</p>
+        </Link>
+        <Link href="/admin/sales-analytics" className="rounded-lg border border-red-500/40 bg-red-500/5 p-4 hover:border-red-500">
+          <p className="text-sm text-red-500/80">موجودی بحرانی (پرفروش + کم‌موجود)</p>
+          <p className="mt-1 text-xl font-extrabold text-red-500">{data.criticalStockOpportunities.length}</p>
+        </Link>
+        <Link href="/admin/sales-analytics" className="rounded-lg border border-border-color bg-surface p-4 hover:border-brand">
+          <p className="text-sm text-foreground/50">سبدهای خرید رهاشده</p>
+          <p className="mt-1 text-xl font-extrabold text-amber-500">{data.abandonedCarts.count}</p>
+          <p className="mt-1 text-xs text-foreground/40">{Math.round(data.abandonedCarts.approximateValueToman).toLocaleString("fa-IR")} تومان</p>
+        </Link>
+      </div>
+
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Link href="/admin/sales-analytics" className="rounded-lg border border-border-color bg-surface p-4 hover:border-brand">
+          <p className="text-sm text-foreground/50">فرصت‌های فروش مرتبط (Cross-sell)</p>
+          <p className="mt-1 text-xl font-extrabold text-brand">{data.crossSellOpportunityCount}</p>
+        </Link>
+        <Link href="/admin/sales-analytics" className="rounded-lg border border-border-color bg-surface p-4 hover:border-brand">
+          <p className="text-sm text-foreground/50">فرصت‌های پک پیشنهادی (Bundle)</p>
+          <p className="mt-1 text-xl font-extrabold text-brand">{data.bundleOpportunityCount}</p>
+        </Link>
+        <Link href="/admin/sales-recommendations" className="rounded-lg border border-border-color bg-surface p-4 hover:border-brand">
+          <p className="text-sm text-foreground/50">پیشنهادهای AI در انتظار تأیید</p>
+          <p className="mt-1 text-xl font-extrabold text-brand">{data.pendingSalesRecommendations.length}</p>
+        </Link>
+      </div>
+
+      {data.salesDataGaps.length > 0 && (
+        <div className="mb-6 rounded-lg border border-dashed border-amber-500/50 bg-amber-500/5 p-3 text-xs text-amber-500">
+          {data.salesDataGaps.map((g, i) => (
+            <p key={i}>{g}</p>
+          ))}
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section>
@@ -199,6 +251,27 @@ export default function AiControlCenterPage() {
               {data.pendingContentDrafts.map((c) => (
                 <Link key={c.id} href={`/admin/content/${c.id}`} className="block rounded-lg border border-border-color p-2 text-sm hover:border-brand">
                   {c.title || c.topic}
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section>
+          <h2 className="mb-3 font-bold">پیشنهادهای فروش در انتظار تأیید</h2>
+          {data.pendingSalesRecommendations.length === 0 ? (
+            <p className="text-sm text-foreground/50">موردی وجود ندارد.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {data.pendingSalesRecommendations.map((r) => (
+                <Link
+                  key={r.id}
+                  href={`/admin/sales-recommendations/${r.id}`}
+                  className={`block rounded-lg border p-2 text-sm hover:border-brand ${
+                    r.severity === "CRITICAL" || r.severity === "HIGH" ? "border-red-500/40 bg-red-500/5 text-red-500" : "border-border-color"
+                  }`}
+                >
+                  {r.title}
                 </Link>
               ))}
             </div>

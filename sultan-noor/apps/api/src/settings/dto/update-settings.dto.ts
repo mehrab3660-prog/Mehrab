@@ -71,4 +71,8 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsString()
   seoContentMonthlyBudgetToman?: string;
+
+  @IsOptional()
+  @IsString()
+  salesAiMonthlyBudgetToman?: string;
 }

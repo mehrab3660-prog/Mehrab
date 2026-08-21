@@ -1143,5 +1143,76 @@ model AppSettings {
   seoAutoFixEnabled            String? // "true"/"false" as text, like every other setting; unset = off
   seoContentMonthlyBudgetToman String? // separate pool from Image Autopilot's budget, same parsing convention
 
+  // Sales Autopilot (Sprint 5) — own budget pool, same parsing convention.
+  // Only the DISCOUNT/CAMPAIGN generators call the AI provider; CROSS_SELL
+  // and BUNDLE suggestions are pure rule-based reads of real order data and
+  // never touch this budget.
+  salesAiMonthlyBudgetToman String?
+
   updatedAt DateTime @updatedAt
+}
+
+// ────────────────────────────── Sales Autopilot (Sprint 5) ──────────────────────────────
+
+enum SalesRecommendationType {
+  CROSS_SELL
+  BUNDLE
+  DISCOUNT
+  CAMPAIGN
+  ABANDONED_CART
+}
+
+enum SalesRecommendationSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum SalesRecommendationStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  ACTIVE
+}
+
+// A single AI/rule-based sales suggestion — cross-sell pairing, bundle
+// packaging, discount idea, or campaign concept. Plain string productIds
+// (no relation) mirrors ProductAiDraft/ProductSeoSuggestion/ContentDraft:
+// no back-reference fields needed on the heavily-used Product model.
+//
+// CRITICAL: approving a suggestion NEVER mutates real commerce state by
+// itself. CROSS_SELL/BUNDLE approval just marks the suggestion reviewed —
+// nothing to apply. DISCOUNT approval never touches Product.basePrice/
+// compareAtPrice or creates a DiscountCode; the admin does that manually
+// through the existing Pricing admin pages, informed by the suggestion.
+// CAMPAIGN has an extra APPROVED -> ACTIVE step, but "ACTIVE" only marks
+// the idea as the admin's current greenlit initiative for their own
+// tracking — there is no campaign-execution/send system in this app, and
+// Sprint 5 does not build one.
+model SalesRecommendation {
+  id       String                       @id @default(cuid())
+  type     SalesRecommendationType
+  severity SalesRecommendationSeverity  @default(MEDIUM)
+
+  title           String
+  reason          String  // human-readable explanation citing real numbers
+  supportingData  Json?   // the real numbers the reason was built from
+  productIds      Json?   // string[] of real Product ids this suggestion involves
+  payload         Json?   // type-specific structured data (bundle items, discount %, campaign copy, ...)
+  confidenceNote  String?
+  sources         Json?   // for AI-generated reasoning (discount/campaign): what grounded it
+
+  status          SalesRecommendationStatus @default(PENDING_REVIEW)
+  rejectionReason String?
+
+  createdByUserId  String?
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([type])
 }

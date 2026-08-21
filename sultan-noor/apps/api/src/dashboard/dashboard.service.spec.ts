@@ -20,7 +20,13 @@ describe('DashboardService.report', () => {
       order: { findMany: jest.fn().mockResolvedValue([]), groupBy: jest.fn().mockResolvedValue([]) },
       orderItem: { findMany: jest.fn().mockResolvedValue([]) },
     };
-    service = new DashboardService(prisma, { run: jest.fn().mockResolvedValue([]) } as any);
+    service = new DashboardService(
+      prisma,
+      { run: jest.fn().mockResolvedValue([]) } as any,
+      { overview: jest.fn() } as any,
+      { bestSellingLowStock: jest.fn(), crossSellPairs: jest.fn() } as any,
+      { summary: jest.fn() } as any,
+    );
   });
 
   it('only counts PROCESSING/SHIPPED/DELIVERED orders as revenue, never PENDING_PAYMENT/CANCELLED/REFUNDED', async () => {
@@ -145,8 +151,20 @@ describe('DashboardService.report', () => {
   });
 });
 
+const EMPTY_SALES_OVERVIEW = {
+  today: { revenue: 0, orderCount: 0, averageOrderValue: 0 },
+  thisMonth: { revenue: 0, orderCount: 0, averageOrderValue: 0 },
+  bestSellersByRevenue: [],
+  worstSellers: [],
+  decliningSalesProducts: [],
+  dataGaps: ['نرخ تبدیل: داده کافی موجود نیست'],
+};
+
 describe('DashboardService.aiControlCenter', () => {
   let prisma: any;
+  let salesAnalytics: any;
+  let opportunities: any;
+  let abandonedCart: any;
   let service: DashboardService;
 
   beforeEach(() => {
@@ -159,8 +177,12 @@ describe('DashboardService.aiControlCenter', () => {
       contentDraft: { findMany: jest.fn().mockResolvedValue([]) },
       product: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
       aiUsageLog: { aggregate: jest.fn().mockResolvedValue({ _sum: { costToman: 0 } }) },
+      salesRecommendation: { findMany: jest.fn().mockResolvedValue([]) },
     };
-    service = new DashboardService(prisma, { run: jest.fn().mockResolvedValue([]) } as any);
+    salesAnalytics = { overview: jest.fn().mockResolvedValue(EMPTY_SALES_OVERVIEW) };
+    opportunities = { bestSellingLowStock: jest.fn().mockResolvedValue([]), crossSellPairs: jest.fn().mockResolvedValue([]) };
+    abandonedCart = { summary: jest.fn().mockResolvedValue({ count: 0, approximateValueToman: 0, frequentProducts: [], oldestAbandonedAt: null, carts: [] }) };
+    service = new DashboardService(prisma, { run: jest.fn().mockResolvedValue([]) } as any, salesAnalytics, opportunities, abandonedCart);
   });
 
   it('only counts/lists drafts that are still PENDING_REVIEW', async () => {
@@ -224,7 +246,7 @@ describe('DashboardService.aiControlCenter', () => {
 
   it('runs the real SeoAuditService and summarizes real problems by severity, never a fabricated count', async () => {
     const seoAudit = { run: jest.fn().mockResolvedValue([{ severity: 'HIGH', entityType: 'Product', entityId: 'p1', entityName: 'x', field: 'metaTitle', message: 'm' }]) };
-    service = new DashboardService(prisma, seoAudit as any);
+    service = new DashboardService(prisma, seoAudit as any, salesAnalytics, opportunities, abandonedCart);
 
     const result = await service.aiControlCenter();
 
@@ -249,6 +271,14 @@ describe('DashboardService.aiControlCenter', () => {
         pendingContentDrafts: expect.any(Array),
         productsNeedingSeoCount: expect.any(Number),
         aiUsageCostThisMonthToman: expect.any(Number),
+        salesToday: expect.any(Object),
+        salesThisMonth: expect.any(Object),
+        bestSellers: expect.any(Array),
+        worstSellers: expect.any(Array),
+        criticalStockOpportunities: expect.any(Array),
+        crossSellOpportunityCount: expect.any(Number),
+        abandonedCarts: expect.any(Object),
+        pendingSalesRecommendations: expect.any(Array),
       }),
     );
     expect(result).not.toHaveProperty('salesOpportunities');

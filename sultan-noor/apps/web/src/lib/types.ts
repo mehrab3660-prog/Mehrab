@@ -379,6 +379,64 @@ export interface AiControlCenterData {
   pendingContentDrafts: { id: string; type: ContentDraftType; topic: string; title: string | null; createdAt: string }[];
   productsNeedingSeoCount: number;
   aiUsageCostThisMonthToman: number;
+  salesToday: { revenue: number; orderCount: number; averageOrderValue: number };
+  salesThisMonth: { revenue: number; orderCount: number; averageOrderValue: number };
+  bestSellers: { productId: string; name: string; quantitySold: number; revenue: number }[];
+  worstSellers: { productId: string; name: string; quantitySold: number; revenue: number }[];
+  criticalStockOpportunities: { productId: string; name: string; quantitySold: number; stockRemaining: number }[];
+  crossSellOpportunityCount: number;
+  bundleOpportunityCount: number;
+  abandonedCarts: { count: number; approximateValueToman: number };
+  pendingSalesRecommendations: { id: string; type: SalesRecommendationType; title: string; severity: SalesRecommendationSeverity; createdAt: string }[];
+  salesDataGaps: string[];
+}
+
+export type SalesRecommendationType = "CROSS_SELL" | "BUNDLE" | "DISCOUNT" | "CAMPAIGN" | "ABANDONED_CART";
+export type SalesRecommendationSeverity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+
+export interface SalesRecommendation {
+  id: string;
+  type: SalesRecommendationType;
+  severity: SalesRecommendationSeverity;
+  title: string;
+  reason: string;
+  supportingData?: Record<string, unknown> | null;
+  productIds?: string[] | null;
+  payload?: Record<string, unknown> | null;
+  confidenceNote?: string | null;
+  sources?: string[] | null;
+  status: "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "ACTIVE";
+  rejectionReason?: string | null;
+  createdAt: string;
+}
+
+export interface SalesAnalyticsOverview {
+  today: { revenue: number; orderCount: number; averageOrderValue: number };
+  thisMonth: { revenue: number; orderCount: number; averageOrderValue: number };
+  window: { days: number; revenue: number; orderCount: number; averageOrderValue: number };
+  bestSellersByRevenue: { productId: string; name: string; quantitySold: number; revenue: number }[];
+  bestSellersByQuantity: { productId: string; name: string; quantitySold: number; revenue: number }[];
+  worstSellers: { productId: string; name: string; quantitySold: number; revenue: number }[];
+  noSalesProducts: { productId: string; name: string; publishedAt: string }[];
+  decliningSalesProducts: { productId: string; name: string; currentQty: number; priorQty: number; declinePercent: number }[];
+  revenueByDay: { period: string; total: number }[];
+  dataGaps: string[];
+}
+
+export interface CrossSellPair {
+  productAId: string;
+  productAName: string;
+  productBId: string;
+  productBName: string;
+  coOccurrence: number;
+}
+
+export interface AbandonedCartSummary {
+  count: number;
+  approximateValueToman: number;
+  frequentProducts: { productId: string; name: string; count: number }[];
+  oldestAbandonedAt: string | null;
+  carts: { id: string; abandonedAt: string; itemCount: number; reminderAlreadySent: boolean }[];
 }
 
 export interface AuditLogEntry {
