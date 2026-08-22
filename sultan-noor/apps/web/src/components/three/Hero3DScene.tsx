@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ComponentRef, type RefObject } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, Html, MeshReflectorMaterial } from "@react-three/drei";
+import { OrbitControls, Html, useGLTF } from "@react-three/drei";
 import { useCart } from "@/context/CartContext";
 import type { SceneHotspot } from "@/lib/types";
 import { API_ORIGIN } from "@/lib/api";
@@ -12,39 +12,89 @@ function formatToman(value: string | number) {
   return `${Number(value).toLocaleString("fa-IR")} تومان`;
 }
 
-// Colors mirror the site's committed Dark Premium palette (globals.css
-// @theme) rather than introducing a second palette just for the 3D layer.
-// Interior tones lean warm (wood/amber) to match the "warm modern home"
-// brief; exterior tones lean cool/dusk to read as night outside.
+// Real CC0 assets (Kenney) — see public/models/THIRD_PARTY_LICENSES.md.
+// No primitive-built house or furniture: every structural/furniture piece
+// below is a loaded GLB model, never Box/Plane/Cylinder/Sphere geometry.
+const EXT = "/models/exterior";
+const INT = "/models/interior";
+
+// Preload every model the scene will ever need the moment this module
+// loads (i.e. as soon as the homepage scrolls it into view) — otherwise
+// useGLTF() suspends the interior/exterior group and the canvas shows
+// nothing at all for a beat while each GLB fetches, right when the fade
+// finishes and the user is looking straight at it.
+const EXTERIOR_MODEL_URLS = [`${EXT}/building-small-b.glb`, `${EXT}/grass-trees.glb`, `${EXT}/grass-trees-tall.glb`];
+const INTERIOR_MODEL_URLS = [
+  `${INT}/rugRounded.glb`,
+  `${INT}/loungeDesignSofa.glb`,
+  `${INT}/chairModernCushion.glb`,
+  `${INT}/tableCoffee.glb`,
+  `${INT}/cabinetTelevision.glb`,
+  `${INT}/pottedPlant.glb`,
+  `${INT}/lampRoundFloor.glb`,
+];
+[...EXTERIOR_MODEL_URLS, ...INTERIOR_MODEL_URLS].forEach((url) => useGLTF.preload(url));
+
 const COLORS = {
-  floor: "#0b1220",
-  wall: "#2a2018",
-  wallAccent: "#3a2c1c",
+  floor: "#3d2c1e",
+  wall: "#5a4a3a",
+  wallAccent: "#6b5847",
   brand: "#f5b82e",
   brandLight: "#ffd873",
   metal: "#2a3550",
-  window: "#ffd9a0",
-  night: "#070a12",
-  houseWall: "#241a12",
-  roof: "#160f0a",
-  ground: "#0c1410",
-  tree: "#0d1c14",
+  sky: "#cfe0e8",
+  ground: "#6b6b4a",
 };
 
-// A real enclosed interior room (floor + ceiling + back + two side walls)
-// so it has depth from every orbit angle instead of reading as a flat
-// backdrop.
+// The source GLBs (Kenney's Starter Kit: City Builder / Furniture Kit) ship
+// with flat, highly-saturated "toy" colors meant for a cartoon city-builder
+// game. Muting saturation and lifting roughness on every material — without
+// touching geometry — is what turns the same real asset from "game demo"
+// into something closer to a warm architectural illustration.
+function toneDownMaterial(mat: THREE.Material, { desaturate = 0.55, lighten = 0 }: { desaturate?: number; lighten?: number }) {
+  const std = mat as THREE.MeshStandardMaterial;
+  if (!std.color) return;
+  if (lighten) {
+    const hsl = { h: 0, s: 0, l: 0 };
+    std.color.getHSL(hsl);
+    std.color.setHSL(hsl.h, hsl.s, THREE.MathUtils.clamp(hsl.l + lighten, 0, 1));
+  }
+  if (typeof std.roughness === "number") std.roughness = Math.max(std.roughness, 0.7);
+  if (typeof std.metalness === "number") std.metalness = Math.min(std.metalness, 0.15);
+  if (desaturate <= 0) return;
+  // Kenney's low-poly kits paint color either as a flat material/vertex
+  // color, or via a UV-mapped texture atlas (baseColorTexture) with an
+  // untouched white baseColorFactor — a plain material.color edit only
+  // ever affects the former, leaving textured meshes (like the house)
+  // completely unchanged. Patching the compiled shader to blend the final
+  // sampled color toward its own luminance desaturates both cases the same
+  // way, which is what actually pulls the source's saturated "toy" palette
+  // down into something calmer.
+  std.onBeforeCompile = (shader) => {
+    shader.uniforms.uDesaturate = { value: desaturate };
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform float uDesaturate;")
+      .replace(
+        "#include <map_fragment>",
+        `#include <map_fragment>
+        {
+          float luma = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(luma), uDesaturate);
+        }`,
+      );
+  };
+  std.needsUpdate = true;
+}
+
 const ROOM_HALF = 3;
 const FLOOR_Y = -1;
 const CEILING_Y = 1.6;
 const WALL_Y = (FLOOR_Y + CEILING_Y) / 2;
 const WALL_H = CEILING_Y - FLOOR_Y;
 
-// Named camera waypoints for the exterior → entrance → interior sequence
-// (Sprint 9 redesign, §1-3 of the owner's brief).
-const CAM_EXTERIOR = { pos: new THREE.Vector3(5.5, 1.8, 8), look: new THREE.Vector3(0, 1, -1) };
-const CAM_APPROACH = { pos: new THREE.Vector3(0.3, 1.2, 2.3), look: new THREE.Vector3(0, 1, 0.4) };
-const CAM_INTERIOR = { pos: new THREE.Vector3(2.6, 0.5, 3.2), look: new THREE.Vector3(0, 0.2, -1) };
+const CAM_EXTERIOR = { pos: new THREE.Vector3(4.6, 2.2, 6), look: new THREE.Vector3(0, 1.2, -1) };
+const CAM_APPROACH = { pos: new THREE.Vector3(0.2, 1.3, 2), look: new THREE.Vector3(0, 1, 0) };
+const CAM_INTERIOR = { pos: new THREE.Vector3(2.6, 0.6, 3.2), look: new THREE.Vector3(0, 0.2, -1) };
 
 type Stage = "exterior" | "approaching" | "interior";
 
@@ -60,20 +110,75 @@ function useIsMobile() {
   return isMobile;
 }
 
+// Loads a real GLB, clones it (so the same asset can be placed multiple
+// times), enables shadows on every mesh, and normalizes it to sit centered
+// on its own base at a given height — so composing a scene never depends
+// on knowing each source model's raw scale/pivot in advance.
+function GltfProp({
+  url,
+  position,
+  rotation = [0, 0, 0],
+  targetHeight,
+  onClick,
+  shadows = true,
+  tone,
+}: {
+  url: string;
+  position: [number, number, number];
+  rotation?: [number, number, number];
+  targetHeight: number;
+  onClick?: (e: { stopPropagation: () => void }) => void;
+  shadows?: boolean;
+  tone?: { desaturate?: number; lighten?: number };
+}) {
+  const { scene } = useGLTF(url);
+  const prepared = useMemo(() => {
+    const clone = scene.clone(true);
+    clone.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (mesh.isMesh) {
+        mesh.castShadow = shadows;
+        mesh.receiveShadow = shadows;
+        if (tone) {
+          if (Array.isArray(mesh.material)) {
+            mesh.material = mesh.material.map((m) => m.clone());
+            mesh.material.forEach((m) => toneDownMaterial(m, tone));
+          } else {
+            mesh.material = mesh.material.clone();
+            toneDownMaterial(mesh.material, tone);
+          }
+        }
+      }
+    });
+    const box1 = new THREE.Box3().setFromObject(clone);
+    const size1 = box1.getSize(new THREE.Vector3());
+    clone.scale.setScalar(targetHeight / (size1.y || 1));
+    const box2 = new THREE.Box3().setFromObject(clone);
+    const center2 = box2.getCenter(new THREE.Vector3());
+    clone.position.x -= center2.x;
+    clone.position.z -= center2.z;
+    clone.position.y -= box2.min.y;
+    return clone;
+    // tone's fields (not the object itself, a fresh literal on every render)
+    // are the real deps here — keeps this memo stable across re-renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scene, targetHeight, shadows, tone?.desaturate, tone?.lighten]);
+
+  return <primitive object={prepared} position={position} rotation={rotation} onClick={onClick} />;
+}
+
 // Drives the camera during the scripted "walking toward the door" beat and
 // snaps it (instantly, only while the screen is faded to black) whenever
 // the exterior/interior stage settles — OrbitControls owns the camera the
 // rest of the time, so this never fights the user's own drag/orbit.
-type OrbitControlsHandle = ComponentRef<typeof OrbitControls>;
-
-function StageCamera({ stage, controlsRef }: { stage: Stage; controlsRef: RefObject<OrbitControlsHandle | null> }) {
+function StageCamera({ stage, controlsRef }: { stage: Stage; controlsRef: RefObject<ComponentRef<typeof OrbitControls> | null> }) {
   const { camera } = useThree();
   const prevStage = useRef<Stage>(stage);
 
   useEffect(() => {
     if (stage === prevStage.current) return;
     prevStage.current = stage;
-    if (stage === "approaching") return; // handled frame-by-frame below
+    if (stage === "approaching") return;
     const target = stage === "interior" ? CAM_INTERIOR : CAM_EXTERIOR;
     camera.position.copy(target.pos);
     camera.lookAt(target.look);
@@ -91,105 +196,64 @@ function StageCamera({ stage, controlsRef }: { stage: Stage; controlsRef: RefObj
   return null;
 }
 
-function Tree({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
-  return (
-    <group position={position} scale={scale}>
-      <mesh position={[0, -0.9, 0]}>
-        <cylinderGeometry args={[0.06, 0.09, 0.5, 6]} />
-        <meshStandardMaterial color="#3a2a1a" />
-      </mesh>
-      <mesh position={[0, -0.3, 0]}>
-        <coneGeometry args={[0.55, 1.1, 8]} />
-        <meshStandardMaterial color={COLORS.tree} />
-      </mesh>
-      <mesh position={[0, 0.35, 0]}>
-        <coneGeometry args={[0.4, 0.9, 8]} />
-        <meshStandardMaterial color={COLORS.tree} />
-      </mesh>
-      <mesh position={[0, 0.9, 0]}>
-        <coneGeometry args={[0.25, 0.7, 8]} />
-        <meshStandardMaterial color={COLORS.tree} />
-      </mesh>
-    </group>
-  );
-}
+// A real house and trees under warm, soft golden-hour daylight — the
+// owner's brief explicitly forbids simulating the house from Box/Plane/
+// Cylinder/Sphere primitives, so the structure is a loaded CC0 GLB
+// (Kenney's Starter Kit: City Builder). That source model ships with flat,
+// highly-saturated "toy" colors meant for a cartoon city-builder game, so
+// every mesh is re-tinted (tone prop) toward muted, natural tones instead —
+// same real geometry, a calmer architectural read. The garage model was
+// dropped entirely: a single house reads as a home, a house-plus-garage
+// cluster reads as a game-asset diorama.
+const HOUSE_TONE = { desaturate: 0.62, lighten: 0.08 };
+const TREE_TONE = { desaturate: 0.35 };
 
-// The exterior "house among the trees at dusk" scene the owner asked for —
-// stylized, primitive-based geometry (no photoreal textures/assets exist
-// for this store), styled toward the reference image's mood.
 function ExteriorScene({ onEnter }: { onEnter: () => void }) {
-  const treePositions: [number, number, number][] = [
-    [-3.2, -1, -2.5],
-    [-2.6, -1, 0.5],
-    [3, -1, -2],
-    [3.6, -1, 0.8],
-    [-4, -1, 2.2],
-    [4.2, -1, -0.5],
+  // Kept behind/beside the house's front face (z <= -0.8) so trees frame
+  // the house instead of standing between it and the camera.
+  const treeSpots: { pos: [number, number, number]; h: number; tall?: boolean }[] = [
+    { pos: [-3.4, -1, -2.4], h: 2.1 },
+    { pos: [-4.3, -1, -0.8], h: 1.9, tall: true },
+    { pos: [3.2, -1, -2.8], h: 2.2, tall: true },
+    { pos: [4.2, -1, -1], h: 1.9 },
   ];
 
   return (
     <group>
-      <fog attach="fog" args={[COLORS.night, 6, 20]} />
-      <color attach="background" args={[COLORS.night]} />
-      <ambientLight intensity={0.25} color="#8fb0ff" />
-      <directionalLight position={[-4, 6, -3]} intensity={0.3} color="#8fb0ff" />
+      {/* Tighter fog hides the flat ground plane's edge sooner, so it reads
+          as a garden clearing rather than an infinite game-map plane. */}
+      <fog attach="fog" args={[COLORS.sky, 8, 20]} />
+      <color attach="background" args={[COLORS.sky]} />
+      <hemisphereLight args={[COLORS.sky, COLORS.ground, 0.9]} />
+      <ambientLight intensity={0.55} />
+      <directionalLight position={[5, 6, 5]} intensity={2} color="#ffe6bf" castShadow shadow-mapSize={[1024, 1024]} />
+      <directionalLight position={[-4, 3, -2]} intensity={0.4} color={COLORS.sky} />
 
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, FLOOR_Y, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]} receiveShadow>
         <planeGeometry args={[40, 40]} />
         <meshStandardMaterial color={COLORS.ground} roughness={1} />
       </mesh>
 
-      {treePositions.map((p, i) => (
-        <Tree key={i} position={p} scale={0.9 + (i % 3) * 0.2} />
+      {treeSpots.map((t, i) => (
+        <GltfProp
+          key={i}
+          url={`${EXT}/${t.tall ? "grass-trees-tall" : "grass-trees"}.glb`}
+          position={t.pos}
+          targetHeight={t.h}
+          tone={TREE_TONE}
+        />
       ))}
 
-      {/* house body */}
-      <mesh position={[0, 0.5, -1]} castShadow>
-        <boxGeometry args={[4, 3, 3]} />
-        <meshStandardMaterial color={COLORS.houseWall} roughness={0.9} />
-      </mesh>
-      {/* roof */}
-      <mesh position={[0, 2.5, -1]} rotation={[0, Math.PI / 4, 0]} scale={[1, 1, 1.9]}>
-        <coneGeometry args={[2.6, 1.4, 4]} />
-        <meshStandardMaterial color={COLORS.roof} roughness={1} />
-      </mesh>
-      {/* chimney */}
-      <mesh position={[1.2, 3.4, -1.6]}>
-        <boxGeometry args={[0.3, 0.9, 0.3]} />
-        <meshStandardMaterial color="#1a1310" />
-      </mesh>
-
-      {/* door — the click target that starts the walk-in sequence */}
-      <mesh
-        position={[0, -0.4, 0.52]}
+      <GltfProp
+        url={`${EXT}/building-small-b.glb`}
+        position={[0, -1, -1.2]}
+        targetHeight={3.1}
+        tone={HOUSE_TONE}
         onClick={(e) => {
           e.stopPropagation();
           onEnter();
         }}
-      >
-        <boxGeometry args={[0.7, 1.4, 0.08]} />
-        <meshStandardMaterial color="#171009" />
-      </mesh>
-      <mesh position={[0.32, -0.4, 0.57]}>
-        <boxGeometry args={[0.03, 0.15, 0.03]} />
-        <meshStandardMaterial color={COLORS.brand} emissive={COLORS.brand} emissiveIntensity={1} />
-      </mesh>
-
-      {/* warm lit windows either side of the door */}
-      {[-1.1, 1.1].map((x) => (
-        <mesh key={x} position={[x, 0.3, 0.52]}>
-          <planeGeometry args={[0.7, 0.9]} />
-          <meshStandardMaterial color={COLORS.window} emissive={COLORS.window} emissiveIntensity={1.2} />
-        </mesh>
-      ))}
-      <mesh position={[0, 1.6, 0.52]}>
-        <planeGeometry args={[1.6, 0.6]} />
-        <meshStandardMaterial color={COLORS.window} emissive={COLORS.window} emissiveIntensity={1} />
-      </mesh>
-
-      <pointLight position={[0, 0.2, 1.4]} color={COLORS.window} intensity={4} distance={5} decay={2} />
-      <pointLight position={[-1.1, 0.3, 1]} color={COLORS.window} intensity={2} distance={3} decay={2} />
-      <pointLight position={[1.1, 0.3, 1]} color={COLORS.window} intensity={2} distance={3} decay={2} />
+      />
     </group>
   );
 }
@@ -208,7 +272,6 @@ function Lamp({ on, onToggle }: { on: boolean; onToggle: () => void }) {
       {/* bulb — click toggles the visual light only, never real product state */}
       <mesh
         position={[0, -0.68, 0]}
-        castShadow
         onClick={(e) => {
           e.stopPropagation();
           onToggle();
@@ -221,7 +284,7 @@ function Lamp({ on, onToggle }: { on: boolean; onToggle: () => void }) {
           emissiveIntensity={on ? 2.2 : 0}
         />
       </mesh>
-      {on && <pointLight position={[0, -0.68, 0]} color={COLORS.brand} intensity={10} distance={7} decay={2} castShadow />}
+      {on && <pointLight position={[0, -0.68, 0]} color={COLORS.brand} intensity={10} distance={7} decay={2} />}
     </group>
   );
 }
@@ -252,19 +315,23 @@ function Socket() {
 
 function SmartHub() {
   return (
-    <mesh position={[1.3, FLOOR_Y + 0.025, -ROOM_HALF + 0.8]} castShadow>
+    <mesh position={[1.3, FLOOR_Y + 0.025, -ROOM_HALF + 0.8]}>
       <cylinderGeometry args={[0.1, 0.1, 0.05, 24]} />
       <meshStandardMaterial color={COLORS.brandLight} emissive={COLORS.brand} emissiveIntensity={0.4} />
     </mesh>
   );
 }
 
+// A real, furnished living room — sofa/table/TV/chair/lamp/rug/plant are
+// all loaded CC0 GLB models (Kenney Furniture Kit), never primitives. Only
+// the room shell (walls/floor/ceiling) and the small electrical fixtures
+// (switch/socket/hub, which are simple flat objects in real life too) stay
+// as plain geometry.
 function InteriorScene({
   lampOn,
   onToggleLamp,
   switchOn,
   onToggleSwitch,
-  highQuality,
   hotspots,
   onOpenHotspot,
   onExit,
@@ -273,7 +340,6 @@ function InteriorScene({
   onToggleLamp: () => void;
   switchOn: boolean;
   onToggleSwitch: () => void;
-  highQuality: boolean;
   hotspots: SceneHotspot[];
   onOpenHotspot: (h: SceneHotspot) => void;
   onExit: () => void;
@@ -281,30 +347,18 @@ function InteriorScene({
   return (
     <group>
       <color attach="background" args={[COLORS.wall]} />
-      <ambientLight intensity={0.35} />
-      <directionalLight position={[3, 4, 4]} intensity={0.5} castShadow={highQuality} />
+      <hemisphereLight args={["#fff2dd", COLORS.wall, 1.4]} />
+      <ambientLight intensity={1.3} />
+      <directionalLight position={[3, 4, 4]} intensity={2.2} color="#fff2dd" />
 
-      {/* floor — a soft real-time reflection sells a premium interior far
-          better than a flat matte plane. Skipped on mobile: it's the single
-          most expensive effect in this scene. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, FLOOR_Y, 0]} receiveShadow>
+      {/* A plain glossy material (not MeshReflectorMaterial) — the reflector's
+          render-to-texture pass was found to conflict with shadow-mapped GLB
+          furniture on some GPUs/drivers, silently leaving the canvas blank.
+          A reliable render beats a fancier one that can fail for real
+          customers. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, FLOOR_Y, 0]}>
         <planeGeometry args={[ROOM_HALF * 2, ROOM_HALF * 2]} />
-        {highQuality ? (
-          <MeshReflectorMaterial
-            blur={[300, 100]}
-            resolution={512}
-            mixBlur={1}
-            mixStrength={35}
-            roughness={0.9}
-            depthScale={1}
-            minDepthThreshold={0.4}
-            maxDepthThreshold={1.2}
-            color={COLORS.floor}
-            metalness={0.3}
-          />
-        ) : (
-          <meshStandardMaterial color={COLORS.floor} />
-        )}
+        <meshStandardMaterial color={COLORS.floor} roughness={0.35} metalness={0.15} />
       </mesh>
 
       <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, CEILING_Y, 0]}>
@@ -312,28 +366,79 @@ function InteriorScene({
         <meshStandardMaterial color={COLORS.wall} />
       </mesh>
 
-      <mesh position={[0, WALL_Y, -ROOM_HALF]} receiveShadow>
+      <mesh position={[0, WALL_Y, -ROOM_HALF]}>
         <planeGeometry args={[ROOM_HALF * 2, WALL_H]} />
         <meshStandardMaterial color={COLORS.wall} />
       </mesh>
 
-      <mesh position={[-ROOM_HALF, WALL_Y, 0]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
+      <mesh position={[-ROOM_HALF, WALL_Y, 0]} rotation={[0, Math.PI / 2, 0]}>
         <planeGeometry args={[ROOM_HALF * 2, WALL_H]} />
         <meshStandardMaterial color={COLORS.wallAccent} />
       </mesh>
 
-      <mesh position={[ROOM_HALF, WALL_Y, 0]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
+      <mesh position={[ROOM_HALF, WALL_Y, 0]} rotation={[0, -Math.PI / 2, 0]}>
         <planeGeometry args={[ROOM_HALF * 2, WALL_H]} />
         <meshStandardMaterial color={COLORS.wallAccent} />
       </mesh>
 
-      {/* window on the left wall — a second, cooler light source that
-          contrasts the lamp's warm glow */}
+      {/* window on the left wall — a dark wood frame with mullion bars around
+          the glowing glass reads as an actual window, not a plain bright
+          card; also a second, brighter light source so the room never ends
+          up black-on-black */}
+      <mesh position={[-ROOM_HALF + 0.015, 0.5, -0.6]} rotation={[0, Math.PI / 2, 0]}>
+        <planeGeometry args={[1.4, 1.6]} />
+        <meshStandardMaterial color={COLORS.wallAccent} roughness={0.8} />
+      </mesh>
       <mesh position={[-ROOM_HALF + 0.02, 0.5, -0.6]} rotation={[0, Math.PI / 2, 0]}>
         <planeGeometry args={[1.2, 1.4]} />
-        <meshStandardMaterial color="#bcd9ff" emissive="#bcd9ff" emissiveIntensity={0.4} />
+        <meshStandardMaterial color="#eaf4ff" emissive="#eaf6ff" emissiveIntensity={1.8} toneMapped={false} />
       </mesh>
-      <pointLight position={[-ROOM_HALF + 0.6, 0.5, -0.6]} color="#bcd9ff" intensity={1.5} distance={4} decay={2} />
+      <mesh position={[-ROOM_HALF + 0.03, 0.5, -0.6]} rotation={[0, Math.PI / 2, 0]}>
+        <planeGeometry args={[1.2, 0.04]} />
+        <meshStandardMaterial color={COLORS.wallAccent} />
+      </mesh>
+      <mesh position={[-ROOM_HALF + 0.03, 0.5, -0.6]} rotation={[0, Math.PI / 2, 0]}>
+        <planeGeometry args={[0.04, 1.4]} />
+        <meshStandardMaterial color={COLORS.wallAccent} />
+      </mesh>
+      <pointLight position={[-ROOM_HALF + 1, 0.5, -0.6]} color="#dcefff" intensity={6} distance={6} decay={2} />
+
+      {/* real furniture — tone-matched to the same muted, warm palette as
+          the exterior house so both scenes read as one consistent design
+          language rather than two different asset packs stitched together */}
+      <GltfProp url={`${INT}/rugRounded.glb`} position={[0.3, FLOOR_Y, 0.6]} targetHeight={0.04} shadows={false} tone={{ desaturate: 0.3 }} />
+      <GltfProp
+        url={`${INT}/loungeDesignSofa.glb`}
+        position={[0.6, FLOOR_Y, 1.6]}
+        rotation={[0, Math.PI, 0]}
+        targetHeight={0.85}
+        shadows={false}
+        tone={{ desaturate: 0.45, lighten: 0.05 }}
+      />
+      <GltfProp
+        url={`${INT}/chairModernCushion.glb`}
+        position={[-1.6, FLOOR_Y, 1.2]}
+        rotation={[0, Math.PI / 4, 0]}
+        targetHeight={0.78}
+        shadows={false}
+        tone={{ desaturate: 0.45, lighten: 0.05 }}
+      />
+      <GltfProp url={`${INT}/tableCoffee.glb`} position={[0.4, FLOOR_Y, 0.4]} targetHeight={0.38} shadows={false} tone={{ desaturate: 0.3 }} />
+      <GltfProp
+        url={`${INT}/cabinetTelevision.glb`}
+        position={[0.2, FLOOR_Y, -ROOM_HALF + 0.35]}
+        targetHeight={0.65}
+        shadows={false}
+        tone={{ desaturate: 0.3 }}
+      />
+      <GltfProp url={`${INT}/pottedPlant.glb`} position={[2.3, FLOOR_Y, -1.4]} targetHeight={0.95} shadows={false} tone={{ desaturate: 0.2 }} />
+      <GltfProp
+        url={`${INT}/lampRoundFloor.glb`}
+        position={[-2.3, FLOOR_Y, 0.2]}
+        targetHeight={1.15}
+        shadows={false}
+        tone={{ desaturate: 0.3, lighten: 0.05 }}
+      />
 
       <Lamp on={lampOn} onToggle={onToggleLamp} />
       <WallSwitch on={switchOn} onToggle={onToggleSwitch} />
@@ -441,9 +546,10 @@ function HotspotPopover({ hotspot, onClose }: { hotspot: SceneHotspot; onClose: 
 }
 
 // How long (ms) the camera spends visibly walking toward the door before
-// the screen fades to black and the scene swaps to the interior.
-const APPROACH_MS = 1200;
-const FADE_MS = 400;
+// the screen fades to black and the scene swaps to the interior. The user
+// can always skip straight to the fade via the "رد کردن" button.
+const APPROACH_MS = 1100;
+const FADE_MS = 350;
 
 export default function Hero3DScene({ hotspots }: { hotspots: SceneHotspot[] }) {
   const [stage, setStage] = useState<Stage>("exterior");
@@ -452,10 +558,9 @@ export default function Hero3DScene({ hotspots }: { hotspots: SceneHotspot[] }) 
   const [switchOn, setSwitchOn] = useState(true);
   const [activeHotspot, setActiveHotspot] = useState<SceneHotspot | null>(null);
   const isMobile = useIsMobile();
-  const controlsRef = useRef<OrbitControlsHandle>(null);
+  const controlsRef = useRef<ComponentRef<typeof OrbitControls>>(null);
+  const approachTimer = useRef<number | null>(null);
 
-  // Resolves relative image URLs the same way the rest of the storefront
-  // does, so hotspot popovers show real uploaded product photos.
   const resolvedHotspots = useMemo(
     () =>
       hotspots.map((h) => ({
@@ -468,16 +573,23 @@ export default function Hero3DScene({ hotspots }: { hotspots: SceneHotspot[] }) 
     [hotspots],
   );
 
+  function swapToInterior() {
+    setFade(1);
+    window.setTimeout(() => {
+      setStage("interior");
+      window.setTimeout(() => setFade(0), 30);
+    }, FADE_MS);
+  }
+
   function enterHouse() {
     if (stage !== "exterior") return;
     setStage("approaching");
-    window.setTimeout(() => {
-      setFade(1);
-      window.setTimeout(() => {
-        setStage("interior");
-        window.setTimeout(() => setFade(0), 30);
-      }, FADE_MS);
-    }, APPROACH_MS);
+    approachTimer.current = window.setTimeout(swapToInterior, APPROACH_MS);
+  }
+
+  function skipApproach() {
+    if (approachTimer.current) window.clearTimeout(approachTimer.current);
+    swapToInterior();
   }
 
   function exitHouse() {
@@ -493,7 +605,7 @@ export default function Hero3DScene({ hotspots }: { hotspots: SceneHotspot[] }) 
       <Canvas
         shadows={!isMobile}
         dpr={isMobile ? [1, 1.5] : [1, 2]}
-        gl={{ antialias: true, powerPreference: "low-power" }}
+        gl={{ antialias: true, powerPreference: "low-power", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.15 }}
         camera={{ position: [CAM_EXTERIOR.pos.x, CAM_EXTERIOR.pos.y, CAM_EXTERIOR.pos.z], fov: 45 }}
         aria-hidden="true"
       >
@@ -506,7 +618,6 @@ export default function Hero3DScene({ hotspots }: { hotspots: SceneHotspot[] }) 
             onToggleLamp={() => setLampOn((v) => !v)}
             switchOn={switchOn}
             onToggleSwitch={() => setSwitchOn((v) => !v)}
-            highQuality={!isMobile}
             hotspots={resolvedHotspots}
             onOpenHotspot={setActiveHotspot}
             onExit={exitHouse}
@@ -520,11 +631,11 @@ export default function Hero3DScene({ hotspots }: { hotspots: SceneHotspot[] }) 
           enableZoom
           enableRotate
           minDistance={2}
-          maxDistance={9}
+          maxDistance={10}
           minPolarAngle={Math.PI / 5}
           maxPolarAngle={Math.PI / 2.1}
-          minAzimuthAngle={-Math.PI / 2.5}
-          maxAzimuthAngle={Math.PI / 2.5}
+          minAzimuthAngle={-Math.PI / 2.2}
+          maxAzimuthAngle={Math.PI / 2.2}
           enableDamping
           dampingFactor={0.08}
         />
@@ -544,6 +655,16 @@ export default function Hero3DScene({ hotspots }: { hotspots: SceneHotspot[] }) 
           className="absolute bottom-4 right-4 z-10 flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-[#0b0e14] shadow-lg shadow-brand/20"
         >
           ورود به خانه ←
+        </button>
+      )}
+
+      {stage === "approaching" && (
+        <button
+          type="button"
+          onClick={skipApproach}
+          className="absolute bottom-4 left-4 z-10 rounded-xl border border-border-color bg-black/60 px-3 py-2 text-xs font-bold text-white backdrop-blur"
+        >
+          رد کردن ←
         </button>
       )}
 

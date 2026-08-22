@@ -25,6 +25,23 @@ test.describe("Sprint 9: 3D homepage experience", () => {
     expect(errors).toEqual([]);
   });
 
+  test("entering the house shows the interior promptly — regression test for the blank-canvas GLB-loading race", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.mouse.wheel(0, 700);
+    const enterBtn = page.locator('button:has-text("ورود به خانه")');
+    await enterBtn.waitFor({ state: "visible", timeout: 10000 });
+    await enterBtn.click();
+
+    // The exit button only renders once InteriorScene has actually mounted
+    // inside the canvas — if furniture GLBs are still suspended and nothing
+    // catches it, this (and everything else in the scene) never appears.
+    await expect(page.locator('button:has-text("نمای بیرونی")')).toBeVisible({ timeout: 4000 });
+    expect(errors).toEqual([]);
+  });
+
   test("a staff member can add a real-product hotspot and see it on the public API, then remove it", async ({ page, request }) => {
     await loginViaOtp(page, SUPER_ADMIN_PHONE, "مدیر سیستم");
 
