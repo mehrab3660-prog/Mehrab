@@ -34,10 +34,13 @@ const LINKS = [
   },
 ];
 
+const STAFF_ROLES = ["SUPER_ADMIN", "ADMIN", "STAFF", "WAREHOUSE_MANAGER"];
+
 export default function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const categories = useCategoryTree();
   const { user, logout } = useAuth();
   const [categoriesOpen, setCategoriesOpen] = useState(categories.length <= 3);
+  const isStaff = user && STAFF_ROLES.includes(user.role);
 
   return (
     <AnimatePresence>
@@ -89,7 +92,17 @@ export default function MobileDrawer({ open, onClose }: { open: boolean; onClose
                     </Link>
                   </div>
                 </div>
-              ) : (
+              ) : null}
+              {isStaff && (
+                <Link
+                  href="/admin"
+                  onClick={onClose}
+                  className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-brand/40 bg-brand/10 py-2.5 text-sm font-bold text-brand"
+                >
+                  🤖 پنل مدیریت
+                </Link>
+              )}
+              {!user && (
                 <Link
                   href="/login"
                   onClick={onClose}
