@@ -1,9 +1,10 @@
 import { test, expect, BrowserContext } from "@playwright/test";
 import { loginViaOtp, randomPhone } from "./helpers/otp";
 
-// Real, non-mocked E2E for the homepage smart-home showroom — logs in via
-// the real OTP flow against the actually running API + Postgres, exactly
-// like the Sprint 8 suite.
+// Real, non-mocked E2E for the homepage hero and the (currently storefront-
+// unused, admin-only) scene-hotspot backend — logs in via the real OTP flow
+// against the actually running API + Postgres, exactly like the Sprint 8
+// suite.
 const SUPER_ADMIN_PHONE = "09120000000";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 
@@ -12,19 +13,18 @@ async function readAccessToken(context: BrowserContext) {
   return storage.origins[0].localStorage.find((i) => i.name === "sn_access_token")!.value;
 }
 
-test.describe("Homepage smart-home showroom", () => {
-  test("homepage renders the showroom hero and floorplan images with no console/page errors", async ({ page }) => {
+test.describe("Homepage hero", () => {
+  test("homepage renders the hero with no console/page errors", async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
 
     await page.goto("/", { waitUntil: "networkidle" });
-    await expect(page.locator("text=خانه هوشمند")).toBeVisible();
-    await expect(page.locator('img[alt="نمای داخلی خانه هوشمند سلطان نور"]')).toBeVisible();
+    await expect(page.locator("h1")).toContainText("روشنایی");
 
     expect(errors).toEqual([]);
   });
 
-  test("a staff member can add a real-product hotspot and see it on the public API and homepage, then remove it", async ({ page, request }) => {
+  test("a staff member can add a real-product hotspot and see it on the public API, then remove it", async ({ page, request }) => {
     await loginViaOtp(page, SUPER_ADMIN_PHONE, "مدیر سیستم");
 
     const productsRes = await request.get(`${API_URL}/products?take=1`);
@@ -45,15 +45,8 @@ test.describe("Homepage smart-home showroom", () => {
     const hotspots = await (await request.get(`${API_URL}/scene/hotspots`)).json();
     expect(hotspots.some((h: { product: { id: string } }) => h.product.id === product.id)).toBe(true);
 
-    await page.goto("/", { waitUntil: "networkidle" });
-    const marker = page.locator(`button[aria-label*="${product.name}"]`);
-    await expect(marker).toBeVisible();
-    await marker.click();
-    await expect(page.getByRole("link", { name: "مشاهده محصول", exact: true })).toBeVisible();
-
-    await page.goto("/admin/scene-hotspots", { waitUntil: "networkidle" });
-    await page.locator("tr", { hasText: "نقطه تست" }).locator('button:has-text("حذف")').click();
-    await expect(page.locator("tr", { hasText: "نقطه تست" })).toHaveCount(0);
+    await row.locator('button:has-text("حذف")').click();
+    await expect(row).toHaveCount(0);
   });
 
   test("a fake product ID is rejected by the admin hotspot API (no-fake-products enforcement)", async ({ page, request }) => {
