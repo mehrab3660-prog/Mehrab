@@ -430,8 +430,8 @@ export default function AdminSettingsPage() {
           />
           <SettingField
             fieldKey="site3dEnabled"
-            label="نمایشگر سه‌بعدی صفحه اصلی"
-            helpText="مقدار «false» را وارد کنید تا نمایشگر سه‌بعدی خاموش شود و سایت به حالت قبلی (بدون سه‌بعدی) نمایش داده شود؛ خالی یا هر مقدار دیگر یعنی روشن."
+            label="نمایشگر خانه هوشمند صفحه اصلی"
+            helpText="مقدار «false» را وارد کنید تا نمایشگر خانه هوشمند خاموش شود و این بخش از صفحه اصلی نمایش داده نشود؛ خالی یا هر مقدار دیگر یعنی روشن."
             status={settings.site3dEnabled}
             onSave={handleSave}
           />

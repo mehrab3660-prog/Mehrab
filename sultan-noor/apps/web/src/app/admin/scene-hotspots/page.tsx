@@ -19,7 +19,7 @@ interface Hotspot {
   product: { id: string; name: string; slug: string; status: Product["status"] };
 }
 
-const EMPTY_FORM = { label: "", icon: "💡", positionX: "0", positionY: "0", positionZ: "0", order: "0", productId: "" };
+const EMPTY_FORM = { label: "", icon: "💡", positionX: "50", positionY: "50", order: "0", productId: "" };
 
 export default function SceneHotspotsPage() {
   const { accessToken } = useAuth();
@@ -59,7 +59,7 @@ export default function SceneHotspotsPage() {
           icon: form.icon,
           positionX: Number(form.positionX),
           positionY: Number(form.positionY),
-          positionZ: Number(form.positionZ),
+          positionZ: 0,
           order: Number(form.order),
           productId: form.productId,
         },
@@ -87,10 +87,10 @@ export default function SceneHotspotsPage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold">نقاط تعاملی نمایشگر سه‌بعدی</h1>
+      <h1 className="mb-6 text-2xl font-bold">نقاط تعاملی نمایشگر خانه هوشمند</h1>
       <AdminHelp storageKey="scene-hotspots">
-        <p>هر نقطه تعاملی یک نشانگر قابل کلیک داخل نمایشگر سه‌بعدی صفحه اصلی است که به یک محصول واقعی از کاتالوگ وصل می‌شود — هرگز محصول ساختگی نمایش داده نمی‌شود.</p>
-        <p>مختصات X/Y/Z موقعیت نشانگر داخل صحنه سه‌بعدی را مشخص می‌کنند. اتاق سه‌بعدی تقریباً بین ۳- تا ۳ در X و Z، و بین ۱- (کف) تا ۱.۶ (سقف) در Y قرار دارد. فقط نقاط «فعال» در سایت نمایش داده می‌شوند.</p>
+        <p>هر نقطه تعاملی یک نشانگر قابل کلیک روی تصویر نمایشگر خانه هوشمند صفحه اصلی است که به یک محصول واقعی از کاتالوگ وصل می‌شود — هرگز محصول ساختگی نمایش داده نمی‌شود.</p>
+        <p>مقادیر X و Y درصد فاصله از چپ و بالای تصویر هستند (هر دو بین ۰ تا ۱۰۰). مثلاً X=50, Y=50 دقیقاً وسط تصویر است. فقط نقاط «فعال» در سایت نمایش داده می‌شوند.</p>
       </AdminHelp>
 
       <form onSubmit={handleCreate} className="mb-6 grid grid-cols-2 gap-2 rounded-xl border border-border-color p-4 sm:grid-cols-6">
@@ -109,26 +109,22 @@ export default function SceneHotspotsPage() {
         />
         <input
           type="number"
-          step="0.1"
-          placeholder="X"
+          min={0}
+          max={100}
+          step="1"
+          placeholder="X (٪ از چپ)"
           value={form.positionX}
           onChange={(e) => setForm({ ...form, positionX: e.target.value })}
           className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
         />
         <input
           type="number"
-          step="0.1"
-          placeholder="Y"
+          min={0}
+          max={100}
+          step="1"
+          placeholder="Y (٪ از بالا)"
           value={form.positionY}
           onChange={(e) => setForm({ ...form, positionY: e.target.value })}
-          className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
-        />
-        <input
-          type="number"
-          step="0.1"
-          placeholder="Z"
-          value={form.positionZ}
-          onChange={(e) => setForm({ ...form, positionZ: e.target.value })}
           className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
         />
 
@@ -188,7 +184,7 @@ export default function SceneHotspotsPage() {
                   {h.product.status !== "PUBLISHED" && <span className="mr-2 text-xs text-amber-400">({h.product.status} — مخفی در سایت)</span>}
                 </td>
                 <td className="p-3 text-xs text-foreground/60">
-                  {h.positionX}, {h.positionY}, {h.positionZ}
+                  X: {h.positionX}٪, Y: {h.positionY}٪
                 </td>
                 <td className="p-3">
                   <button onClick={() => toggleActive(h)} className={`rounded-full px-2 py-0.5 text-xs ${h.isActive ? "bg-emerald-500/20 text-emerald-400" : "bg-surface-2 text-foreground/50"}`}>

@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
-import { Banner, Category, Product, Brand, BlogPost } from "@/lib/types";
+import { Category, Product, Brand, BlogPost } from "@/lib/types";
 import ProductGrid from "@/components/ProductGrid";
-import HeroCarousel from "@/components/HeroCarousel";
 import RevealSection from "@/components/RevealSection";
 import TrustBadges from "@/components/TrustBadges";
 import SectionDivider from "@/components/SectionDivider";
@@ -13,7 +12,7 @@ import LatestBlogPosts from "@/components/LatestBlogPosts";
 import FinalCta from "@/components/FinalCta";
 import AiAdvisorPromoCard from "@/components/AiAdvisorPromoCard";
 import PersonalizedRecommendations from "@/components/PersonalizedRecommendations";
-import Scene3DHomepageSection from "@/components/three/Scene3DHomepageSection";
+import ShowroomSection from "@/components/ShowroomSection";
 
 async function safeGet<T>(path: string, fallback: T): Promise<T> {
   try {
@@ -24,8 +23,7 @@ async function safeGet<T>(path: string, fallback: T): Promise<T> {
 }
 
 export default async function HomePage() {
-  const [banners, productsRes, categories, bestSellers, brands, blogPosts] = await Promise.all([
-    safeGet<Banner[]>("/banners?placement=HOME_HERO", []),
+  const [productsRes, categories, bestSellers, brands, blogPosts] = await Promise.all([
     safeGet<{ items: Product[] }>("/products?take=24", { items: [] }),
     safeGet<Category[]>("/categories", []),
     safeGet<Product[]>("/products/best-sellers?take=8", []),
@@ -39,9 +37,7 @@ export default async function HomePage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-5 sm:py-8">
-      <HeroCarousel banners={banners} />
-
-      <Scene3DHomepageSection categories={categories} />
+      <ShowroomSection />
 
       {categories.length > 0 && (
         <>
