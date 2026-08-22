@@ -25,6 +25,7 @@ const NAV = [
   { href: "/admin", label: "داشبورد" },
   { href: "/admin/analytics", label: "گزارش پیشرفته فروش" },
   { href: "/admin/products", label: "محصولات" },
+  { href: "/admin/scene-hotspots", label: "نقاط تعاملی سه‌بعدی" },
   { href: "/admin/consultant-rules", label: "قوانین مشاور هوشمند برق" },
   { href: "/admin/sales-analytics", label: "تحلیل فروش" },
   { href: "/admin/orders", label: "سفارش‌ها" },

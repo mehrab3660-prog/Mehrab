@@ -41,7 +41,8 @@ type SettingsResponse = Record<
   | "electricalConsultantEnabled"
   | "aiAutonomousMode"
   | "ownerReportAiSummaryEnabled"
-  | "ownerReportAiMonthlyBudgetToman",
+  | "ownerReportAiMonthlyBudgetToman"
+  | "site3dEnabled",
   SettingStatus
 >;
 
@@ -425,6 +426,13 @@ export default function AdminSettingsPage() {
             label="آدرس سایت (برای بازگشت از درگاه پرداخت)"
             helpText="مثال: https://sultannoor.ir — بدون / در انتها"
             status={settings.siteUrl}
+            onSave={handleSave}
+          />
+          <SettingField
+            fieldKey="site3dEnabled"
+            label="نمایشگر سه‌بعدی صفحه اصلی"
+            helpText="مقدار «false» را وارد کنید تا نمایشگر سه‌بعدی خاموش شود و سایت به حالت قبلی (بدون سه‌بعدی) نمایش داده شود؛ خالی یا هر مقدار دیگر یعنی روشن."
+            status={settings.site3dEnabled}
             onSave={handleSave}
           />
         </section>

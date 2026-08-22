@@ -31,7 +31,8 @@ type SettingKey =
   | 'electricalConsultantEnabled'
   | 'aiAutonomousMode'
   | 'ownerReportAiSummaryEnabled'
-  | 'ownerReportAiMonthlyBudgetToman';
+  | 'ownerReportAiMonthlyBudgetToman'
+  | 'site3dEnabled';
 
 // Maps each DB-backed setting to the env var it falls back to when unset —
 // existing .env-based deployments keep working unchanged.
@@ -65,6 +66,7 @@ const ENV_FALLBACK: Record<SettingKey, string> = {
   aiAutonomousMode: 'AI_AUTONOMOUS_MODE',
   ownerReportAiSummaryEnabled: 'OWNER_REPORT_AI_SUMMARY_ENABLED',
   ownerReportAiMonthlyBudgetToman: 'OWNER_REPORT_AI_MONTHLY_BUDGET_TOMAN',
+  site3dEnabled: 'SITE_3D_ENABLED',
 };
 
 const SECRET_KEYS: SettingKey[] = [

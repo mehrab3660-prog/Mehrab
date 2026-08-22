@@ -28,6 +28,7 @@ interface EditForm {
   basePrice: string;
   compareAtPrice: string;
   minWholesaleQty: string;
+  model3dUrl: string;
 }
 
 function editFormFromProduct(p: Product): EditForm {
@@ -42,6 +43,7 @@ function editFormFromProduct(p: Product): EditForm {
     basePrice: String(p.basePrice),
     compareAtPrice: p.compareAtPrice != null ? String(p.compareAtPrice) : "",
     minWholesaleQty: p.minWholesaleQty != null ? String(p.minWholesaleQty) : "",
+    model3dUrl: p.model3dUrl ?? "",
   };
 }
 
@@ -146,6 +148,7 @@ export default function AdminProductsPage() {
           basePrice: Number(editForm.basePrice),
           compareAtPrice: editForm.compareAtPrice ? Number(editForm.compareAtPrice) : undefined,
           minWholesaleQty: editForm.minWholesaleQty ? Number(editForm.minWholesaleQty) : undefined,
+          model3dUrl: editForm.model3dUrl || undefined,
         },
         accessToken,
       );
@@ -528,6 +531,13 @@ export default function AdminProductsPage() {
                         value={editForm.minWholesaleQty}
                         onChange={(e) => setEditForm({ ...editForm, minWholesaleQty: e.target.value })}
                         className="rounded-lg border border-border-color bg-background px-2 py-1 text-sm"
+                      />
+                      <input
+                        type="text"
+                        placeholder="آدرس مدل سه‌بعدی GLB (اختیاری — برای نمایشگر ۳بعدی صفحه محصول)"
+                        value={editForm.model3dUrl}
+                        onChange={(e) => setEditForm({ ...editForm, model3dUrl: e.target.value })}
+                        className="col-span-2 rounded-lg border border-border-color bg-background px-2 py-1 text-sm sm:col-span-4"
                       />
                       <textarea
                         placeholder="توضیحات محصول (اختیاری)"

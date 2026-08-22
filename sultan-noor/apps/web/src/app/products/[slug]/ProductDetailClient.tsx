@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { api } from "@/lib/api";
 import { Product } from "@/lib/types";
 import { useAuth } from "@/context/AuthContext";
@@ -12,6 +13,20 @@ import { useToast } from "@/context/ToastContext";
 import ProductGrid from "@/components/ProductGrid";
 import RecentlyViewed from "@/components/RecentlyViewed";
 import { addRecentlyViewed } from "@/lib/recentlyViewed";
+import { Scene3DErrorBoundary } from "@/components/three/Scene3DErrorBoundary";
+import { useWebglSupported } from "@/components/three/useWebglSupported";
+
+const ProductModelViewer = dynamic(() => import("@/components/three/ProductModelViewer"), { ssr: false });
+
+// Flips the parent back to the real product photos the instant the 3D
+// viewer throws — never leaves the customer staring at a broken canvas.
+function ModelErrorFallback({ onError }: { onError: () => void }) {
+  useEffect(() => {
+    onError();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
+}
 
 interface Review {
   id: string;
@@ -74,6 +89,9 @@ export default function ProductDetailClient() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [quantity, setQuantity] = useState(1);
   const [activeImage, setActiveImage] = useState(0);
+  const [show3d, setShow3d] = useState(true);
+  const [model3dFailed, setModel3dFailed] = useState(false);
+  const webglSupported = useWebglSupported();
   const [selectedAttrs, setSelectedAttrs] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [restockSubscribed, setRestockSubscribed] = useState(false);
@@ -242,18 +260,33 @@ export default function ProductDetailClient() {
     <div className="mx-auto max-w-6xl px-4 py-8">
       <div className="grid gap-8 md:grid-cols-2">
         <div>
-          <div className="aspect-square overflow-hidden rounded-2xl surface-card">
-            {images[activeImage] ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={images[activeImage].url}
-                alt={product.name}
-                className={`h-full w-full object-cover ${outOfStock ? "opacity-50 grayscale" : ""}`}
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center text-foreground/40">بدون تصویر</div>
-            )}
-          </div>
+          {product.model3dUrl && webglSupported && !model3dFailed && show3d ? (
+            <Scene3DErrorBoundary fallback={<ModelErrorFallback onError={() => setModel3dFailed(true)} />}>
+              <ProductModelViewer url={product.model3dUrl} onFallback={() => setModel3dFailed(true)} />
+            </Scene3DErrorBoundary>
+          ) : (
+            <div className="aspect-square overflow-hidden rounded-2xl surface-card">
+              {images[activeImage] ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={images[activeImage].url}
+                  alt={product.name}
+                  className={`h-full w-full object-cover ${outOfStock ? "opacity-50 grayscale" : ""}`}
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-foreground/40">بدون تصویر</div>
+              )}
+            </div>
+          )}
+          {product.model3dUrl && webglSupported && !model3dFailed && (
+            <button
+              type="button"
+              onClick={() => setShow3d((v) => !v)}
+              className="mt-2 rounded-lg border border-border-color px-3 py-1.5 text-xs font-bold hover:border-brand/50"
+            >
+              {show3d ? "مشاهده تصاویر" : "مشاهده مدل سه‌بعدی"}
+            </button>
+          )}
           {images.length > 1 && (
             <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar">
               {images.map((img, i) => (

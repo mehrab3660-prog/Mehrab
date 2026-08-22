@@ -221,6 +221,17 @@ export interface Product {
   reviewCount?: number;
   totalStock?: number;
   restockSubscribed?: boolean;
+  model3dUrl?: string | null;
+}
+
+// Sprint 9 — a clickable marker inside the homepage 3D scene, always
+// resolved server-side from a real, PUBLISHED product (never fabricated).
+export interface SceneHotspot {
+  id: string;
+  label: string;
+  icon: string;
+  position: { x: number; y: number; z: number };
+  product: AiProductCard;
 }
 
 export interface CartItem {

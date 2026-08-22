@@ -238,12 +238,41 @@ model Product {
   searchKeywords  String?
   imageEmbedding  String? // serialized vector for visual search, populated by AI worker
 
+  // Optional real GLB/glTF model for the Sprint 9 3D product viewer — never
+  // auto-generated, only set by staff via the admin scene management page.
+  model3dUrl String?
+
+  sceneHotspots SceneHotspot[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([categoryId])
   @@index([brandId])
   @@index([status])
+}
+
+// A clickable marker placed by staff inside the homepage 3D scene, always
+// pointing at a real Product — the 3D layer is presentation-only and must
+// never invent product data (Sprint 9, rule "NO FAKE PRODUCTS").
+model SceneHotspot {
+  id        String  @id @default(cuid())
+  label     String
+  icon      String  @default("💡")
+  positionX Float
+  positionY Float
+  positionZ Float
+  order     Int     @default(0)
+  isActive  Boolean @default(true)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@index([isActive])
 }
 
 model ProductImage {
@@ -1197,6 +1226,11 @@ model AppSettings {
   // parsing convention as every other AI feature's *MonthlyBudgetToman.
   ownerReportAiSummaryEnabled     String?
   ownerReportAiMonthlyBudgetToman String?
+
+  // 3D Homepage/Product Experience (Sprint 9) — "false" turns the whole 3D
+  // layer off and falls back to the prior static 2D storefront; unset means
+  // ON, consistent with every other feature-enable flag in this table.
+  site3dEnabled String?
 
   updatedAt DateTime @updatedAt
 }

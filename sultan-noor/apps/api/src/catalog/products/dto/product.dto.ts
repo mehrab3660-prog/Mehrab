@@ -127,6 +127,12 @@ export class UpdateProductDto {
   @IsInt()
   @Min(1)
   minWholesaleQty?: number;
+
+  // Optional real GLB/glTF URL for the Sprint 9 product-page 3D viewer —
+  // set manually by staff once a real model exists; never auto-generated.
+  @IsOptional()
+  @IsString()
+  model3dUrl?: string;
 }
 
 export class ListProductsQueryDto {

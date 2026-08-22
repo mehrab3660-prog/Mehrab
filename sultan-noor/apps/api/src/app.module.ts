@@ -50,6 +50,7 @@ import { StockSubscriptionsModule } from './stock-subscriptions/stock-subscripti
 import { ReturnsModule } from './returns/returns.module';
 import { LoyaltyModule } from './loyalty/loyalty.module';
 import { WholesaleLeadsModule } from './wholesale-leads/wholesale-leads.module';
+import { SceneModule } from './scene/scene.module';
 
 @Module({
   imports: [
@@ -98,6 +99,7 @@ import { WholesaleLeadsModule } from './wholesale-leads/wholesale-leads.module';
     ApprovalCenterModule,
     MediaSearchModule,
     DashboardModule,
+    SceneModule,
     StockSubscriptionsModule,
     ReturnsModule,
     LoyaltyModule,

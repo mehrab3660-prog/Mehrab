@@ -119,4 +119,8 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsString()
   ownerReportAiMonthlyBudgetToman?: string;
+
+  @IsOptional()
+  @IsString()
+  site3dEnabled?: string;
 }

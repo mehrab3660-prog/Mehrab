@@ -13,6 +13,7 @@ import LatestBlogPosts from "@/components/LatestBlogPosts";
 import FinalCta from "@/components/FinalCta";
 import AiAdvisorPromoCard from "@/components/AiAdvisorPromoCard";
 import PersonalizedRecommendations from "@/components/PersonalizedRecommendations";
+import Scene3DHomepageSection from "@/components/three/Scene3DHomepageSection";
 
 async function safeGet<T>(path: string, fallback: T): Promise<T> {
   try {
@@ -39,6 +40,8 @@ export default async function HomePage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-5 sm:py-8">
       <HeroCarousel banners={banners} />
+
+      <Scene3DHomepageSection categories={categories} />
 
       {categories.length > 0 && (
         <>
