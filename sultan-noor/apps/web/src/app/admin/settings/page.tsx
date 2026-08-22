@@ -240,178 +240,182 @@ export default function AdminSettingsPage() {
           </div>
         </section>
 
-        <section>
-          <h2 className="mb-3 text-lg font-bold">مشاور هوشمند (Anthropic)</h2>
-          <div className="space-y-3">
-            <SettingField
-              fieldKey="anthropicApiKey"
-              label="API Key"
-              helpText="تا وقتی تنظیم نشده، مشاور هوشمند با پاسخ‌های ساده مبتنی بر قوانین کار می‌کند."
-              status={settings.anthropicApiKey}
-              onSave={handleSave}
-            />
-            <SettingField
-              fieldKey="anthropicModel"
-              label="مدل (اختیاری)"
-              helpText="پیش‌فرض: claude-sonnet-4-5"
-              status={settings.anthropicModel}
-              onSave={handleSave}
-            />
-          </div>
-        </section>
-
-        <section>
-          <h2 className="mb-3 text-lg font-bold">جستجوی صوتی (OpenAI Whisper)</h2>
-          <SettingField
-            fieldKey="openaiApiKey"
-            label="API Key"
-            helpText="تا وقتی تنظیم نشده، جستجوی صوتی غیرفعال است."
-            status={settings.openaiApiKey}
-            onSave={handleSave}
-          />
-        </section>
-
-        <section>
-          <h2 className="mb-3 text-lg font-bold">تصویر خودکار محصول (Image Autopilot)</h2>
-          <p className="mb-3 text-xs text-foreground/50">
-            هر سه کلید زیر اختیاری‌اند. تا وقتی تنظیم نشوند، همان بخش نادیده گرفته می‌شود و آماده‌سازی محصول با هوش مصنوعی بدون خطا ادامه پیدا می‌کند — فقط پیام «تصویر خودکار آماده نشد» را می‌بینید و می‌توانید عکس را دستی بارگذاری کنید.
+        {/* ─────────────────── همه‌ی تنظیمات هوش مصنوعی، یک‌جا ─────────────────── */}
+        <details open className="rounded-xl border-2 border-brand/30 bg-brand/[0.03] p-4">
+          <summary className="cursor-pointer text-xl font-bold text-brand">🤖 هوش مصنوعی (AI) — همه تنظیمات</summary>
+          <p className="my-3 text-xs text-foreground/60">
+            فقط با وارد کردن یک «کلید اصلی Anthropic» زیر، تقریباً همه‌ی قابلیت‌های هوش مصنوعی فروشگاه (مشاور فروش، آماده‌سازی محصول، سئوی خودکار، تولید محتوا، اخبار برق، خلاصه گزارش روزانه) فعال می‌شوند.
+            بقیه‌ی بخش‌های این‌جا (تصویر خودکار، بودجه‌ها، تنظیمات دقیق‌تر هر بخش) کاملاً اختیاری‌اند — می‌توانید بازشان نکنید.
           </p>
+
           <div className="space-y-3">
-            <SettingField
-              fieldKey="imageSearchApiKey"
-              label="کلید جستجوی تصویر (Bing Image Search)"
-              helpText="برای جستجوی خودکار عکس واقعی محصول در اینترنت. اگر خالی باشد، این مرحله رد می‌شود."
-              status={settings.imageSearchApiKey}
-              onSave={handleSave}
-            />
-            <SettingField
-              fieldKey="removeBgApiKey"
-              label="کلید حذف پس‌زمینه (remove.bg)"
-              helpText="اختیاری — اگر تنظیم نشود، عکس با پس‌زمینه‌ی اصلی خودش استفاده می‌شود."
-              status={settings.removeBgApiKey}
-              onSave={handleSave}
-            />
-            <SettingField
-              fieldKey="imageAutopilotMonthlyBudgetToman"
-              label="سقف هزینه‌ی ماهانه (تومان، تخمینی)"
-              helpText="اگر خالی باشد، محدودیتی اعمال نمی‌شود. این عدد یک برآورد تقریبی است، نه صورتحساب دقیق."
-              status={settings.imageAutopilotMonthlyBudgetToman}
-              onSave={handleSave}
-            />
+            <details open className="rounded-lg border border-border-color p-3">
+              <summary className="cursor-pointer font-bold">کلید اصلی (Anthropic) — همین یکی مهم‌ترینه</summary>
+              <div className="mt-3 space-y-3">
+                <SettingField
+                  fieldKey="anthropicApiKey"
+                  label="API Key"
+                  helpText="تا وقتی تنظیم نشده، مشاور هوشمند با پاسخ‌های ساده مبتنی بر قوانین کار می‌کند."
+                  status={settings.anthropicApiKey}
+                  onSave={handleSave}
+                />
+                <SettingField
+                  fieldKey="anthropicModel"
+                  label="مدل (اختیاری)"
+                  helpText="پیش‌فرض: claude-sonnet-4-5"
+                  status={settings.anthropicModel}
+                  onSave={handleSave}
+                />
+              </div>
+            </details>
+
+            <details className="rounded-lg border border-border-color p-3">
+              <summary className="cursor-pointer font-bold">دستیار فروش هوشمند فروشگاه (Store-only AI)</summary>
+              <p className="mt-2 mb-3 text-xs text-foreground/50">
+                این دستیار فقط و فقط از کاتالوگ واقعی سلطان نور محصول پیشنهاد می‌دهد و هرگز محصولی از فروشگاه دیگری معرفی نمی‌کند. «فقط کاتالوگ» پیش‌فرض همیشه فعال است.
+              </p>
+              <div className="space-y-3">
+                <SettingField
+                  fieldKey="storeAiEnabled"
+                  label="فعال بودن دستیار فروش (مقدار «false» برای غیرفعال کردن)"
+                  helpText="اگر خالی باشد یا هر مقداری غیر از «false» باشد، دستیار فعال است."
+                  status={settings.storeAiEnabled}
+                  onSave={handleSave}
+                />
+                <SettingField
+                  fieldKey="storeAiStrictCatalogOnly"
+                  label="فقط کاتالوگ واقعی — بدون استدلال آزاد AI (مقدار «false» برای اجازه‌ی استدلال AI در مقایسه‌ها)"
+                  helpText="پیش‌فرض تولید همیشه فعال (روشن) است."
+                  status={settings.storeAiStrictCatalogOnly}
+                  onSave={handleSave}
+                />
+                <SettingField
+                  fieldKey="storeAiMaxResults"
+                  label="حداکثر تعداد محصول پیشنهادی در هر پاسخ"
+                  helpText="پیش‌فرض: ۵"
+                  status={settings.storeAiMaxResults}
+                  onSave={handleSave}
+                />
+                <SettingField
+                  fieldKey="storeAiRateLimitPerMinute"
+                  label="حداکثر تعداد درخواست مجاز در دقیقه (برای هر کاربر/IP)"
+                  helpText="پیش‌فرض: ۱۰"
+                  status={settings.storeAiRateLimitPerMinute}
+                  onSave={handleSave}
+                />
+                <SettingField
+                  fieldKey="storeAiAllowAddToCart"
+                  label="نمایش دکمه «افزودن به سبد» در چت (مقدار «false» برای مخفی کردن)"
+                  helpText="افزودن واقعی همیشه از طریق API واقعی سبد خرید و با بررسی مجدد موجودی/قیمت انجام می‌شود."
+                  status={settings.storeAiAllowAddToCart}
+                  onSave={handleSave}
+                />
+                <SettingField
+                  fieldKey="storeAiMonthlyBudgetToman"
+                  label="سقف هزینه‌ی ماهانه استدلال AI (تومان، تخمینی)"
+                  helpText="اگر خالی باشد، محدودیتی اعمال نمی‌شود."
+                  status={settings.storeAiMonthlyBudgetToman}
+                  onSave={handleSave}
+                />
+              </div>
+            </details>
+
+            <details className="rounded-lg border border-border-color p-3">
+              <summary className="cursor-pointer font-bold">گزارش هوشمند مالک (خلاصه گزارش روزانه)</summary>
+              <div className="mt-3 space-y-3">
+                <SettingField
+                  fieldKey="ownerReportAiSummaryEnabled"
+                  label="فعال بودن خلاصه هوشمند گزارش روزانه (مقدار «false» برای غیرفعال کردن)"
+                  helpText="این فقط اعداد واقعی محاسبه‌شده توسط بک‌اند را به فارسی ساده توضیح می‌دهد — خودش هیچ عددی نمی‌سازد."
+                  status={settings.ownerReportAiSummaryEnabled}
+                  onSave={handleSave}
+                />
+                <SettingField
+                  fieldKey="ownerReportAiMonthlyBudgetToman"
+                  label="سقف هزینه‌ی ماهانه خلاصه هوشمند گزارش (تومان، تخمینی)"
+                  helpText="اگر خالی باشد، محدودیتی اعمال نمی‌شود."
+                  status={settings.ownerReportAiMonthlyBudgetToman}
+                  onSave={handleSave}
+                />
+              </div>
+            </details>
+
+            <details className="rounded-lg border border-border-color p-3">
+              <summary className="cursor-pointer font-bold">اخبار برق (News Autopilot)</summary>
+              <div className="mt-3">
+                <SettingField
+                  fieldKey="newsMonthlyBudgetToman"
+                  label="سقف هزینه‌ی ماهانه تولید خبر با AI (تومان، تخمینی)"
+                  helpText="اگر خالی باشد، محدودیتی اعمال نمی‌شود."
+                  status={settings.newsMonthlyBudgetToman}
+                  onSave={handleSave}
+                />
+              </div>
+            </details>
+
+            <details className="rounded-lg border border-border-color p-3">
+              <summary className="cursor-pointer font-bold">حالت خودمختار (Autonomous Mode) — پیش‌فرض خاموش</summary>
+              <p className="mt-2 mb-3 text-xs text-foreground/50">
+                برخلاف بقیه‌ی تنظیمات این صفحه، این یکی فقط با مقدار دقیق «true» روشن می‌شود. حتی وقتی روشن باشد، تغییر قیمت، تخفیف، انتشار محصول/خبر/محتوا، فعال‌سازی کمپین، تغییر موجودی، ثبت سفارش خرید و هرگونه پیام تبلیغاتی همیشه نیازمند تأیید دستی مالک است.
+              </p>
+              <SettingField
+                fieldKey="aiAutonomousMode"
+                label="فعال بودن حالت خودمختار (فقط مقدار «true» آن را روشن می‌کند)"
+                helpText="فعلاً تنها اثر این حالت، اجازه‌دادن به اصلاح خودکار کم‌ریسک سئو است — آن هم فقط وقتی «seoAutoFixEnabled» هم روشن باشد."
+                status={settings.aiAutonomousMode}
+                onSave={handleSave}
+              />
+            </details>
+
+            <details className="rounded-lg border border-border-color p-3">
+              <summary className="cursor-pointer font-bold">تصویر خودکار محصول (Image Autopilot) — اختیاری</summary>
+              <p className="mt-2 mb-3 text-xs text-foreground/50">
+                هر کلید زیر اختیاری‌ست. تا وقتی تنظیم نشوند، آماده‌سازی محصول با AI بدون خطا ادامه پیدا می‌کند — فقط باید عکس را دستی بارگذاری کنید. تولید تصویر با AI از همان کلید OpenAI زیر استفاده می‌کند.
+              </p>
+              <div className="space-y-3">
+                <SettingField
+                  fieldKey="openaiApiKey"
+                  label="کلید OpenAI (برای جستجوی صوتی و تولید عکس با AI)"
+                  helpText="تا وقتی تنظیم نشده، جستجوی صوتی و تولید عکس با AI غیرفعال است."
+                  status={settings.openaiApiKey}
+                  onSave={handleSave}
+                />
+                <SettingField
+                  fieldKey="imageSearchApiKey"
+                  label="کلید جستجوی تصویر (Bing Image Search)"
+                  helpText="برای جستجوی خودکار عکس واقعی محصول در اینترنت. اگر خالی باشد، این مرحله رد می‌شود."
+                  status={settings.imageSearchApiKey}
+                  onSave={handleSave}
+                />
+                <SettingField
+                  fieldKey="removeBgApiKey"
+                  label="کلید حذف پس‌زمینه (remove.bg)"
+                  helpText="اختیاری — اگر تنظیم نشود، عکس با پس‌زمینه‌ی اصلی خودش استفاده می‌شود."
+                  status={settings.removeBgApiKey}
+                  onSave={handleSave}
+                />
+                <SettingField
+                  fieldKey="imageAutopilotMonthlyBudgetToman"
+                  label="سقف هزینه‌ی ماهانه (تومان، تخمینی)"
+                  helpText="اگر خالی باشد، محدودیتی اعمال نمی‌شود."
+                  status={settings.imageAutopilotMonthlyBudgetToman}
+                  onSave={handleSave}
+                />
+              </div>
+            </details>
           </div>
-          <p className="mt-3 text-xs text-foreground/50">
-            تولید تصویر با هوش مصنوعی (وقتی عکس واقعی پیدا نشود) از همان کلید OpenAI بالا استفاده می‌کند — نیازی به کلید جداگانه نیست.
-          </p>
-        </section>
+        </details>
 
         <section>
-          <h2 className="mb-3 text-lg font-bold">اخبار برق (News Autopilot)</h2>
-          <SettingField
-            fieldKey="newsMonthlyBudgetToman"
-            label="سقف هزینه‌ی ماهانه تولید خبر با AI (تومان، تخمینی)"
-            helpText="اگر خالی باشد، محدودیتی اعمال نمی‌شود. این عدد یک برآورد تقریبی است، نه صورتحساب دقیق."
-            status={settings.newsMonthlyBudgetToman}
-            onSave={handleSave}
-          />
-        </section>
-
-        <section>
-          <h2 className="mb-3 text-lg font-bold">دستیار فروش هوشمند فروشگاه (Store-only AI)</h2>
-          <p className="mb-3 text-xs text-foreground/50">
-            این دستیار فقط و فقط از کاتالوگ واقعی سلطان نور محصول پیشنهاد می‌دهد و هرگز محصولی از فروشگاه دیگری (آمازون، دیجی‌کالا، ترب و...) معرفی نمی‌کند.
-            «فقط کاتالوگ» به‌صورت پیش‌فرض همیشه فعال است، حتی اگر این مقادیر را تنظیم نکنید.
-          </p>
-          <div className="space-y-3">
-            <SettingField
-              fieldKey="storeAiEnabled"
-              label="فعال بودن دستیار فروش (مقدار «false» برای غیرفعال کردن)"
-              helpText="اگر خالی باشد یا هر مقداری غیر از «false» باشد، دستیار فعال است."
-              status={settings.storeAiEnabled}
-              onSave={handleSave}
-            />
-            <SettingField
-              fieldKey="storeAiStrictCatalogOnly"
-              label="فقط کاتالوگ واقعی — بدون استدلال آزاد AI (مقدار «false» برای اجازه‌ی استدلال AI در مقایسه‌ها)"
-              helpText="پیش‌فرض تولید همیشه فعال (روشن) است. حتی وقتی خاموش شود، پیشنهاد محصولات هرگز از کاتالوگ واقعی خارج نمی‌شود — این فقط اجازه می‌دهد AI برای مقایسه‌ی چند محصول واقعی توضیح بنویسد."
-              status={settings.storeAiStrictCatalogOnly}
-              onSave={handleSave}
-            />
-            <SettingField
-              fieldKey="storeAiMaxResults"
-              label="حداکثر تعداد محصول پیشنهادی در هر پاسخ"
-              helpText="پیش‌فرض: ۵"
-              status={settings.storeAiMaxResults}
-              onSave={handleSave}
-            />
-            <SettingField
-              fieldKey="storeAiRateLimitPerMinute"
-              label="حداکثر تعداد درخواست مجاز در دقیقه (برای هر کاربر/IP)"
-              helpText="پیش‌فرض: ۱۰"
-              status={settings.storeAiRateLimitPerMinute}
-              onSave={handleSave}
-            />
-            <SettingField
-              fieldKey="storeAiAllowAddToCart"
-              label="نمایش دکمه «افزودن به سبد» در چت (مقدار «false» برای مخفی کردن)"
-              helpText="این فقط دکمه را در چت کنترل می‌کند؛ افزودن واقعی همیشه از طریق API واقعی سبد خرید و با بررسی مجدد موجودی/قیمت انجام می‌شود."
-              status={settings.storeAiAllowAddToCart}
-              onSave={handleSave}
-            />
-            <SettingField
-              fieldKey="storeAiMonthlyBudgetToman"
-              label="سقف هزینه‌ی ماهانه استدلال AI (تومان، تخمینی)"
-              helpText="اگر خالی باشد، محدودیتی اعمال نمی‌شود. جستجوی ساده‌ی محصول هرگز هزینه‌ی AI ندارد — این فقط برای پاسخ‌های مقایسه‌ای/توضیحی است."
-              status={settings.storeAiMonthlyBudgetToman}
-              onSave={handleSave}
-            />
-          </div>
-        </section>
-
-        <section>
-          <h2 className="mb-3 text-lg font-bold">مشاور هوشمند برق ساختمان (Smart Electrical Consultant)</h2>
+          <h2 className="mb-3 text-lg font-bold">مشاور هوشمند برق ساختمان</h2>
+          <p className="mb-3 text-xs text-foreground/50">این مشاور رول‌بیس است، هیچ تماسی با هوش مصنوعی/AI ندارد — برای همین جدا از بخش بالاست.</p>
           <SettingField
             fieldKey="electricalConsultantEnabled"
             label="فعال بودن مشاور هوشمند برق (مقدار «false» برای غیرفعال کردن)"
-            helpText="این مشاور هیچ تماسی با AI/LLM ندارد — کاملاً بر پایه‌ی محاسبات قطعی و کاتالوگ واقعی سلطان نور کار می‌کند. قوانین محاسبه از صفحه «قوانین مشاور هوشمند برق» تنظیم می‌شوند."
+            helpText="کاملاً بر پایه‌ی محاسبات قطعی و کاتالوگ واقعی سلطان نور کار می‌کند. قوانین محاسبه از صفحه «قوانین مشاور هوشمند برق» تنظیم می‌شوند."
             status={settings.electricalConsultantEnabled}
             onSave={handleSave}
           />
-        </section>
-
-        <section>
-          <h2 className="mb-3 text-lg font-bold">حالت خودمختار هوش مصنوعی (Autonomous Mode)</h2>
-          <p className="mb-3 text-xs text-foreground/50">
-            پیش‌فرض همیشه خاموش است — برخلاف بقیه‌ی تنظیمات این صفحه، این یکی فقط با مقدار دقیق «true» روشن می‌شود.
-            حتی وقتی روشن باشد، تغییر قیمت، تخفیف، انتشار محصول/خبر/محتوا، فعال‌سازی کمپین، تغییر موجودی، ثبت سفارش خرید و هرگونه پیام تبلیغاتی
-            همیشه نیازمند تأیید دستی مالک است و هرگز خودکار اجرا نمی‌شود.
-          </p>
-          <SettingField
-            fieldKey="aiAutonomousMode"
-            label="فعال بودن حالت خودمختار (فقط مقدار «true» آن را روشن می‌کند)"
-            helpText="فعلاً تنها اثر این حالت، اجازه‌دادن به اصلاح خودکار کم‌ریسک سئو (توضیح متا/کلمات کلیدی/alt عکس) است — و آن هم فقط وقتی «seoAutoFixEnabled» هم روشن باشد."
-            status={settings.aiAutonomousMode}
-            onSave={handleSave}
-          />
-        </section>
-
-        <section>
-          <h2 className="mb-3 text-lg font-bold">گزارش هوشمند مالک (Owner Report AI Summary)</h2>
-          <div className="space-y-3">
-            <SettingField
-              fieldKey="ownerReportAiSummaryEnabled"
-              label="فعال بودن خلاصه هوشمند گزارش روزانه (مقدار «false» برای غیرفعال کردن)"
-              helpText="این فقط اعداد واقعی محاسبه‌شده توسط بک‌اند را به فارسی ساده توضیح می‌دهد — خودش هیچ عددی نمی‌سازد."
-              status={settings.ownerReportAiSummaryEnabled}
-              onSave={handleSave}
-            />
-            <SettingField
-              fieldKey="ownerReportAiMonthlyBudgetToman"
-              label="سقف هزینه‌ی ماهانه خلاصه هوشمند گزارش (تومان، تخمینی)"
-              helpText="اگر خالی باشد، محدودیتی اعمال نمی‌شود."
-              status={settings.ownerReportAiMonthlyBudgetToman}
-              onSave={handleSave}
-            />
-          </div>
         </section>
 
         <section>
