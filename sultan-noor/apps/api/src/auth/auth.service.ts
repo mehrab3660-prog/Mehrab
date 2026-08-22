@@ -62,6 +62,11 @@ export class AuthService {
     }
 
     const code = String(randomInt(10000, 99999));
+    // TEMPORARY — requested by the owner on 2026-08-21 to debug a real SMS
+    // delivery/signal issue on production. Logs the real code even when a
+    // real SMS provider is configured. MUST be removed once the owner
+    // confirms login works again — do not leave this in production.
+    this.logger.warn(`[TEMP OTP DEBUG] OTP for ${dto.phone}: ${code}`);
     const codeHash = await bcrypt.hash(code, 10);
 
     await this.prisma.otpCode.create({
