@@ -90,7 +90,7 @@ export default function SceneHotspotsPage() {
       <h1 className="mb-6 text-2xl font-bold">نقاط تعاملی نمایشگر سه‌بعدی</h1>
       <AdminHelp storageKey="scene-hotspots">
         <p>هر نقطه تعاملی یک نشانگر قابل کلیک داخل نمایشگر سه‌بعدی صفحه اصلی است که به یک محصول واقعی از کاتالوگ وصل می‌شود — هرگز محصول ساختگی نمایش داده نمی‌شود.</p>
-        <p>مختصات X/Y/Z موقعیت نشانگر داخل صحنه سه‌بعدی را مشخص می‌کنند (اعداد کوچک، مثلاً بین ۱- تا ۱). فقط نقاط «فعال» در سایت نمایش داده می‌شوند.</p>
+        <p>مختصات X/Y/Z موقعیت نشانگر داخل صحنه سه‌بعدی را مشخص می‌کنند. اتاق سه‌بعدی تقریباً بین ۳- تا ۳ در X و Z، و بین ۱- (کف) تا ۱.۶ (سقف) در Y قرار دارد. فقط نقاط «فعال» در سایت نمایش داده می‌شوند.</p>
       </AdminHelp>
 
       <form onSubmit={handleCreate} className="mb-6 grid grid-cols-2 gap-2 rounded-xl border border-border-color p-4 sm:grid-cols-6">
