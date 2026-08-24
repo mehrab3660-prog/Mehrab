@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0">
+<title>آرشیو فاکتور</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#4f46e5">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="آرشیو فاکتور">
+<link rel="apple-touch-icon" href="/icons/icon-180.png">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- صفحه‌ی لیست -->
+<section id="screen-list" class="screen">
+  <header class="topbar">
+    <h1>آرشیو فاکتور</h1>
+    <button id="btn-menu" class="icon-btn" title="پشتیبان‌گیری">⋮</button>
+  </header>
+
+  <div class="search-bar">
+    <input type="search" id="search-input" placeholder="جستجو در عنوان یا توضیحات...">
+  </div>
+
+  <div id="empty-state" class="empty-state hidden">
+    <div class="empty-icon">🧾</div>
+    <p>هنوز فاکتوری اضافه نکردید</p>
+    <p class="muted">با دکمه‌ی + یک فاکتور جدید اضافه کنید</p>
+  </div>
+
+  <div id="invoice-list" class="invoice-list"></div>
+
+  <button id="btn-add" class="fab" title="افزودن فاکتور">+</button>
+</section>
+
+<!-- صفحه‌ی افزودن/ویرایش -->
+<section id="screen-form" class="screen hidden">
+  <header class="topbar">
+    <button id="form-back" class="icon-btn">→</button>
+    <h1 id="form-title">فاکتور جدید</h1>
+    <button id="form-save" class="text-btn">ذخیره</button>
+  </header>
+
+  <div class="form-body">
+    <div class="photo-picker">
+      <img id="photo-preview" class="hidden" alt="عکس فاکتور">
+      <label id="photo-placeholder" for="photo-input" class="photo-placeholder">
+        <span>📷</span>
+        <span>گرفتن عکس یا انتخاب از گالری</span>
+      </label>
+      <input type="file" id="photo-input" accept="image/*" capture="environment" class="hidden">
+      <button id="btn-remove-photo" class="text-btn danger hidden">حذف عکس</button>
+    </div>
+
+    <div class="field">
+      <label for="f-title">عنوان</label>
+      <input type="text" id="f-title" placeholder="مثلاً فاکتور خرید کالا">
+    </div>
+
+    <div class="field">
+      <label for="f-amount">مبلغ (تومان)</label>
+      <input type="number" id="f-amount" inputmode="decimal" placeholder="۰">
+    </div>
+
+    <div class="field">
+      <label for="f-date">تاریخ</label>
+      <input type="date" id="f-date">
+      <span id="f-date-jalali" class="muted small"></span>
+    </div>
+
+    <div class="field">
+      <label for="f-note">توضیحات</label>
+      <textarea id="f-note" rows="3" placeholder="توضیح اختیاری..."></textarea>
+    </div>
+  </div>
+</section>
+
+<!-- صفحه‌ی جزئیات -->
+<section id="screen-detail" class="screen hidden">
+  <header class="topbar">
+    <button id="detail-back" class="icon-btn">→</button>
+    <h1>جزئیات فاکتور</h1>
+    <button id="btn-edit" class="icon-btn">✎</button>
+  </header>
+
+  <div class="detail-body">
+    <img id="detail-photo" class="detail-photo hidden" alt="عکس فاکتور">
+    <h2 id="detail-title"></h2>
+    <div id="detail-amount" class="detail-amount"></div>
+    <div id="detail-date" class="muted"></div>
+    <p id="detail-note" class="detail-note"></p>
+
+    <div class="detail-actions">
+      <button id="btn-share" class="btn">اشتراک‌گذاری</button>
+      <button id="btn-delete" class="btn danger">حذف</button>
+    </div>
+  </div>
+</section>
+
+<!-- منوی پشتیبان‌گیری -->
+<div id="menu-overlay" class="overlay hidden">
+  <div class="sheet">
+    <button id="btn-export" class="sheet-item">📤 خروجی گرفتن از همه‌ی فاکتورها (پشتیبان)</button>
+    <label for="import-input" class="sheet-item">📥 بازیابی از فایل پشتیبان</label>
+    <input type="file" id="import-input" accept="application/json" class="hidden">
+    <button id="menu-cancel" class="sheet-item cancel">انصراف</button>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>
