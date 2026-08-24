@@ -1,0 +1,944 @@
+<title>آرشیو فاکتور</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#4338ca">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="آرشیو فاکتور">
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAYAAAA9zQYyAAAE0klEQVR4nO3dsW3WUBSG4RPEFGmpWYABkjIZAIkBmIAqomICBkBigLRZgAWoKZM1oEAXWb/s5Lex7z3n+96nokDxtfxycm2HPxc3V4+/AxDxavQCgD0RNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKS8Hr2Are4fLkcvQdrt9dPoJWzChIYUgoYUgoYUgoYUgoYUgoYUgoYUgoYUgoYUgoYUgoYUgoYUgoYUgoYUgoYUgoYUgoYUgoaUsv8Fa6uv3x9GL+FwH99fj17CMFYT2iHmCJ/znGMTtNtFdjvfxiZoeLAJ2m1f6Xa+jU3QET4X2eU859g95XC+2A6sJjT0ETSkEDSkEDSk2N0UOrxwcL7xtZrQDjFH+JznHJug3S6y2/k2NkHDA0FDik3QbjdKbufb2AQd4XORXc5zjt1jO+eL7cBqQkMfQUMKQUMKQUOK3U2hwxs05xtfqwntEHOEz3nOsQna7SK7nW9jEzQ82ATttq90O9/GJugIn4vscp5z7J5yOF9sB1YTGvoIGlIIGlIIGlIIGlLsnnJkeoPGE5f9WU3oTDFH5FuPApugs8aTdV1V2QQNDzZBZ92vZl1XVTZBR+SLJ9t6FNg95SAibVYTGvoIGlIIGlIIGlIIGlIIGlIIGlIIGlIIGlIIGlIIGlIIGlIIGlLsftrO3ZsfH877i3cRbz9/OXYxByBoA2dHfOLn3ad/f64SN0GL2hrxkipxE7SYvUOe0+LOGDY3hUJ6xDw1ndpZMKEF9A55Ktu0ZkIXNzLmqSzTmqALyxJzkyFqgi4qW8zN6KgJuqCsMTcjoyboYrLH3IyKmqALqRJzMyJqgoYUgi6i2nRuek9pgi6gasxNz6gJGlIIOrnq07npNaUJGqv9evdt9BIWETRWaTFnjZqgE8u23TiNeG3UPbYdBI2zLMWbbVITNF70XLTZvosQdFLZQpmzZY1HbzsIGs9ams5Z/8ERNBZVizmCoLEg283euQha2NYoK90EniJoUVtfgFSOOYKgJW19AVI95giClrP1BYhCzBEELee5+LbEXinmCIKWtCZCpZgjCFrWUozn7qcrxhxB0Gnt8Rz4pahHvDg5+jPwCFrc2klddTI3BA0pBJ3YXq+fz526R0/nHh+5S9AmXoq1+lajIWgjS9GqxBxROOjb6yeLY+79bfo03l4x9/qE/9K/kqIFdv9w2eU4o465N6WJfKrshJ468uIvfe2ex8zy+0u26rl+iaAjjgnspa/Z85hVo+69bpmgI/7GsFdk536dPY83Yo+u5uLm6vH36EUcYese93+i6nHM0b/DZI0R31Vkg27WRLbHhOxxvApRj9oiSW055ozYOhx9vOz76ZHrkw86ov/NXY/jZY169LrktxynpluCHjdhRx8v0/ZjdMwRJhN6qkXV64nC0cfLEFFEnnXYTWhlI6Z1lpAbuwmtrHdc2WKOYELLOnJaZwy5IWgDe8SdOeIpgjazJu4qEU8RNKRwUwgpBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pfwBF41jcJEAKEwAAAABJRU5ErkJggg==">
+<link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAYAAAA9zQYyAAAE0klEQVR4nO3dsW3WUBSG4RPEFGmpWYABkjIZAIkBmIAqomICBkBigLRZgAWoKZM1oEAXWb/s5Lex7z3n+96nokDxtfxycm2HPxc3V4+/AxDxavQCgD0RNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKQQNKS8Hr2Are4fLkcvQdrt9dPoJWzChIYUgoYUgoYUgoYUgoYUgoYUgoYUgoYUgoYUgoYUgoYUgoYUgoYUgoYUgoYUgoYUgoYUgoaUsv8Fa6uv3x9GL+FwH99fj17CMFYT2iHmCJ/znGMTtNtFdjvfxiZoeLAJ2m1f6Xa+jU3QET4X2eU859g95XC+2A6sJjT0ETSkEDSkEDSk2N0UOrxwcL7xtZrQDjFH+JznHJug3S6y2/k2NkHDA0FDik3QbjdKbufb2AQd4XORXc5zjt1jO+eL7cBqQkMfQUMKQUMKQUOK3U2hwxs05xtfqwntEHOEz3nOsQna7SK7nW9jEzQ82ATttq90O9/GJugIn4vscp5z7J5yOF9sB1YTGvoIGlIIGlIIGlIIGlLsnnJkeoPGE5f9WU3oTDFH5FuPApugs8aTdV1V2QQNDzZBZ92vZl1XVTZBR+SLJ9t6FNg95SAibVYTGvoIGlIIGlIIGlIIGlIIGlIIGlIIGlIIGlIIGlIIGlIIGlLsftrO3ZsfH877i3cRbz9/OXYxByBoA2dHfOLn3ad/f64SN0GL2hrxkipxE7SYvUOe0+LOGDY3hUJ6xDw1ndpZMKEF9A55Ktu0ZkIXNzLmqSzTmqALyxJzkyFqgi4qW8zN6KgJuqCsMTcjoyboYrLH3IyKmqALqRJzMyJqgoYUgi6i2nRuek9pgi6gasxNz6gJGlIIOrnq07npNaUJGqv9evdt9BIWETRWaTFnjZqgE8u23TiNeG3UPbYdBI2zLMWbbVITNF70XLTZvosQdFLZQpmzZY1HbzsIGs9ams5Z/8ERNBZVizmCoLEg283euQha2NYoK90EniJoUVtfgFSOOYKgJW19AVI95giClrP1BYhCzBEELee5+LbEXinmCIKWtCZCpZgjCFrWUozn7qcrxhxB0Gnt8Rz4pahHvDg5+jPwCFrc2klddTI3BA0pBJ3YXq+fz526R0/nHh+5S9AmXoq1+lajIWgjS9GqxBxROOjb6yeLY+79bfo03l4x9/qE/9K/kqIFdv9w2eU4o465N6WJfKrshJ468uIvfe2ex8zy+0u26rl+iaAjjgnspa/Z85hVo+69bpmgI/7GsFdk536dPY83Yo+u5uLm6vH36EUcYese93+i6nHM0b/DZI0R31Vkg27WRLbHhOxxvApRj9oiSW055ozYOhx9vOz76ZHrkw86ov/NXY/jZY169LrktxynpluCHjdhRx8v0/ZjdMwRJhN6qkXV64nC0cfLEFFEnnXYTWhlI6Z1lpAbuwmtrHdc2WKOYELLOnJaZwy5IWgDe8SdOeIpgjazJu4qEU8RNKRwUwgpBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pBA0pfwBF41jcJEAKEwAAAABJRU5ErkJggg==">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f5fb;
+    --surface: #ffffff;
+    --surface-2: #eceffb;
+    --ink: #15182b;
+    --ink-muted: #5b6178;
+    --accent: #4338ca;
+    --accent-ink: #ffffff;
+    --success: #157f3d;
+    --success-soft: #dcfce7;
+    --danger: #c22233;
+    --danger-soft: #fbe4e6;
+    --border: #e1e3f2;
+    --shadow: 0 10px 24px -16px rgba(21, 24, 43, 0.35);
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1020;
+      --surface: #171a2e;
+      --surface-2: #20233f;
+      --ink: #edeffb;
+      --ink-muted: #9297b8;
+      --accent: #9aa1f7;
+      --accent-ink: #14163a;
+      --success: #62d996;
+      --success-soft: #12301f;
+      --danger: #f28b93;
+      --danger-soft: #3a1a1e;
+      --border: #2a2e4d;
+      --shadow: 0 10px 26px -14px rgba(0, 0, 0, 0.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1020;
+    --surface: #171a2e;
+    --surface-2: #20233f;
+    --ink: #edeffb;
+    --ink-muted: #9297b8;
+    --accent: #9aa1f7;
+    --accent-ink: #14163a;
+    --success: #62d996;
+    --success-soft: #12301f;
+    --danger: #f28b93;
+    --danger-soft: #3a1a1e;
+    --border: #2a2e4d;
+    --shadow: 0 10px 26px -14px rgba(0, 0, 0, 0.6);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Vazirmatn", -apple-system, BlinkMacSystemFont, Tahoma, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: contain;
+  }
+
+  body { background: var(--bg); }
+
+  .hidden { display: none !important; }
+
+  .screen {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: calc(var(--safe-top) + 14px) 14px 14px;
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  .topbar h1 {
+    font-size: 17px;
+    margin: 0;
+    flex: 1;
+    text-align: center;
+    font-weight: 700;
+  }
+
+  .icon-btn, .text-btn {
+    background: none;
+    border: none;
+    color: var(--accent-ink);
+    padding: 6px 8px;
+    cursor: pointer;
+    min-width: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: inherit;
+    border-radius: 10px;
+  }
+  .icon-btn:active, .text-btn:active { background: rgba(255,255,255,0.15); }
+  .icon-btn svg { width: 22px; height: 22px; }
+
+  .text-btn {
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .search-bar { padding: 12px 14px 6px; }
+
+  .search-field {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .search-field svg {
+    position: absolute;
+    inset-inline-start: 14px;
+    width: 18px;
+    height: 18px;
+    color: var(--ink-muted);
+    pointer-events: none;
+  }
+
+  .search-bar input {
+    width: 100%;
+    padding: 11px 14px 11px 14px;
+    padding-inline-start: 40px;
+    border-radius: 13px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 15px;
+    font-family: inherit;
+  }
+  .search-bar input::placeholder { color: var(--ink-muted); }
+
+  .invoice-list {
+    padding: 6px 14px 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex: 1;
+  }
+
+  .invoice-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 10px;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+  }
+
+  .invoice-card .thumb {
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    object-fit: cover;
+    background: var(--surface-2);
+    flex-shrink: 0;
+  }
+
+  .invoice-card .thumb.placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+  }
+  .invoice-card .thumb.placeholder svg { width: 24px; height: 24px; }
+
+  .invoice-card .info { flex: 1; min-width: 0; }
+
+  .invoice-card .info .title {
+    font-weight: 600;
+    font-size: 15px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .invoice-card .info .meta {
+    font-size: 13px;
+    color: var(--ink-muted);
+    margin-top: 3px;
+    display: flex;
+    gap: 10px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 70px 24px;
+    color: var(--ink-muted);
+  }
+  .empty-state svg { width: 56px; height: 56px; color: var(--accent); margin-bottom: 12px; }
+  .empty-state p { margin: 4px 0; }
+  .empty-state .title { color: var(--ink); font-weight: 700; font-size: 16px; }
+
+  .muted { color: var(--ink-muted); }
+  .small { font-size: 12px; }
+
+  .fab {
+    position: fixed;
+    bottom: calc(var(--safe-bottom) + 22px);
+    left: 20px;
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 12px 24px -8px rgba(67, 56, 202, 0.55);
+    cursor: pointer;
+    z-index: 6;
+  }
+  .fab svg { width: 26px; height: 26px; }
+
+  .form-body, .detail-body {
+    padding: 18px;
+    padding-bottom: calc(var(--safe-bottom) + 32px);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .photo-picker {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .photo-placeholder {
+    width: 100%;
+    height: 180px;
+    border: 1.5px dashed var(--border);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--ink-muted);
+    font-size: 14px;
+    cursor: pointer;
+    background: var(--surface);
+  }
+  .photo-placeholder svg { width: 30px; height: 30px; color: var(--accent); }
+
+  #photo-preview {
+    width: 100%;
+    max-height: 260px;
+    object-fit: contain;
+    border-radius: 16px;
+    background: #000;
+  }
+
+  .field { display: flex; flex-direction: column; gap: 7px; }
+
+  .field label {
+    font-size: 13px;
+    color: var(--ink-muted);
+    font-weight: 700;
+  }
+
+  .field input, .field textarea {
+    padding: 12px 14px;
+    border-radius: 13px;
+    border: 1px solid var(--border);
+    font-size: 15px;
+    background: var(--surface);
+    color: var(--ink);
+    font-family: inherit;
+    width: 100%;
+  }
+  .field input[type="number"] { font-variant-numeric: tabular-nums; }
+  .field textarea { resize: vertical; }
+
+  .text-btn.danger { color: #ffd7da; }
+
+  .detail-photo {
+    width: 100%;
+    max-height: 320px;
+    object-fit: contain;
+    border-radius: 16px;
+    background: #000;
+  }
+
+  .detail-amount {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .detail-date { display: flex; align-items: center; gap: 6px; }
+  .detail-date svg { width: 16px; height: 16px; }
+
+  .detail-note { white-space: pre-wrap; line-height: 1.8; }
+
+  .detail-actions { display: flex; gap: 10px; margin-top: 6px; }
+
+  .btn {
+    flex: 1;
+    padding: 13px;
+    border-radius: 13px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-family: inherit;
+  }
+  .btn svg { width: 18px; height: 18px; }
+
+  .btn.danger { color: var(--danger); border-color: var(--danger-soft); background: var(--danger-soft); }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 16, 32, 0.45);
+    z-index: 20;
+    display: flex;
+    align-items: flex-end;
+  }
+
+  .sheet {
+    width: 100%;
+    background: var(--surface);
+    border-radius: 20px 20px 0 0;
+    padding: 10px 0 calc(var(--safe-bottom) + 8px);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .sheet-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    text-align: right;
+    padding: 16px 20px;
+    background: none;
+    border: none;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--ink);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    box-sizing: border-box;
+    font-family: inherit;
+  }
+  .sheet-item svg { width: 20px; height: 20px; color: var(--accent); flex-shrink: 0; }
+  .sheet-item.cancel { color: var(--danger); border-bottom: none; font-weight: 700; justify-content: center; }
+
+  .toast {
+    position: fixed;
+    bottom: calc(var(--safe-bottom) + 24px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: var(--bg);
+    padding: 11px 20px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    z-index: 30;
+    box-shadow: var(--shadow);
+  }
+</style>
+
+<section id="screen-list" class="screen">
+  <header class="topbar">
+    <button id="btn-menu" class="icon-btn" title="پشتیبان‌گیری" aria-label="منو">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.2" fill="currentColor" stroke="none"/></svg>
+    </button>
+    <h1>آرشیو فاکتور</h1>
+    <span class="icon-btn" style="visibility:hidden">&nbsp;</span>
+  </header>
+
+  <div class="search-bar">
+    <div class="search-field">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="search" id="search-input" placeholder="جستجو در عنوان یا توضیحات...">
+    </div>
+  </div>
+
+  <div id="empty-state" class="empty-state hidden">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h10a1 1 0 0 1 1 1v16.2a.5.5 0 0 1-.76.43L15 19.2l-1.24 1.43a.5.5 0 0 1-.76 0L11.76 19.2 10.52 20.6a.5.5 0 0 1-.76 0L8.52 19.2l-2.24 1.43A.5.5 0 0 1 5.5 20.2V4a1 1 0 0 1 1-1Z"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/></svg>
+    <p class="title">هنوز فاکتوری اضافه نکردید</p>
+    <p class="muted">با دکمه‌ی + یک فاکتور جدید اضافه کنید</p>
+  </div>
+
+  <div id="invoice-list" class="invoice-list"></div>
+
+  <button id="btn-add" class="fab" title="افزودن فاکتور" aria-label="افزودن فاکتور">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+</section>
+
+<section id="screen-form" class="screen hidden">
+  <header class="topbar">
+    <button id="form-back" class="icon-btn" aria-label="بازگشت">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M5 12l6-6M5 12l6 6"/></svg>
+    </button>
+    <h1 id="form-title">فاکتور جدید</h1>
+    <button id="form-save" class="text-btn">ذخیره</button>
+  </header>
+
+  <div class="form-body">
+    <div class="photo-picker">
+      <img id="photo-preview" class="hidden" alt="عکس فاکتور">
+      <label id="photo-placeholder" for="photo-input" class="photo-placeholder">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a2 2 0 0 1 2-2h1.2l.9-1.5A1 1 0 0 1 8.96 4h6.08a1 1 0 0 1 .86.5L16.8 6H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><circle cx="12" cy="13" r="3.5"/></svg>
+        <span>گرفتن عکس یا انتخاب از گالری</span>
+      </label>
+      <input type="file" id="photo-input" accept="image/*" capture="environment" class="hidden">
+      <button id="btn-remove-photo" class="text-btn danger hidden" style="color:var(--danger)">حذف عکس</button>
+    </div>
+
+    <div class="field">
+      <label for="f-title">عنوان</label>
+      <input type="text" id="f-title" placeholder="مثلاً فاکتور خرید کالا">
+    </div>
+
+    <div class="field">
+      <label for="f-amount">مبلغ (تومان)</label>
+      <input type="number" id="f-amount" inputmode="decimal" placeholder="۰">
+    </div>
+
+    <div class="field">
+      <label for="f-date">تاریخ</label>
+      <input type="date" id="f-date">
+      <span id="f-date-jalali" class="muted small"></span>
+    </div>
+
+    <div class="field">
+      <label for="f-note">توضیحات</label>
+      <textarea id="f-note" rows="3" placeholder="توضیح اختیاری..."></textarea>
+    </div>
+  </div>
+</section>
+
+<section id="screen-detail" class="screen hidden">
+  <header class="topbar">
+    <button id="detail-back" class="icon-btn" aria-label="بازگشت">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M5 12l6-6M5 12l6 6"/></svg>
+    </button>
+    <h1>جزئیات فاکتور</h1>
+    <button id="btn-edit" class="icon-btn" aria-label="ویرایش">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+    </button>
+  </header>
+
+  <div class="detail-body">
+    <img id="detail-photo" class="detail-photo hidden" alt="عکس فاکتور">
+    <h2 id="detail-title" style="margin:0;font-size:19px;"></h2>
+    <div id="detail-amount" class="detail-amount"></div>
+    <div id="detail-date" class="muted detail-date">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span id="detail-date-text"></span>
+    </div>
+    <p id="detail-note" class="detail-note"></p>
+
+    <div class="detail-actions">
+      <button id="btn-share" class="btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg>
+        اشتراک‌گذاری
+      </button>
+      <button id="btn-delete" class="btn danger">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        حذف
+      </button>
+    </div>
+  </div>
+</section>
+
+<div id="menu-overlay" class="overlay hidden">
+  <div class="sheet">
+    <button id="btn-export" class="sheet-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg>
+      خروجی گرفتن از همه‌ی فاکتورها (پشتیبان)
+    </button>
+    <label for="import-input" class="sheet-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"/><path d="m7 16 5 5 5-5"/><path d="M5 3h14"/></svg>
+      بازیابی از فایل پشتیبان
+    </label>
+    <input type="file" id="import-input" accept="application/json" class="hidden">
+    <button id="menu-cancel" class="sheet-item cancel">انصراف</button>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script>
+function gregorianToJalali(gy, gm, gd) {
+  const g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+  let jy = gy <= 1600 ? 0 : 979;
+  gy -= gy <= 1600 ? 621 : 1600;
+  const gy2 = gm > 2 ? gy + 1 : gy;
+  let days =
+    365 * gy +
+    Math.floor((gy2 + 3) / 4) -
+    Math.floor((gy2 + 99) / 100) +
+    Math.floor((gy2 + 399) / 400) -
+    80 +
+    gd +
+    g_d_m[gm - 1];
+  jy += 33 * Math.floor(days / 12053);
+  days %= 12053;
+  jy += 4 * Math.floor(days / 1461);
+  days %= 1461;
+  if (days > 365) {
+    jy += Math.floor((days - 1) / 365);
+    days = (days - 1) % 365;
+  }
+  let jm, jd;
+  if (days < 186) {
+    jm = 1 + Math.floor(days / 31);
+    jd = 1 + (days % 31);
+  } else {
+    jm = 7 + Math.floor((days - 186) / 30);
+    jd = 1 + ((days - 186) % 30);
+  }
+  return [jy, jm, jd];
+}
+
+const JALALI_MONTHS = [
+  "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
+  "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند",
+];
+
+function formatJalali(isoDate) {
+  if (!isoDate) return "";
+  const [gy, gm, gd] = isoDate.split("-").map(Number);
+  const [jy, jm, jd] = gregorianToJalali(gy, gm, gd);
+  return `${jd} ${JALALI_MONTHS[jm - 1]} ${jy}`;
+}
+
+function todayIso() {
+  const d = new Date();
+  const tzOffset = d.getTimezoneOffset() * 60000;
+  return new Date(d - tzOffset).toISOString().slice(0, 10);
+}
+
+function formatAmount(n) {
+  if (n === null || n === undefined || n === "") return "";
+  return Number(n).toLocaleString("fa-IR") + " تومان";
+}
+
+const DB_NAME = "invoice-archive-db";
+const STORE = "invoices";
+let dbPromise = null;
+
+function openDb() {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE)) {
+        const store = db.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
+        store.createIndex("date", "date");
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return dbPromise;
+}
+
+async function dbAll() {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readonly");
+    const req = tx.objectStore(STORE).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function dbGet(id) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readonly");
+    const req = tx.objectStore(STORE).get(id);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function dbPut(record) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    const req = tx.objectStore(STORE).put(record);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function dbDelete(id) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    const req = tx.objectStore(STORE).delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+let state = { invoices: [], filter: "", editingId: null, photoBlob: null, photoRemoved: false };
+
+const $ = (sel) => document.querySelector(sel);
+
+const screens = { list: $("#screen-list"), form: $("#screen-form"), detail: $("#screen-detail") };
+
+function showScreen(name) {
+  Object.values(screens).forEach((s) => s.classList.add("hidden"));
+  screens[name].classList.remove("hidden");
+}
+
+function toast(msg) {
+  const el = $("#toast");
+  el.textContent = msg;
+  el.classList.remove("hidden");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.add("hidden"), 2200);
+}
+
+async function refreshList() {
+  state.invoices = await dbAll();
+  renderList();
+}
+
+const THUMB_PLACEHOLDER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h10a1 1 0 0 1 1 1v16.2a.5.5 0 0 1-.76.43L15 19.2l-1.24 1.43a.5.5 0 0 1-.76 0L11.76 19.2 10.52 20.6a.5.5 0 0 1-.76 0L8.52 19.2l-2.24 1.43A.5.5 0 0 1 5.5 20.2V4a1 1 0 0 1 1-1Z"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/></svg>';
+
+function renderList() {
+  const container = $("#invoice-list");
+  const q = state.filter.trim().toLowerCase();
+  let items = state.invoices.slice().sort((a, b) => (b.date || "").localeCompare(a.date || "") || b.id - a.id);
+  if (q) {
+    items = items.filter((i) => (i.title || "").toLowerCase().includes(q) || (i.note || "").toLowerCase().includes(q));
+  }
+
+  container.innerHTML = "";
+  $("#empty-state").classList.toggle("hidden", state.invoices.length > 0);
+
+  for (const inv of items) {
+    const card = document.createElement("div");
+    card.className = "invoice-card";
+    card.dataset.id = inv.id;
+
+    let thumbHtml;
+    if (inv.photo) {
+      const url = URL.createObjectURL(inv.photo);
+      thumbHtml = `<img class="thumb" src="${url}" alt="">`;
+    } else {
+      thumbHtml = `<div class="thumb placeholder">${THUMB_PLACEHOLDER_SVG}</div>`;
+    }
+
+    card.innerHTML = `
+      ${thumbHtml}
+      <div class="info">
+        <div class="title">${escapeHtml(inv.title || "بدون عنوان")}</div>
+        <div class="meta">
+          <span>${formatJalali(inv.date)}</span>
+          ${inv.amount ? `<span>${formatAmount(inv.amount)}</span>` : ""}
+        </div>
+      </div>
+    `;
+    card.addEventListener("click", () => openDetail(inv.id));
+    container.appendChild(card);
+  }
+}
+
+function escapeHtml(s) {
+  const div = document.createElement("div");
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+function openForm(editing) {
+  state.editingId = editing ? editing.id : null;
+  state.photoBlob = editing ? editing.photo || null : null;
+  state.photoRemoved = false;
+
+  $("#form-title").textContent = editing ? "ویرایش فاکتور" : "فاکتور جدید";
+  $("#f-title").value = editing?.title || "";
+  $("#f-amount").value = editing?.amount || "";
+  $("#f-date").value = editing?.date || todayIso();
+  $("#f-note").value = editing?.note || "";
+  updateJalaliHint();
+  updatePhotoPreview();
+
+  showScreen("form");
+}
+
+function updateJalaliHint() {
+  $("#f-date-jalali").textContent = formatJalali($("#f-date").value);
+}
+
+function updatePhotoPreview() {
+  const img = $("#photo-preview");
+  const placeholder = $("#photo-placeholder");
+  const removeBtn = $("#btn-remove-photo");
+  if (state.photoBlob && !state.photoRemoved) {
+    img.src = URL.createObjectURL(state.photoBlob);
+    img.classList.remove("hidden");
+    placeholder.classList.add("hidden");
+    removeBtn.classList.remove("hidden");
+  } else {
+    img.classList.add("hidden");
+    placeholder.classList.remove("hidden");
+    removeBtn.classList.add("hidden");
+  }
+}
+
+async function saveForm() {
+  const title = $("#f-title").value.trim();
+  const amount = $("#f-amount").value ? Number($("#f-amount").value) : null;
+  const date = $("#f-date").value || todayIso();
+  const note = $("#f-note").value.trim();
+
+  if (!title && !state.photoBlob) {
+    toast("حداقل یک عنوان یا عکس وارد کنید");
+    return;
+  }
+
+  const record = { title, amount, date, note, photo: state.photoRemoved ? null : state.photoBlob, updatedAt: Date.now() };
+  if (state.editingId) record.id = state.editingId;
+
+  const id = await dbPut(record);
+  await refreshList();
+  toast("ذخیره شد");
+  openDetail(state.editingId || id);
+}
+
+let currentDetailId = null;
+
+async function openDetail(id) {
+  const inv = await dbGet(id);
+  if (!inv) return;
+  currentDetailId = id;
+
+  const img = $("#detail-photo");
+  if (inv.photo) {
+    img.src = URL.createObjectURL(inv.photo);
+    img.classList.remove("hidden");
+  } else {
+    img.classList.add("hidden");
+  }
+  $("#detail-title").textContent = inv.title || "بدون عنوان";
+  $("#detail-amount").textContent = inv.amount ? formatAmount(inv.amount) : "";
+  $("#detail-date-text").textContent = formatJalali(inv.date);
+  $("#detail-note").textContent = inv.note || "";
+
+  showScreen("detail");
+}
+
+async function deleteCurrentDetail() {
+  if (!currentDetailId) return;
+  if (!confirm("این فاکتور حذف بشه؟")) return;
+  await dbDelete(currentDetailId);
+  await refreshList();
+  showScreen("list");
+  toast("حذف شد");
+}
+
+async function shareCurrentDetail() {
+  const inv = await dbGet(currentDetailId);
+  if (!inv) return;
+  const text = `${inv.title || "فاکتور"}\n${inv.amount ? formatAmount(inv.amount) + "\n" : ""}${formatJalali(inv.date)}${inv.note ? "\n" + inv.note : ""}`;
+
+  try {
+    if (inv.photo && navigator.canShare && navigator.canShare({ files: [new File([inv.photo], "invoice.jpg", { type: inv.photo.type || "image/jpeg" })] })) {
+      const file = new File([inv.photo], "invoice.jpg", { type: inv.photo.type || "image/jpeg" });
+      await navigator.share({ text, files: [file] });
+    } else if (navigator.share) {
+      await navigator.share({ text });
+    } else {
+      await navigator.clipboard.writeText(text);
+      toast("متن کپی شد");
+    }
+  } catch (e) {}
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function exportBackup() {
+  const items = await dbAll();
+  const payload = [];
+  for (const inv of items) {
+    payload.push({ title: inv.title, amount: inv.amount, date: inv.date, note: inv.note, photo: inv.photo ? await blobToBase64(inv.photo) : null });
+  }
+  const json = JSON.stringify({ app: "invoice-archive", version: 1, items: payload }, null, 2);
+  const file = new File([json], `invoice-archive-backup-${todayIso()}.json`, { type: "application/json" });
+
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: "پشتیبان آرشیو فاکتور" });
+      return;
+    }
+  } catch (e) {
+    if (e && e.name === "AbortError") return;
+  }
+
+  try {
+    const downloads = window.claude && (await window.claude.use("downloads"));
+    if (downloads) {
+      await downloads.save({ filename: file.name, data: json });
+      toast("فایل پشتیبان ذخیره شد");
+      return;
+    }
+  } catch (e) {
+    if (e && e.code === "declined") return;
+  }
+
+  const url = URL.createObjectURL(file);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = file.name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+function base64ToBlob(dataUrl) {
+  const [meta, b64] = dataUrl.split(",");
+  const mime = meta.match(/data:(.*);base64/)?.[1] || "image/jpeg";
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+async function importBackup(file) {
+  const text = await file.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    toast("فایل پشتیبان معتبر نیست");
+    return;
+  }
+  const items = data.items || [];
+  for (const it of items) {
+    await dbPut({ title: it.title, amount: it.amount, date: it.date, note: it.note, photo: it.photo ? base64ToBlob(it.photo) : null, updatedAt: Date.now() });
+  }
+  await refreshList();
+  toast(`${items.length} فاکتور بازیابی شد`);
+}
+
+$("#btn-add").addEventListener("click", () => openForm(null));
+$("#form-back").addEventListener("click", () => showScreen("list"));
+$("#form-save").addEventListener("click", saveForm);
+$("#f-date").addEventListener("change", updateJalaliHint);
+
+$("#photo-placeholder").addEventListener("click", () => $("#photo-input").click());
+$("#photo-input").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  state.photoBlob = file;
+  state.photoRemoved = false;
+  updatePhotoPreview();
+});
+$("#btn-remove-photo").addEventListener("click", () => {
+  state.photoRemoved = true;
+  state.photoBlob = null;
+  updatePhotoPreview();
+});
+
+$("#detail-back").addEventListener("click", () => showScreen("list"));
+$("#btn-edit").addEventListener("click", async () => {
+  const inv = await dbGet(currentDetailId);
+  openForm(inv);
+});
+$("#btn-delete").addEventListener("click", deleteCurrentDetail);
+$("#btn-share").addEventListener("click", shareCurrentDetail);
+
+$("#search-input").addEventListener("input", (e) => {
+  state.filter = e.target.value;
+  renderList();
+});
+
+$("#btn-menu").addEventListener("click", () => $("#menu-overlay").classList.remove("hidden"));
+$("#menu-cancel").addEventListener("click", () => $("#menu-overlay").classList.add("hidden"));
+$("#menu-overlay").addEventListener("click", (e) => {
+  if (e.target.id === "menu-overlay") $("#menu-overlay").classList.add("hidden");
+});
+$("#btn-export").addEventListener("click", async () => {
+  $("#menu-overlay").classList.add("hidden");
+  await exportBackup();
+});
+$("#import-input").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  $("#menu-overlay").classList.add("hidden");
+  if (file) await importBackup(file);
+  e.target.value = "";
+});
+
+refreshList();
+</script>
