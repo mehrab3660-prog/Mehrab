@@ -2,9 +2,16 @@
 <html lang="fa" dir="rtl" data-theme="light">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>حسابداری</title>
 <link rel="icon" href="/assets/icon.png">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0f172a">
+<!-- iOS: enables Add to Home Screen as a standalone (no Safari chrome) app -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="حسابداری">
+<link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -849,5 +856,12 @@
 </div>
 
 <script src="/app.js"></script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
+</script>
 </body>
 </html>
