@@ -27,9 +27,11 @@
   <div class="search-bar">
     <div class="search-field">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input type="search" id="search-input" placeholder="جستجو در عنوان یا توضیحات...">
+      <input type="search" id="search-input" placeholder="جستجو در تأمین‌کننده یا توضیحات...">
     </div>
   </div>
+
+  <div id="supplier-filter" class="supplier-filter hidden"></div>
 
   <div id="empty-state" class="empty-state hidden">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h10a1 1 0 0 1 1 1v16.2a.5.5 0 0 1-.76.43L15 19.2l-1.24 1.43a.5.5 0 0 1-.76 0L11.76 19.2 10.52 20.6a.5.5 0 0 1-.76 0L8.52 19.2l-2.24 1.43A.5.5 0 0 1 5.5 20.2V4a1 1 0 0 1 1-1Z"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/></svg>
@@ -69,8 +71,9 @@
     </div>
 
     <div class="field">
-      <label for="f-title">عنوان</label>
-      <input type="text" id="f-title" placeholder="مثلاً فاکتور خرید کالا">
+      <label for="f-title">تأمین‌کننده</label>
+      <input type="text" id="f-title" list="supplier-datalist" placeholder="مثلاً شرکت پخش الف" autocomplete="off">
+      <datalist id="supplier-datalist"></datalist>
     </div>
 
     <div class="field">

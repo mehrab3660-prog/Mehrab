@@ -160,6 +160,34 @@
   }
   .search-bar input::placeholder { color: var(--ink-muted); }
 
+  .supplier-filter {
+    display: flex;
+    gap: 8px;
+    padding: 2px 14px 10px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .supplier-filter::-webkit-scrollbar { display: none; }
+
+  .supplier-chip {
+    flex-shrink: 0;
+    padding: 7px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .supplier-chip.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+  }
+
   .invoice-list {
     padding: 6px 14px 96px;
     display: flex;
@@ -551,9 +579,11 @@
   <div class="search-bar">
     <div class="search-field">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input type="search" id="search-input" placeholder="جستجو در عنوان یا توضیحات...">
+      <input type="search" id="search-input" placeholder="جستجو در تأمین‌کننده یا توضیحات...">
     </div>
   </div>
+
+  <div id="supplier-filter" class="supplier-filter hidden"></div>
 
   <div id="empty-state" class="empty-state hidden">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h10a1 1 0 0 1 1 1v16.2a.5.5 0 0 1-.76.43L15 19.2l-1.24 1.43a.5.5 0 0 1-.76 0L11.76 19.2 10.52 20.6a.5.5 0 0 1-.76 0L8.52 19.2l-2.24 1.43A.5.5 0 0 1 5.5 20.2V4a1 1 0 0 1 1-1Z"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/></svg>
@@ -593,8 +623,9 @@
     </div>
 
     <div class="field">
-      <label for="f-title">عنوان</label>
-      <input type="text" id="f-title" placeholder="مثلاً فاکتور خرید کالا">
+      <label for="f-title">تأمین‌کننده</label>
+      <input type="text" id="f-title" list="supplier-datalist" placeholder="مثلاً شرکت پخش الف" autocomplete="off">
+      <datalist id="supplier-datalist"></datalist>
     </div>
 
     <div class="field">
@@ -887,7 +918,7 @@ async function dbDelete(id) {
   });
 }
 
-let state = { invoices: [], filter: "", editingId: null, photoBlob: null, photoRemoved: false, selectedDate: todayIso() };
+let state = { invoices: [], filter: "", supplierFilter: null, editingId: null, photoBlob: null, photoRemoved: false, selectedDate: todayIso() };
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -908,7 +939,56 @@ function toast(msg) {
 
 async function refreshList() {
   state.invoices = await dbAll();
+  renderSupplierFilter();
   renderList();
+}
+
+function distinctSuppliers() {
+  const names = state.invoices.map((i) => (i.title || "").trim()).filter(Boolean);
+  return [...new Set(names)].sort((a, b) => a.localeCompare(b, "fa"));
+}
+
+function renderSupplierFilter() {
+  const suppliers = distinctSuppliers();
+  const container = $("#supplier-filter");
+  const datalist = $("#supplier-datalist");
+
+  datalist.innerHTML = suppliers.map((s) => `<option value="${escapeHtml(s)}"></option>`).join("");
+
+  if (suppliers.length < 2) {
+    container.classList.add("hidden");
+    container.innerHTML = "";
+    if (state.supplierFilter && !suppliers.includes(state.supplierFilter)) state.supplierFilter = null;
+    return;
+  }
+  if (state.supplierFilter && !suppliers.includes(state.supplierFilter)) state.supplierFilter = null;
+
+  container.classList.remove("hidden");
+  container.innerHTML = "";
+
+  const allChip = document.createElement("button");
+  allChip.type = "button";
+  allChip.className = "supplier-chip" + (state.supplierFilter ? "" : " active");
+  allChip.textContent = "همه";
+  allChip.addEventListener("click", () => {
+    state.supplierFilter = null;
+    renderSupplierFilter();
+    renderList();
+  });
+  container.appendChild(allChip);
+
+  for (const name of suppliers) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "supplier-chip" + (state.supplierFilter === name ? " active" : "");
+    chip.textContent = name;
+    chip.addEventListener("click", () => {
+      state.supplierFilter = state.supplierFilter === name ? null : name;
+      renderSupplierFilter();
+      renderList();
+    });
+    container.appendChild(chip);
+  }
 }
 
 const THUMB_PLACEHOLDER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h10a1 1 0 0 1 1 1v16.2a.5.5 0 0 1-.76.43L15 19.2l-1.24 1.43a.5.5 0 0 1-.76 0L11.76 19.2 10.52 20.6a.5.5 0 0 1-.76 0L8.52 19.2l-2.24 1.43A.5.5 0 0 1 5.5 20.2V4a1 1 0 0 1 1-1Z"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/></svg>';
@@ -930,6 +1010,9 @@ function renderList() {
   const container = $("#invoice-list");
   const q = state.filter.trim().toLowerCase();
   let items = state.invoices.slice().sort((a, b) => (b.date || "").localeCompare(a.date || "") || b.id - a.id);
+  if (state.supplierFilter) {
+    items = items.filter((i) => (i.title || "").trim() === state.supplierFilter);
+  }
   if (q) {
     items = items.filter((i) => (i.title || "").toLowerCase().includes(q) || (i.note || "").toLowerCase().includes(q));
   }
@@ -955,7 +1038,7 @@ function renderList() {
     card.innerHTML = `
       ${thumbHtml}
       <div class="info">
-        <div class="title">${escapeHtml(inv.title || "بدون عنوان")}</div>
+        <div class="title">${escapeHtml(inv.title || "بدون تأمین‌کننده")}</div>
         <div class="meta">
           <span>${formatJalali(inv.date)}</span>
           ${inv.amount ? `<span>${formatAmount(inv.amount)}</span>` : ""}
@@ -1095,7 +1178,7 @@ async function saveForm() {
   const note = $("#f-note").value.trim();
 
   if (!title && !state.photoBlob) {
-    toast("حداقل یک عنوان یا عکس وارد کنید");
+    toast("حداقل نام تأمین‌کننده یا عکس وارد کنید");
     return;
   }
 
@@ -1137,7 +1220,7 @@ async function openDetail(id) {
     generic.classList.remove("hidden");
   }
 
-  $("#detail-title").textContent = inv.title || "بدون عنوان";
+  $("#detail-title").textContent = inv.title || "بدون تأمین‌کننده";
   $("#detail-amount").textContent = inv.amount ? formatAmount(inv.amount) : "";
   $("#detail-date-text").textContent = formatJalali(inv.date);
   $("#detail-note").textContent = inv.note || "";

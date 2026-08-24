@@ -182,7 +182,7 @@ async function dbDelete(id) {
   });
 }
 
-let state = { invoices: [], filter: "", editingId: null, photoBlob: null, photoRemoved: false, selectedDate: todayIso() };
+let state = { invoices: [], filter: "", supplierFilter: null, editingId: null, photoBlob: null, photoRemoved: false, selectedDate: todayIso() };
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -203,7 +203,56 @@ function toast(msg) {
 
 async function refreshList() {
   state.invoices = await dbAll();
+  renderSupplierFilter();
   renderList();
+}
+
+function distinctSuppliers() {
+  const names = state.invoices.map((i) => (i.title || "").trim()).filter(Boolean);
+  return [...new Set(names)].sort((a, b) => a.localeCompare(b, "fa"));
+}
+
+function renderSupplierFilter() {
+  const suppliers = distinctSuppliers();
+  const container = $("#supplier-filter");
+  const datalist = $("#supplier-datalist");
+
+  datalist.innerHTML = suppliers.map((s) => `<option value="${escapeHtml(s)}"></option>`).join("");
+
+  if (suppliers.length < 2) {
+    container.classList.add("hidden");
+    container.innerHTML = "";
+    if (state.supplierFilter && !suppliers.includes(state.supplierFilter)) state.supplierFilter = null;
+    return;
+  }
+  if (state.supplierFilter && !suppliers.includes(state.supplierFilter)) state.supplierFilter = null;
+
+  container.classList.remove("hidden");
+  container.innerHTML = "";
+
+  const allChip = document.createElement("button");
+  allChip.type = "button";
+  allChip.className = "supplier-chip" + (state.supplierFilter ? "" : " active");
+  allChip.textContent = "همه";
+  allChip.addEventListener("click", () => {
+    state.supplierFilter = null;
+    renderSupplierFilter();
+    renderList();
+  });
+  container.appendChild(allChip);
+
+  for (const name of suppliers) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "supplier-chip" + (state.supplierFilter === name ? " active" : "");
+    chip.textContent = name;
+    chip.addEventListener("click", () => {
+      state.supplierFilter = state.supplierFilter === name ? null : name;
+      renderSupplierFilter();
+      renderList();
+    });
+    container.appendChild(chip);
+  }
 }
 
 const THUMB_PLACEHOLDER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h10a1 1 0 0 1 1 1v16.2a.5.5 0 0 1-.76.43L15 19.2l-1.24 1.43a.5.5 0 0 1-.76 0L11.76 19.2 10.52 20.6a.5.5 0 0 1-.76 0L8.52 19.2l-2.24 1.43A.5.5 0 0 1 5.5 20.2V4a1 1 0 0 1 1-1Z"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/></svg>';
@@ -225,6 +274,9 @@ function renderList() {
   const container = $("#invoice-list");
   const q = state.filter.trim().toLowerCase();
   let items = state.invoices.slice().sort((a, b) => (b.date || "").localeCompare(a.date || "") || b.id - a.id);
+  if (state.supplierFilter) {
+    items = items.filter((i) => (i.title || "").trim() === state.supplierFilter);
+  }
   if (q) {
     items = items.filter((i) => (i.title || "").toLowerCase().includes(q) || (i.note || "").toLowerCase().includes(q));
   }
@@ -250,7 +302,7 @@ function renderList() {
     card.innerHTML = `
       ${thumbHtml}
       <div class="info">
-        <div class="title">${escapeHtml(inv.title || "بدون عنوان")}</div>
+        <div class="title">${escapeHtml(inv.title || "بدون تأمین‌کننده")}</div>
         <div class="meta">
           <span>${formatJalali(inv.date)}</span>
           ${inv.amount ? `<span>${formatAmount(inv.amount)}</span>` : ""}
@@ -390,7 +442,7 @@ async function saveForm() {
   const note = $("#f-note").value.trim();
 
   if (!title && !state.photoBlob) {
-    toast("حداقل یک عنوان یا عکس وارد کنید");
+    toast("حداقل نام تأمین‌کننده یا عکس وارد کنید");
     return;
   }
 
@@ -432,7 +484,7 @@ async function openDetail(id) {
     generic.classList.remove("hidden");
   }
 
-  $("#detail-title").textContent = inv.title || "بدون عنوان";
+  $("#detail-title").textContent = inv.title || "بدون تأمین‌کننده";
   $("#detail-amount").textContent = inv.amount ? formatAmount(inv.amount) : "";
   $("#detail-date-text").textContent = formatJalali(inv.date);
   $("#detail-note").textContent = inv.note || "";

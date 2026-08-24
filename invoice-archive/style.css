@@ -150,6 +150,34 @@
   }
   .search-bar input::placeholder { color: var(--ink-muted); }
 
+  .supplier-filter {
+    display: flex;
+    gap: 8px;
+    padding: 2px 14px 10px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .supplier-filter::-webkit-scrollbar { display: none; }
+
+  .supplier-chip {
+    flex-shrink: 0;
+    padding: 7px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .supplier-chip.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+  }
+
   .invoice-list {
     padding: 6px 14px 96px;
     display: flex;
