@@ -5,42 +5,53 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0">
 <title>آرشیو فاکتور</title>
 <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#4f46e5">
+<meta name="theme-color" content="#4338ca">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="آرشیو فاکتور">
 <link rel="apple-touch-icon" href="/icons/icon-180.png">
 <link rel="icon" href="/icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
-<!-- صفحه‌ی لیست -->
 <section id="screen-list" class="screen">
   <header class="topbar">
+    <button id="btn-menu" class="icon-btn" title="پشتیبان‌گیری" aria-label="منو">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.2" fill="currentColor" stroke="none"/></svg>
+    </button>
     <h1>آرشیو فاکتور</h1>
-    <button id="btn-menu" class="icon-btn" title="پشتیبان‌گیری">⋮</button>
+    <span class="icon-btn" style="visibility:hidden">&nbsp;</span>
   </header>
 
   <div class="search-bar">
-    <input type="search" id="search-input" placeholder="جستجو در عنوان یا توضیحات...">
+    <div class="search-field">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="search" id="search-input" placeholder="جستجو در عنوان یا توضیحات...">
+    </div>
   </div>
 
   <div id="empty-state" class="empty-state hidden">
-    <div class="empty-icon">🧾</div>
-    <p>هنوز فاکتوری اضافه نکردید</p>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h10a1 1 0 0 1 1 1v16.2a.5.5 0 0 1-.76.43L15 19.2l-1.24 1.43a.5.5 0 0 1-.76 0L11.76 19.2 10.52 20.6a.5.5 0 0 1-.76 0L8.52 19.2l-2.24 1.43A.5.5 0 0 1 5.5 20.2V4a1 1 0 0 1 1-1Z"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/></svg>
+    <p class="title">هنوز فاکتوری اضافه نکردید</p>
     <p class="muted">با دکمه‌ی + یک فاکتور جدید اضافه کنید</p>
   </div>
 
   <div id="invoice-list" class="invoice-list"></div>
 
-  <button id="btn-add" class="fab" title="افزودن فاکتور">+</button>
+  <button id="btn-add" class="fab" title="افزودن فاکتور" aria-label="افزودن فاکتور">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
 </section>
 
-<!-- صفحه‌ی افزودن/ویرایش -->
 <section id="screen-form" class="screen hidden">
   <header class="topbar">
-    <button id="form-back" class="icon-btn">→</button>
+    <button id="form-back" class="icon-btn" aria-label="بازگشت">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M5 12l6-6M5 12l6 6"/></svg>
+    </button>
     <h1 id="form-title">فاکتور جدید</h1>
     <button id="form-save" class="text-btn">ذخیره</button>
   </header>
@@ -48,12 +59,16 @@
   <div class="form-body">
     <div class="photo-picker">
       <img id="photo-preview" class="hidden" alt="عکس فاکتور">
+      <div id="file-preview-generic" class="file-preview-generic hidden">
+        <div class="file-badge" id="file-badge-label">PDF</div>
+        <div class="file-name" id="file-preview-name"></div>
+      </div>
       <label id="photo-placeholder" for="photo-input" class="photo-placeholder">
-        <span>📷</span>
-        <span>گرفتن عکس یا انتخاب از گالری</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a2 2 0 0 1 2-2h1.2l.9-1.5A1 1 0 0 1 8.96 4h6.08a1 1 0 0 1 .86.5L16.8 6H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><circle cx="12" cy="13" r="3.5"/></svg>
+        <span>افزودن عکس یا PDF — از دوربین، گالری یا فایل‌های گوشی</span>
       </label>
-      <input type="file" id="photo-input" accept="image/*" capture="environment" class="hidden">
-      <button id="btn-remove-photo" class="text-btn danger hidden">حذف عکس</button>
+      <input type="file" id="photo-input" accept="image/*,application/pdf" class="hidden">
+      <button id="btn-remove-photo" class="text-btn danger hidden" style="color:var(--danger)">حذف فایل</button>
     </div>
 
     <div class="field">
@@ -79,33 +94,63 @@
   </div>
 </section>
 
-<!-- صفحه‌ی جزئیات -->
 <section id="screen-detail" class="screen hidden">
   <header class="topbar">
-    <button id="detail-back" class="icon-btn">→</button>
+    <button id="detail-back" class="icon-btn" aria-label="بازگشت">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M5 12l6-6M5 12l6 6"/></svg>
+    </button>
     <h1>جزئیات فاکتور</h1>
-    <button id="btn-edit" class="icon-btn">✎</button>
+    <button id="btn-edit" class="icon-btn" aria-label="ویرایش">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+    </button>
   </header>
 
   <div class="detail-body">
     <img id="detail-photo" class="detail-photo hidden" alt="عکس فاکتور">
-    <h2 id="detail-title"></h2>
+    <div id="detail-pdf-wrap" class="detail-pdf-wrap hidden">
+      <iframe id="detail-pdf-frame" class="detail-pdf-frame" title="فایل PDF"></iframe>
+    </div>
+    <div id="detail-file-generic" class="file-preview-generic hidden">
+      <div class="file-badge" id="detail-file-badge">PDF</div>
+      <div class="file-name" id="detail-file-name"></div>
+    </div>
+    <h2 id="detail-title" style="margin:0;font-size:19px;"></h2>
     <div id="detail-amount" class="detail-amount"></div>
-    <div id="detail-date" class="muted"></div>
+    <div id="detail-date" class="muted detail-date">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span id="detail-date-text"></span>
+    </div>
     <p id="detail-note" class="detail-note"></p>
 
     <div class="detail-actions">
-      <button id="btn-share" class="btn">اشتراک‌گذاری</button>
-      <button id="btn-delete" class="btn danger">حذف</button>
+      <div class="action-row">
+        <button id="btn-download" class="btn hidden">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+          دانلود
+        </button>
+        <button id="btn-share" class="btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg>
+          اشتراک‌گذاری
+        </button>
+      </div>
+      <button id="btn-delete" class="btn danger">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        حذف
+      </button>
     </div>
   </div>
 </section>
 
-<!-- منوی پشتیبان‌گیری -->
 <div id="menu-overlay" class="overlay hidden">
   <div class="sheet">
-    <button id="btn-export" class="sheet-item">📤 خروجی گرفتن از همه‌ی فاکتورها (پشتیبان)</button>
-    <label for="import-input" class="sheet-item">📥 بازیابی از فایل پشتیبان</label>
+    <button id="btn-export" class="sheet-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg>
+      خروجی گرفتن از همه‌ی فاکتورها (پشتیبان)
+    </button>
+    <label for="import-input" class="sheet-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"/><path d="m7 16 5 5 5-5"/><path d="M5 3h14"/></svg>
+      بازیابی از فایل پشتیبان
+    </label>
     <input type="file" id="import-input" accept="application/json" class="hidden">
     <button id="menu-cancel" class="sheet-item cancel">انصراف</button>
   </div>

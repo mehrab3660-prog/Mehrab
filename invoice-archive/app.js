@@ -1,4 +1,3 @@
-/* ---------- تبدیل تاریخ میلادی به شمسی (فقط برای نمایش) ---------- */
 function gregorianToJalali(gy, gm, gd) {
   const g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
   let jy = gy <= 1600 ? 0 : 979;
@@ -54,7 +53,6 @@ function formatAmount(n) {
   return Number(n).toLocaleString("fa-IR") + " تومان";
 }
 
-/* ---------- ذخیره‌سازی محلی (IndexedDB) ---------- */
 const DB_NAME = "invoice-archive-db";
 const STORE = "invoices";
 let dbPromise = null;
@@ -116,22 +114,11 @@ async function dbDelete(id) {
   });
 }
 
-/* ---------- حالت برنامه ---------- */
-let state = {
-  invoices: [],
-  filter: "",
-  editingId: null,
-  photoBlob: null,
-  photoRemoved: false,
-};
+let state = { invoices: [], filter: "", editingId: null, photoBlob: null, photoRemoved: false };
 
 const $ = (sel) => document.querySelector(sel);
 
-const screens = {
-  list: $("#screen-list"),
-  form: $("#screen-form"),
-  detail: $("#screen-detail"),
-};
+const screens = { list: $("#screen-list"), form: $("#screen-form"), detail: $("#screen-detail") };
 
 function showScreen(name) {
   Object.values(screens).forEach((s) => s.classList.add("hidden"));
@@ -146,10 +133,24 @@ function toast(msg) {
   toast._t = setTimeout(() => el.classList.add("hidden"), 2200);
 }
 
-/* ---------- رندر لیست ---------- */
 async function refreshList() {
   state.invoices = await dbAll();
   renderList();
+}
+
+const THUMB_PLACEHOLDER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h10a1 1 0 0 1 1 1v16.2a.5.5 0 0 1-.76.43L15 19.2l-1.24 1.43a.5.5 0 0 1-.76 0L11.76 19.2 10.52 20.6a.5.5 0 0 1-.76 0L8.52 19.2l-2.24 1.43A.5.5 0 0 1 5.5 20.2V4a1 1 0 0 1 1-1Z"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/></svg>';
+
+function isImageFile(blob) {
+  return !!blob && !!blob.type && blob.type.startsWith("image/");
+}
+function isPdfFile(blob) {
+  return !!blob && blob.type === "application/pdf";
+}
+function fileBadgeLabel(blob) {
+  return isPdfFile(blob) ? "PDF" : "FILE";
+}
+function fileDisplayName(blob) {
+  return (blob && blob.name) || (isPdfFile(blob) ? "فایل PDF" : "فایل ضمیمه");
 }
 
 function renderList() {
@@ -157,9 +158,7 @@ function renderList() {
   const q = state.filter.trim().toLowerCase();
   let items = state.invoices.slice().sort((a, b) => (b.date || "").localeCompare(a.date || "") || b.id - a.id);
   if (q) {
-    items = items.filter(
-      (i) => (i.title || "").toLowerCase().includes(q) || (i.note || "").toLowerCase().includes(q)
-    );
+    items = items.filter((i) => (i.title || "").toLowerCase().includes(q) || (i.note || "").toLowerCase().includes(q));
   }
 
   container.innerHTML = "";
@@ -171,11 +170,13 @@ function renderList() {
     card.dataset.id = inv.id;
 
     let thumbHtml;
-    if (inv.photo) {
+    if (isImageFile(inv.photo)) {
       const url = URL.createObjectURL(inv.photo);
       thumbHtml = `<img class="thumb" src="${url}" alt="">`;
+    } else if (inv.photo) {
+      thumbHtml = `<div class="thumb pdf-thumb">${fileBadgeLabel(inv.photo)}</div>`;
     } else {
-      thumbHtml = `<div class="thumb placeholder">🧾</div>`;
+      thumbHtml = `<div class="thumb placeholder">${THUMB_PLACEHOLDER_SVG}</div>`;
     }
 
     card.innerHTML = `
@@ -199,7 +200,6 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
-/* ---------- فرم افزودن/ویرایش ---------- */
 function openForm(editing) {
   state.editingId = editing ? editing.id : null;
   state.photoBlob = editing ? editing.photo || null : null;
@@ -222,15 +222,26 @@ function updateJalaliHint() {
 
 function updatePhotoPreview() {
   const img = $("#photo-preview");
+  const generic = $("#file-preview-generic");
   const placeholder = $("#photo-placeholder");
   const removeBtn = $("#btn-remove-photo");
-  if (state.photoBlob && !state.photoRemoved) {
-    img.src = URL.createObjectURL(state.photoBlob);
-    img.classList.remove("hidden");
+  const blob = state.photoRemoved ? null : state.photoBlob;
+
+  img.classList.add("hidden");
+  generic.classList.add("hidden");
+
+  if (blob) {
+    if (isImageFile(blob)) {
+      img.src = URL.createObjectURL(blob);
+      img.classList.remove("hidden");
+    } else {
+      $("#file-badge-label").textContent = fileBadgeLabel(blob);
+      $("#file-preview-name").textContent = fileDisplayName(blob);
+      generic.classList.remove("hidden");
+    }
     placeholder.classList.add("hidden");
     removeBtn.classList.remove("hidden");
   } else {
-    img.classList.add("hidden");
     placeholder.classList.remove("hidden");
     removeBtn.classList.add("hidden");
   }
@@ -247,14 +258,7 @@ async function saveForm() {
     return;
   }
 
-  const record = {
-    title,
-    amount,
-    date,
-    note,
-    photo: state.photoRemoved ? null : state.photoBlob,
-    updatedAt: Date.now(),
-  };
+  const record = { title, amount, date, note, photo: state.photoRemoved ? null : state.photoBlob, updatedAt: Date.now() };
   if (state.editingId) record.id = state.editingId;
 
   const id = await dbPut(record);
@@ -263,7 +267,6 @@ async function saveForm() {
   openDetail(state.editingId || id);
 }
 
-/* ---------- جزئیات ---------- */
 let currentDetailId = null;
 
 async function openDetail(id) {
@@ -272,16 +275,32 @@ async function openDetail(id) {
   currentDetailId = id;
 
   const img = $("#detail-photo");
-  if (inv.photo) {
+  const pdfWrap = $("#detail-pdf-wrap");
+  const pdfFrame = $("#detail-pdf-frame");
+  const generic = $("#detail-file-generic");
+
+  img.classList.add("hidden");
+  pdfWrap.classList.add("hidden");
+  generic.classList.add("hidden");
+  pdfFrame.src = "about:blank";
+
+  if (isImageFile(inv.photo)) {
     img.src = URL.createObjectURL(inv.photo);
     img.classList.remove("hidden");
-  } else {
-    img.classList.add("hidden");
+  } else if (isPdfFile(inv.photo)) {
+    pdfFrame.src = URL.createObjectURL(inv.photo);
+    pdfWrap.classList.remove("hidden");
+  } else if (inv.photo) {
+    $("#detail-file-badge").textContent = fileBadgeLabel(inv.photo);
+    $("#detail-file-name").textContent = fileDisplayName(inv.photo);
+    generic.classList.remove("hidden");
   }
+
   $("#detail-title").textContent = inv.title || "بدون عنوان";
   $("#detail-amount").textContent = inv.amount ? formatAmount(inv.amount) : "";
-  $("#detail-date").textContent = formatJalali(inv.date);
+  $("#detail-date-text").textContent = formatJalali(inv.date);
   $("#detail-note").textContent = inv.note || "";
+  $("#btn-download").classList.toggle("hidden", !inv.photo);
 
   showScreen("detail");
 }
@@ -295,27 +314,61 @@ async function deleteCurrentDetail() {
   toast("حذف شد");
 }
 
+function attachmentFilename(inv) {
+  if (inv.photo && inv.photo.name) return inv.photo.name;
+  const ext = isPdfFile(inv.photo) ? "pdf" : (inv.photo && inv.photo.type && inv.photo.type.split("/")[1]) || "jpg";
+  const base = (inv.title || "فاکتور").replace(/[\\/:*?"<>|]/g, "-");
+  return `${base}.${ext}`;
+}
+
 async function shareCurrentDetail() {
   const inv = await dbGet(currentDetailId);
   if (!inv) return;
   const text = `${inv.title || "فاکتور"}\n${inv.amount ? formatAmount(inv.amount) + "\n" : ""}${formatJalali(inv.date)}${inv.note ? "\n" + inv.note : ""}`;
 
   try {
-    if (inv.photo && navigator.canShare && navigator.canShare({ files: [new File([inv.photo], "invoice.jpg", { type: inv.photo.type || "image/jpeg" })] })) {
-      const file = new File([inv.photo], "invoice.jpg", { type: inv.photo.type || "image/jpeg" });
-      await navigator.share({ text, files: [file] });
-    } else if (navigator.share) {
+    if (inv.photo) {
+      const file = new File([inv.photo], attachmentFilename(inv), { type: inv.photo.type || "application/octet-stream" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ text, files: [file] });
+        return;
+      }
+    }
+    if (navigator.share) {
       await navigator.share({ text });
     } else {
       await navigator.clipboard.writeText(text);
       toast("متن کپی شد");
     }
-  } catch (e) {
-    /* کاربر اشتراک‌گذاری رو لغو کرده */
-  }
+  } catch (e) {}
 }
 
-/* ---------- پشتیبان‌گیری / بازیابی ---------- */
+async function downloadCurrentFile() {
+  const inv = await dbGet(currentDetailId);
+  if (!inv || !inv.photo) return;
+  const filename = attachmentFilename(inv);
+
+  try {
+    const downloads = window.claude && (await window.claude.use("downloads"));
+    if (downloads) {
+      await downloads.save({ filename, data: inv.photo });
+      toast("فایل ذخیره شد");
+      return;
+    }
+  } catch (e) {
+    if (e && e.code === "declined") return;
+  }
+
+  const url = URL.createObjectURL(inv.photo);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -329,13 +382,7 @@ async function exportBackup() {
   const items = await dbAll();
   const payload = [];
   for (const inv of items) {
-    payload.push({
-      title: inv.title,
-      amount: inv.amount,
-      date: inv.date,
-      note: inv.note,
-      photo: inv.photo ? await blobToBase64(inv.photo) : null,
-    });
+    payload.push({ title: inv.title, amount: inv.amount, date: inv.date, note: inv.note, photo: inv.photo ? await blobToBase64(inv.photo) : null });
   }
   const json = JSON.stringify({ app: "invoice-archive", version: 1, items: payload }, null, 2);
   const file = new File([json], `invoice-archive-backup-${todayIso()}.json`, { type: "application/json" });
@@ -346,7 +393,18 @@ async function exportBackup() {
       return;
     }
   } catch (e) {
-    /* کاربر لغو کرد یا اشتراک‌گذاری فایل پشتیبانی نشد؛ حالت جایگزین زیر اجرا می‌شود */
+    if (e && e.name === "AbortError") return;
+  }
+
+  try {
+    const downloads = window.claude && (await window.claude.use("downloads"));
+    if (downloads) {
+      await downloads.save({ filename: file.name, data: json });
+      toast("فایل پشتیبان ذخیره شد");
+      return;
+    }
+  } catch (e) {
+    if (e && e.code === "declined") return;
   }
 
   const url = URL.createObjectURL(file);
@@ -379,24 +437,15 @@ async function importBackup(file) {
   }
   const items = data.items || [];
   for (const it of items) {
-    await dbPut({
-      title: it.title,
-      amount: it.amount,
-      date: it.date,
-      note: it.note,
-      photo: it.photo ? base64ToBlob(it.photo) : null,
-      updatedAt: Date.now(),
-    });
+    await dbPut({ title: it.title, amount: it.amount, date: it.date, note: it.note, photo: it.photo ? base64ToBlob(it.photo) : null, updatedAt: Date.now() });
   }
   await refreshList();
   toast(`${items.length} فاکتور بازیابی شد`);
 }
 
-/* ---------- رویدادها ---------- */
 $("#btn-add").addEventListener("click", () => openForm(null));
 $("#form-back").addEventListener("click", () => showScreen("list"));
 $("#form-save").addEventListener("click", saveForm);
-
 $("#f-date").addEventListener("change", updateJalaliHint);
 
 $("#photo-placeholder").addEventListener("click", () => $("#photo-input").click());
@@ -420,6 +469,7 @@ $("#btn-edit").addEventListener("click", async () => {
 });
 $("#btn-delete").addEventListener("click", deleteCurrentDetail);
 $("#btn-share").addEventListener("click", shareCurrentDetail);
+$("#btn-download").addEventListener("click", downloadCurrentFile);
 
 $("#search-input").addEventListener("input", (e) => {
   state.filter = e.target.value;
@@ -442,7 +492,6 @@ $("#import-input").addEventListener("change", async (e) => {
   e.target.value = "";
 });
 
-/* ---------- شروع ---------- */
 refreshList();
 
 if ("serviceWorker" in navigator) {
