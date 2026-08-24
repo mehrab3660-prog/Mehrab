@@ -594,7 +594,6 @@ $("#date-picker-overlay").addEventListener("click", (e) => {
   if (e.target.id === "date-picker-overlay") closeDatePicker();
 });
 
-$("#photo-placeholder").addEventListener("click", () => $("#photo-input").click());
 $("#photo-input").addEventListener("change", (e) => {
   const file = e.target.files[0];
   if (!file) return;
