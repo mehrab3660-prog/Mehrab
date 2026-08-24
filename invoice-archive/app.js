@@ -30,6 +30,45 @@ function gregorianToJalali(gy, gm, gd) {
   return [jy, jm, jd];
 }
 
+function jalaliToGregorian(jy, jm, jd) {
+  let gy = jy <= 979 ? 621 : 1600;
+  jy -= jy <= 979 ? 0 : 979;
+  let days =
+    365 * jy +
+    Math.floor(jy / 33) * 8 +
+    Math.floor((mod(jy, 33) + 3) / 4) +
+    78 +
+    jd +
+    (jm < 7 ? (jm - 1) * 31 : (jm - 7) * 30 + 186);
+  gy += 400 * Math.floor(days / 146097);
+  days = mod(days, 146097);
+  if (days > 36524) {
+    days -= 1;
+    gy += 100 * Math.floor(days / 36524);
+    days = mod(days, 36524);
+    if (days >= 365) days += 1;
+  }
+  gy += 4 * Math.floor(days / 1461);
+  days = mod(days, 1461);
+  if (days > 365) {
+    gy += Math.floor((days - 1) / 365);
+    days = mod(days - 1, 365);
+  }
+  let gd = days + 1;
+  const isLeapG = (gy % 4 === 0 && gy % 100 !== 0) || gy % 400 === 0;
+  const sal_a = [0, 31, isLeapG ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  let gm = 0;
+  while (gm < 13 && gd > sal_a[gm]) {
+    gd -= sal_a[gm];
+    gm += 1;
+  }
+  return [gy, gm, gd];
+}
+
+function mod(a, b) {
+  return a - Math.floor(a / b) * b;
+}
+
 const JALALI_MONTHS = [
   "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
   "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند",
@@ -40,6 +79,35 @@ function formatJalali(isoDate) {
   const [gy, gm, gd] = isoDate.split("-").map(Number);
   const [jy, jm, jd] = gregorianToJalali(gy, gm, gd);
   return `${jd} ${JALALI_MONTHS[jm - 1]} ${jy}`;
+}
+
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
+function isoFromJalali(jy, jm, jd) {
+  const [gy, gm, gd] = jalaliToGregorian(jy, jm, jd);
+  return `${gy}-${pad2(gm)}-${pad2(gd)}`;
+}
+
+function jalaliMonthLength(jy, jm) {
+  let nextJy = jy;
+  let nextJm = jm + 1;
+  if (nextJm > 12) {
+    nextJm = 1;
+    nextJy += 1;
+  }
+  const [gy1, gm1, gd1] = jalaliToGregorian(jy, jm, 1);
+  const [gy2, gm2, gd2] = jalaliToGregorian(nextJy, nextJm, 1);
+  const d1 = Date.UTC(gy1, gm1 - 1, gd1);
+  const d2 = Date.UTC(gy2, gm2 - 1, gd2);
+  return Math.round((d2 - d1) / 86400000);
+}
+
+function jalaliWeekday(jy, jm, jd) {
+  const [gy, gm, gd] = jalaliToGregorian(jy, jm, jd);
+  const jsDay = new Date(Date.UTC(gy, gm - 1, gd)).getUTCDay();
+  return mod(jsDay + 1, 7);
 }
 
 function todayIso() {
@@ -114,7 +182,7 @@ async function dbDelete(id) {
   });
 }
 
-let state = { invoices: [], filter: "", editingId: null, photoBlob: null, photoRemoved: false };
+let state = { invoices: [], filter: "", editingId: null, photoBlob: null, photoRemoved: false, selectedDate: todayIso() };
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -208,16 +276,84 @@ function openForm(editing) {
   $("#form-title").textContent = editing ? "ویرایش فاکتور" : "فاکتور جدید";
   $("#f-title").value = editing?.title || "";
   $("#f-amount").value = editing?.amount || "";
-  $("#f-date").value = editing?.date || todayIso();
+  state.selectedDate = editing?.date || todayIso();
   $("#f-note").value = editing?.note || "";
-  updateJalaliHint();
+  updateDateDisplay();
   updatePhotoPreview();
 
   showScreen("form");
 }
 
-function updateJalaliHint() {
-  $("#f-date-jalali").textContent = formatJalali($("#f-date").value);
+function updateDateDisplay() {
+  $("#f-date-display").textContent = formatJalali(state.selectedDate);
+}
+
+let dpView = { jy: 1, jm: 1 };
+
+function openDatePicker() {
+  const base = state.selectedDate || todayIso();
+  const [gy, gm, gd] = base.split("-").map(Number);
+  const [jy, jm] = gregorianToJalali(gy, gm, gd);
+  dpView = { jy, jm };
+  renderDatePicker();
+  $("#date-picker-overlay").classList.remove("hidden");
+}
+
+function closeDatePicker() {
+  $("#date-picker-overlay").classList.add("hidden");
+}
+
+function renderDatePicker() {
+  $("#dp-month-label").textContent = JALALI_MONTHS[dpView.jm - 1];
+  $("#dp-year-label").textContent = dpView.jy;
+
+  const todayJ = gregorianToJalali(...todayIso().split("-").map(Number));
+  const selectedJ = state.selectedDate ? gregorianToJalali(...state.selectedDate.split("-").map(Number)) : null;
+
+  const offset = jalaliWeekday(dpView.jy, dpView.jm, 1);
+  const dayCount = jalaliMonthLength(dpView.jy, dpView.jm);
+
+  const grid = $("#dp-grid");
+  grid.innerHTML = "";
+
+  for (let i = 0; i < offset; i++) {
+    const cell = document.createElement("span");
+    cell.className = "dp-day dp-empty";
+    grid.appendChild(cell);
+  }
+
+  for (let d = 1; d <= dayCount; d++) {
+    const cell = document.createElement("button");
+    cell.type = "button";
+    cell.className = "dp-day";
+    cell.textContent = d.toLocaleString("fa-IR");
+
+    const isToday = todayJ[0] === dpView.jy && todayJ[1] === dpView.jm && todayJ[2] === d;
+    const isSelected = selectedJ && selectedJ[0] === dpView.jy && selectedJ[1] === dpView.jm && selectedJ[2] === d;
+    if (isToday) cell.classList.add("dp-today");
+    if (isSelected) cell.classList.add("dp-selected");
+
+    cell.addEventListener("click", () => {
+      state.selectedDate = isoFromJalali(dpView.jy, dpView.jm, d);
+      updateDateDisplay();
+      closeDatePicker();
+    });
+    grid.appendChild(cell);
+  }
+}
+
+function changeDatePickerMonth(delta) {
+  let jm = dpView.jm + delta;
+  let jy = dpView.jy;
+  if (jm > 12) {
+    jm = 1;
+    jy += 1;
+  } else if (jm < 1) {
+    jm = 12;
+    jy -= 1;
+  }
+  dpView = { jy, jm };
+  renderDatePicker();
 }
 
 function updatePhotoPreview() {
@@ -250,7 +386,7 @@ function updatePhotoPreview() {
 async function saveForm() {
   const title = $("#f-title").value.trim();
   const amount = $("#f-amount").value ? Number($("#f-amount").value) : null;
-  const date = $("#f-date").value || todayIso();
+  const date = state.selectedDate || todayIso();
   const note = $("#f-note").value.trim();
 
   if (!title && !state.photoBlob) {
@@ -446,7 +582,17 @@ async function importBackup(file) {
 $("#btn-add").addEventListener("click", () => openForm(null));
 $("#form-back").addEventListener("click", () => showScreen("list"));
 $("#form-save").addEventListener("click", saveForm);
-$("#f-date").addEventListener("change", updateJalaliHint);
+$("#f-date-btn").addEventListener("click", openDatePicker);
+$("#dp-prev").addEventListener("click", () => changeDatePickerMonth(-1));
+$("#dp-next").addEventListener("click", () => changeDatePickerMonth(1));
+$("#dp-today").addEventListener("click", () => {
+  state.selectedDate = todayIso();
+  updateDateDisplay();
+  closeDatePicker();
+});
+$("#date-picker-overlay").addEventListener("click", (e) => {
+  if (e.target.id === "date-picker-overlay") closeDatePicker();
+});
 
 $("#photo-placeholder").addEventListener("click", () => $("#photo-input").click());
 $("#photo-input").addEventListener("change", (e) => {

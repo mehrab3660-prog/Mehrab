@@ -1,4 +1,4 @@
-const CACHE_NAME = "invoice-archive-v1";
+const CACHE_NAME = "invoice-archive-v2";
 const SHELL_FILES = [
   "/",
   "/style.css",
@@ -7,6 +7,7 @@ const SHELL_FILES = [
   "/icons/icon-180.png",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
+  "/fonts/estedad-arabic.woff2",
 ];
 
 self.addEventListener("install", (event) => {

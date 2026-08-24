@@ -11,9 +11,6 @@
 <meta name="apple-mobile-web-app-title" content="آرشیو فاکتور">
 <link rel="apple-touch-icon" href="/icons/icon-180.png">
 <link rel="icon" href="/icons/icon-192.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -82,9 +79,11 @@
     </div>
 
     <div class="field">
-      <label for="f-date">تاریخ</label>
-      <input type="date" id="f-date">
-      <span id="f-date-jalali" class="muted small"></span>
+      <label>تاریخ</label>
+      <button type="button" id="f-date-btn" class="date-field-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span id="f-date-display"></span>
+      </button>
     </div>
 
     <div class="field">
@@ -153,6 +152,27 @@
     </label>
     <input type="file" id="import-input" accept="application/json" class="hidden">
     <button id="menu-cancel" class="sheet-item cancel">انصراف</button>
+  </div>
+</div>
+
+<div id="date-picker-overlay" class="overlay hidden">
+  <div class="sheet date-picker-sheet">
+    <div class="date-picker-header">
+      <button type="button" id="dp-prev" class="icon-btn dp-nav" aria-label="ماه قبل">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+      </button>
+      <div class="date-picker-title"><span id="dp-month-label"></span>&nbsp;<span id="dp-year-label"></span></div>
+      <button type="button" id="dp-next" class="icon-btn dp-nav" aria-label="ماه بعد">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+    <div class="date-picker-weekdays">
+      <span>ش</span><span>ی</span><span>د</span><span>س</span><span>چ</span><span>پ</span><span>ج</span>
+    </div>
+    <div class="date-picker-grid" id="dp-grid"></div>
+    <div class="date-picker-footer">
+      <button type="button" id="dp-today" class="sheet-item cancel" style="color:var(--accent)">رفتن به امروز</button>
+    </div>
   </div>
 </div>
 
