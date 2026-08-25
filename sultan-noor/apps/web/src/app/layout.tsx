@@ -13,6 +13,7 @@ import AiAdvisorWidget from "@/components/AiAdvisorWidget";
 import PageTransition from "@/components/PageTransition";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import MainContent from "@/components/MainContent";
+import SplashIntro from "@/components/SplashIntro";
 import { JsonLd, SITE_URL } from "@/lib/jsonld";
 
 const vazirmatn = Vazirmatn({
@@ -65,6 +66,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <WishlistProvider>
                 <CompareProvider>
                   <AiAdvisorProvider>
+                    <SplashIntro />
                     <Header />
                     <MainContent>
                       <PageTransition>{children}</PageTransition>

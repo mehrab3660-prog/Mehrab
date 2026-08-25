@@ -12,6 +12,13 @@ export default defineConfig({
   use: {
     baseURL: BASE_URL,
     trace: "retain-on-failure",
+    // Pre-seed the "splash intro already seen" flag so every test starts
+    // straight on the real page instead of behind the once-ever brand
+    // intro overlay — that overlay has its own dedicated test below.
+    storageState: {
+      cookies: [],
+      origins: [{ origin: BASE_URL, localStorage: [{ name: "sultan-noor-splash-seen", value: "1" }] }],
+    },
   },
   projects: [
     {

@@ -23,6 +23,22 @@
   --color-border-color: #4f4536;
   --color-accent-cyan: #35d0e0;
   --color-accent-purple: #8b6bf0;
+
+  /* Architectural Luminescence calls for a near-orthogonal, "Sharp (0)"
+     shape language — remapping the radius scale here (rather than editing
+     every rounded-* usage) keeps corners crisp everywhere at once while
+     rounded-full (icons, avatars, pills) is untouched since it doesn't
+     derive from these tokens. A hairline 1-2px is kept at the top of the
+     scale as the spec's allowed "micro-radius" for primary CTAs/cards. */
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 1px;
+  --radius-xl: 1px;
+  --radius-2xl: 2px;
+  --radius-3xl: 2px;
+  --radius-4xl: 2px;
+  --radius: 0px;
 }
 
 @theme inline {
