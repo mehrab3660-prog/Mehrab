@@ -1,0 +1,1526 @@
+// Sultan Noor (سلطان نور) e-commerce platform — core data model.
+// Covers: RBAC, OTP auth, B2C/B2B catalog, multi-warehouse inventory,
+// pricing/discounts, orders/invoices/payments, reviews & Q&A,
+// notifications, blog, banners, audit/activity logs, AI advisor.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ────────────────────────────── Identity & RBAC ──────────────────────────────
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  STAFF
+  WAREHOUSE_MANAGER
+  B2B_CUSTOMER
+  CUSTOMER
+}
+
+enum CustomerType {
+  RETAIL // B2C
+  WHOLESALE // B2B
+}
+
+model User {
+  id              String         @id @default(cuid())
+  phone           String         @unique
+  email           String?        @unique
+  fullName        String?
+  passwordHash    String?
+  role            Role           @default(CUSTOMER)
+  customerType    CustomerType   @default(RETAIL)
+  companyName     String?
+  nationalId      String?
+  isActive        Boolean        @default(true)
+  isPhoneVerified Boolean        @default(false)
+  customerGroupId String?
+  customerGroup   CustomerGroup? @relation(fields: [customerGroupId], references: [id])
+
+  // Current redeemable balance — the running total, kept in sync with
+  // LoyaltyTransaction rows below so the balance never needs to be
+  // recomputed by summing history on every read.
+  loyaltyPoints Int @default(0)
+
+  // Referral program. referralCode is this user's own shareable code —
+  // nullable only because existing users predate the feature; AuthService
+  // backfills it lazily on their next login. referredByUserId is set once,
+  // at signup, from whatever code (if any) the new user entered.
+  // referralRewardedAt guards the one-time bonus payout so it can only ever
+  // fire once per referral relationship, no matter how many orders follow.
+  referralCode       String?   @unique
+  referredByUserId   String?
+  referredBy         User?     @relation("Referrals", fields: [referredByUserId], references: [id])
+  referrals          User[]    @relation("Referrals")
+  referralRewardedAt DateTime?
+
+  addresses               Address[]
+  carts                   Cart[]
+  wishlists               Wishlist[]
+  orders                  Order[]
+  reviews                 Review[]
+  questions               Question[]
+  answers                 Answer[]
+  notifications           Notification[]
+  auditLogs               AuditLog[]
+  activityLogs            ActivityLog[]
+  otpCodes                OtpCode[]
+  aiConversations         AiConversation[]
+  electricalConsultations ElectricalConsultation[]
+  blogPosts               BlogPost[]
+  stockSubscriptions      StockSubscription[]
+  returnRequests          ReturnRequest[]
+  loyaltyTransactions     LoyaltyTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([role])
+}
+
+enum OtpPurpose {
+  REGISTER
+  LOGIN
+  RESET_PASSWORD
+  CHANGE_PHONE
+}
+
+model OtpCode {
+  id         String     @id @default(cuid())
+  phone      String
+  codeHash   String
+  purpose    OtpPurpose
+  userId     String?
+  user       User?      @relation(fields: [userId], references: [id])
+  expiresAt  DateTime
+  consumedAt DateTime?
+  attempts   Int        @default(0)
+  createdAt  DateTime   @default(now())
+
+  @@index([phone, purpose])
+}
+
+model Address {
+  id            String  @id @default(cuid())
+  userId        String
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title         String
+  province      String
+  city          String
+  line1         String
+  line2         String?
+  postalCode    String?
+  receiverName  String
+  receiverPhone String
+  isDefault     Boolean @default(false)
+
+  orders Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Customer groups drive B2B tiered pricing (e.g. Retail, Bronze, Silver, Gold wholesalers).
+model CustomerGroup {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  description String?
+  users       User[]
+  priceTiers  PriceTier[]
+  createdAt   DateTime    @default(now())
+}
+
+// ────────────────────────────── Catalog ──────────────────────────────
+
+model Brand {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  slug     String    @unique
+  logoUrl  String?
+  isActive Boolean   @default(true)
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Category {
+  id       String     @id @default(cuid())
+  name     String
+  slug     String     @unique
+  parentId String?
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  imageUrl String?
+  isActive Boolean    @default(true)
+  products Product[]
+
+  // Category landing-page copy (Sprint 4 Content Autopilot can propose and,
+  // once approved, publish into this field) — optional, page works without it.
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parentId])
+}
+
+model Supplier {
+  id             String          @id @default(cuid())
+  name           String
+  contactName    String?
+  phone          String?
+  email          String?
+  address        String?
+  isActive       Boolean         @default(true)
+  products       Product[]
+  purchaseOrders PurchaseOrder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Warehouse {
+  id       String  @id @default(cuid())
+  name     String  @unique
+  address  String?
+  isActive Boolean @default(true)
+
+  stocks              Stock[]
+  purchaseOrders      PurchaseOrder[]
+  fulfilledOrderItems OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Product {
+  id          String        @id @default(cuid())
+  name        String
+  slug        String        @unique
+  description String?
+  status      ProductStatus @default(DRAFT)
+  brandId     String?
+  brand       Brand?        @relation(fields: [brandId], references: [id])
+  categoryId  String?
+  category    Category?     @relation(fields: [categoryId], references: [id])
+  supplierId  String?
+  supplier    Supplier?     @relation(fields: [supplierId], references: [id])
+
+  basePrice       Decimal  @db.Decimal(14, 2)
+  compareAtPrice  Decimal? @db.Decimal(14, 2)
+  minWholesaleQty Int? // minimum quantity required for B2B pricing to apply
+
+  variants           ProductVariant[]
+  images             ProductImage[]
+  reviews            Review[]
+  questions          Question[]
+  cartItems          CartItem[]
+  wishlistItems      WishlistItem[]
+  orderItems         OrderItem[]
+  priceTiers         PriceTier[]
+  stockSubscriptions StockSubscription[]
+
+  metaTitle       String?
+  metaDescription String?
+  searchKeywords  String?
+  imageEmbedding  String? // serialized vector for visual search, populated by AI worker
+
+  // Optional real GLB/glTF model for the Sprint 9 3D product viewer — never
+  // auto-generated, only set by staff via the admin scene management page.
+  model3dUrl String?
+
+  sceneHotspots SceneHotspot[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([categoryId])
+  @@index([brandId])
+  @@index([status])
+}
+
+// A clickable marker placed by staff inside the homepage 3D scene, always
+// pointing at a real Product — the 3D layer is presentation-only and must
+// never invent product data (Sprint 9, rule "NO FAKE PRODUCTS").
+model SceneHotspot {
+  id        String  @id @default(cuid())
+  label     String
+  icon      String  @default("💡")
+  positionX Float
+  positionY Float
+  positionZ Float
+  order     Int     @default(0)
+  isActive  Boolean @default(true)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@index([isActive])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  altText   String?
+  position  Int     @default(0)
+}
+
+model ProductVariant {
+  id          String  @id @default(cuid())
+  productId   String
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku         String  @unique
+  attributes  Json // e.g. { "color": "red", "size": "L" }
+  price       Decimal @db.Decimal(14, 2)
+  weightGrams Int?
+  isActive    Boolean @default(true)
+
+  stocks             Stock[]
+  cartItems          CartItem[]
+  wishlistItems      WishlistItem[]
+  orderItems         OrderItem[]
+  purchaseOrderItems PurchaseOrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Stock {
+  id               String         @id @default(cuid())
+  warehouseId      String
+  warehouse        Warehouse      @relation(fields: [warehouseId], references: [id])
+  productVariantId String
+  productVariant   ProductVariant @relation(fields: [productVariantId], references: [id])
+  quantity         Int            @default(0)
+  reservedQuantity Int            @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([warehouseId, productVariantId])
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  ORDERED
+  RECEIVED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id          String              @id @default(cuid())
+  supplierId  String
+  supplier    Supplier            @relation(fields: [supplierId], references: [id])
+  warehouseId String
+  warehouse   Warehouse           @relation(fields: [warehouseId], references: [id])
+  status      PurchaseOrderStatus @default(DRAFT)
+  items       PurchaseOrderItem[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+}
+
+model PurchaseOrderItem {
+  id               String         @id @default(cuid())
+  purchaseOrderId  String
+  purchaseOrder    PurchaseOrder  @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  productVariantId String
+  productVariant   ProductVariant @relation(fields: [productVariantId], references: [id])
+  quantity         Int
+  unitCost         Decimal        @db.Decimal(14, 2)
+}
+
+// Tiered / wholesale pricing: for a given product + customer group, price changes by quantity break.
+model PriceTier {
+  id              String        @id @default(cuid())
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customerGroupId String
+  customerGroup   CustomerGroup @relation(fields: [customerGroupId], references: [id])
+  minQuantity     Int
+  unitPrice       Decimal       @db.Decimal(14, 2)
+
+  @@unique([productId, customerGroupId, minQuantity])
+}
+
+// ────────────────────────────── Cart & Wishlist ──────────────────────────────
+
+model Cart {
+  id     String     @id @default(cuid())
+  userId String
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items  CartItem[]
+
+  // Set once an abandoned-cart recovery SMS has gone out, so the cron job
+  // never texts the same idle cart twice; cleared whenever the cart is
+  // touched again so a fresh abandonment can be reminded again later.
+  abandonedReminderSentAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CartItem {
+  id               String          @id @default(cuid())
+  cartId           String
+  cart             Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId        String
+  product          Product         @relation(fields: [productId], references: [id])
+  productVariantId String?
+  productVariant   ProductVariant? @relation(fields: [productVariantId], references: [id])
+  quantity         Int             @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cartId, productVariantId])
+}
+
+model Wishlist {
+  id     String         @id @default(cuid())
+  userId String
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items  WishlistItem[]
+
+  createdAt DateTime @default(now())
+}
+
+model WishlistItem {
+  id               String          @id @default(cuid())
+  wishlistId       String
+  wishlist         Wishlist        @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  productId        String
+  product          Product         @relation(fields: [productId], references: [id])
+  productVariantId String?
+  productVariant   ProductVariant? @relation(fields: [productVariantId], references: [id])
+
+  // The product's basePrice when this item was wishlisted, and the price it
+  // was last alerted at (so a further drop after an alert can alert again,
+  // while a bounce back up to the same price doesn't re-alert).
+  priceAtAdd       Decimal  @db.Decimal(14, 2)
+  lastAlertedPrice Decimal? @db.Decimal(14, 2)
+
+  createdAt DateTime @default(now())
+
+  @@unique([wishlistId, productId, productVariantId])
+}
+
+// A customer's request to be texted once a currently out-of-stock product
+// is back — one row per (user, product); `notifiedAt` fires exactly once
+// per subscription and then the row stops matching future restocks.
+model StockSubscription {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  notifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+}
+
+// ────────────────────────────── Discounts ──────────────────────────────
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+model DiscountCode {
+  id              String       @id @default(cuid())
+  code            String       @unique
+  type            DiscountType
+  value           Decimal      @db.Decimal(14, 2)
+  minOrderTotal   Decimal?     @db.Decimal(14, 2)
+  maxUsage        Int?
+  maxUsagePerUser Int?
+  usedCount       Int          @default(0)
+  startsAt        DateTime?
+  expiresAt       DateTime?
+  isActive        Boolean      @default(true)
+  orders          Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// A shipping cost band: this rate applies to orders addressed to `province`
+// (null = fallback band used when no rate matches the order's own province)
+// weighing up to `maxWeightGrams`. The cheapest/lightest matching band wins.
+// With no rates configured at all, order pricing falls back to a flat rate —
+// same graceful-degradation pattern as Meilisearch/AI advisor.
+model ShippingRate {
+  id             String   @id @default(cuid())
+  province       String?
+  maxWeightGrams Int
+  price          Decimal  @db.Decimal(14, 2)
+  createdAt      DateTime @default(now())
+
+  @@unique([province, maxWeightGrams])
+}
+
+// ────────────────────────────── Orders / Invoices / Payments ──────────────────────────────
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum DeliverySlot {
+  MORNING
+  AFTERNOON
+  EVENING
+}
+
+model Order {
+  id            String             @id @default(cuid())
+  orderNumber   String             @unique
+  userId        String
+  user          User               @relation(fields: [userId], references: [id])
+  addressId     String
+  address       Address            @relation(fields: [addressId], references: [id])
+  status        OrderStatus        @default(PENDING_PAYMENT)
+  items         OrderItem[]
+  statusHistory OrderStatusEvent[]
+
+  // Customer's chosen delivery window at checkout — both optional, since an
+  // order placed without picking one just gets no scheduling preference.
+  deliveryDate DateTime?
+  deliverySlot DeliverySlot?
+
+  subtotal      Decimal @db.Decimal(14, 2)
+  discountTotal Decimal @default(0) @db.Decimal(14, 2)
+  shippingTotal Decimal @default(0) @db.Decimal(14, 2)
+  taxTotal      Decimal @default(0) @db.Decimal(14, 2)
+  grandTotal    Decimal @db.Decimal(14, 2)
+
+  discountCodeId String?
+  discountCode   DiscountCode? @relation(fields: [discountCodeId], references: [id])
+
+  // Loyalty points the customer redeemed against this order (and the toman
+  // value that came off the total for it), plus what was later earned on it
+  // once delivered. The two *AwardedAt/*ReversedAt timestamps are idempotency
+  // guards — OrdersService.updateStatus can be called more than once with the
+  // same status, and points must only ever be credited or clawed back once.
+  loyaltyPointsRedeemed   Int       @default(0)
+  loyaltyDiscount         Decimal   @default(0) @db.Decimal(14, 2)
+  loyaltyPointsEarned     Int       @default(0)
+  loyaltyPointsAwardedAt  DateTime?
+  loyaltyPointsReversedAt DateTime?
+
+  invoice             Invoice?
+  payments            Payment[]
+  returnRequests      ReturnRequest[]
+  loyaltyTransactions LoyaltyTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model OrderItem {
+  id               String          @id @default(cuid())
+  orderId          String
+  order            Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId        String
+  product          Product         @relation(fields: [productId], references: [id])
+  productVariantId String?
+  productVariant   ProductVariant? @relation(fields: [productVariantId], references: [id])
+  nameSnapshot     String
+  skuSnapshot      String?
+  unitPrice        Decimal         @db.Decimal(14, 2)
+  quantity         Int
+  lineTotal        Decimal         @db.Decimal(14, 2)
+
+  // Which warehouse this line was actually reserved/picked from — set by
+  // OrdersService's warehouse-routing logic at order creation, so staff
+  // know where to pick each item from without guessing.
+  fulfillmentWarehouseId String?
+  fulfillmentWarehouse   Warehouse? @relation(fields: [fulfillmentWarehouseId], references: [id])
+
+  returnRequestItems ReturnRequestItem[]
+}
+
+model OrderStatusEvent {
+  id        String      @id @default(cuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus
+  note      String?
+  createdAt DateTime    @default(now())
+}
+
+enum ReturnRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REFUNDED
+}
+
+// A customer's request to return some (or all) items from a DELIVERED
+// order. Approval/rejection is an admin decision; moving to REFUNDED also
+// flips the underlying Order/Payment to REFUNDED (see ReturnsService).
+model ReturnRequest {
+  id        String              @id @default(cuid())
+  orderId   String
+  order     Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User                @relation(fields: [userId], references: [id])
+  reason    String
+  status    ReturnRequestStatus @default(PENDING)
+  adminNote String?
+  items     ReturnRequestItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([userId])
+}
+
+model ReturnRequestItem {
+  id              String        @id @default(cuid())
+  returnRequestId String
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  orderItemId     String
+  orderItem       OrderItem     @relation(fields: [orderItemId], references: [id])
+  quantity        Int
+}
+
+model Invoice {
+  id            String   @id @default(cuid())
+  orderId       String   @unique
+  order         Order    @relation(fields: [orderId], references: [id])
+  invoiceNumber String   @unique
+  pdfUrl        String?
+  issuedAt      DateTime @default(now())
+}
+
+enum PaymentStatus {
+  INITIATED
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentGateway {
+  ZARINPAL
+  IDPAY
+  CASH_ON_DELIVERY
+}
+
+model Payment {
+  id        String         @id @default(cuid())
+  orderId   String
+  order     Order          @relation(fields: [orderId], references: [id])
+  gateway   PaymentGateway
+  status    PaymentStatus  @default(INITIATED)
+  amount    Decimal        @db.Decimal(14, 2)
+  authority String? // gateway transaction/authority reference
+  refId     String? // gateway settlement reference
+  raw       Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Every payment lookup (initiate, verify, duplicate-callback checks) filters
+  // by these two together — was completely unindexed.
+  @@index([orderId, authority])
+}
+
+enum LoyaltyTransactionType {
+  EARNED
+  REDEEMED
+  ADJUSTED
+  REFERRAL_BONUS
+}
+
+// Full audit trail of every loyalty-point balance change, so a customer (or
+// support) can always see why their balance is what it is, not just the
+// current total. User.loyaltyPoints is the running balance kept in sync
+// with these rows by LoyaltyService/OrdersService.
+model LoyaltyTransaction {
+  id           String                 @id @default(cuid())
+  userId       String
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId      String?
+  order        Order?                 @relation(fields: [orderId], references: [id])
+  type         LoyaltyTransactionType
+  points       Int // signed: positive = credited, negative = debited
+  balanceAfter Int
+  note         String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ────────────────────────────── Reviews & Q&A ──────────────────────────────
+
+model Review {
+  id         String        @id @default(cuid())
+  productId  String
+  product    Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User          @relation(fields: [userId], references: [id])
+  rating     Int
+  title      String?
+  body       String?
+  isApproved Boolean       @default(false)
+  images     ReviewImage[]
+
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+}
+
+model ReviewImage {
+  id       String @id @default(cuid())
+  reviewId String
+  review   Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  url      String
+  position Int    @default(0)
+}
+
+model Question {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  body        String
+  isPublished Boolean  @default(true)
+  answers     Answer[]
+
+  createdAt DateTime @default(now())
+}
+
+model Answer {
+  id          String   @id @default(cuid())
+  questionId  String
+  question    Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  body        String
+  isFromStaff Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+}
+
+// ─────────────────────────────── Wholesale leads ────────────────────────────
+
+enum WholesaleLeadStatus {
+  NEW
+  CONTACTED
+  CONVERTED
+  CLOSED
+}
+
+// Public B2B "contact us" submissions from prospective wholesale buyers who
+// aren't customers yet — no User relation on purpose. Staff follow up and,
+// once converted, the existing WHOLESALE CustomerType/pricing-tier flow
+// takes over; this model only tracks the lead itself.
+model WholesaleLead {
+  id          String              @id @default(cuid())
+  companyName String
+  contactName String
+  phone       String
+  email       String?
+  message     String
+  status      WholesaleLeadStatus @default(NEW)
+  adminNote   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+// ────────────────────────────── Notifications ──────────────────────────────
+
+enum NotificationType {
+  ORDER_UPDATE
+  PRICE_DROP
+  BACK_IN_STOCK
+  PROMOTION
+  QA_REPLY
+  SYSTEM
+}
+
+model Notification {
+  id     String           @id @default(cuid())
+  userId String
+  user   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type   NotificationType
+  title  String
+  body   String?
+  data   Json?
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+}
+
+// ────────────────────────────── Content: Blog & Banners ──────────────────────────────
+
+model BlogPost {
+  id            String    @id @default(cuid())
+  title         String
+  slug          String    @unique
+  excerpt       String?
+  content       String
+  coverImageUrl String?
+  authorId      String
+  author        User      @relation(fields: [authorId], references: [id])
+  isPublished   Boolean   @default(false)
+  publishedAt   DateTime?
+
+  // SEO (Sprint 4) — optional, additive; falls back to title/excerpt in the
+  // frontend when unset, same as before this field existed.
+  metaTitle       String?
+  metaDescription String?
+
+  // News Autopilot (Sprint 6) — optional, additive. category is a single
+  // free-text label ("برق صنعتی", "هوشمندسازی", ...); tags is a comma-
+  // separated list, same convention as Product.searchKeywords. Ordinary
+  // hand-written blog posts simply leave these unset.
+  category String?
+  tags     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum BannerPlacement {
+  HOME_HERO
+  HOME_SECONDARY
+  CATEGORY_TOP
+  SIDEBAR
+}
+
+model Banner {
+  id        String          @id @default(cuid())
+  title     String
+  imageUrl  String
+  linkUrl   String?
+  placement BannerPlacement
+  position  Int             @default(0)
+  isActive  Boolean         @default(true)
+  startsAt  DateTime?
+  endsAt    DateTime?
+
+  createdAt DateTime @default(now())
+}
+
+// ────────────────────────────── Audit & Activity Logs ──────────────────────────────
+
+// AuditLog: sensitive admin/staff actions on business data (who changed what).
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String // e.g. "product.update", "order.refund"
+  entityType String
+  entityId   String?
+  before     Json?
+  after      Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+}
+
+// ActivityLog: general user/system activity trail (logins, page views, searches).
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  event     String // e.g. "auth.login", "search.query", "product.view"
+  metadata  Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([event])
+  @@index([userId])
+}
+
+// ────────────────────────────── AI Shopping Advisor ──────────────────────────────
+
+model AiConversation {
+  id       String      @id @default(cuid())
+  userId   String?
+  user     User?       @relation(fields: [userId], references: [id])
+  messages AiMessage[]
+
+  // Set when the customer asks to talk to a human — staff then see this
+  // conversation in their queue and can reply as AiMessageRole.STAFF.
+  // resolvedAt clears it back off the queue once handled.
+  escalatedAt DateTime?
+  resolvedAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([escalatedAt])
+}
+
+enum AiMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  STAFF
+}
+
+model AiMessage {
+  id             String         @id @default(cuid())
+  conversationId String
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           AiMessageRole
+  content        String
+  createdAt      DateTime       @default(now())
+}
+
+// ────────────────────────────── AI Product Preparation Pipeline ──────────────────────────────
+
+enum ProductAiDraftStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+// Holds AI-drafted product content until a human admin explicitly approves
+// it. Nothing here is a live, visible Product — approve() is the only path
+// that ever creates or changes one, and it always requires an authenticated
+// staff action (see AiProductService.approve).
+model ProductAiDraft {
+  id          String  @id @default(cuid())
+  name        String
+  brandName   String?
+  modelNumber String?
+  ownerPrice  Decimal @db.Decimal(14, 2)
+
+  // Everything below is what the AI proposed — always editable by staff
+  // before approval, never trusted blindly.
+  suggestedPrice Decimal? @db.Decimal(14, 2)
+  description    String?
+  specs          Json?
+  features       Json?
+  faq            Json?
+  seoTitle       String?
+  seoDescription String?
+  categoryName   String?
+  confidenceNote String? // model's own disclosure of what it is unsure about
+  sources        Json?
+
+  status             ProductAiDraftStatus @default(PENDING_REVIEW)
+  rejectionReason    String?
+  // Set once approved — the resulting Product's id. Plain string (no FK) so
+  // this table stays fully additive and never constrains the Product model.
+  publishedProductId String?
+
+  createdByUserId  String?
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+
+  // Best-effort, never-blocking note from Image Autopilot — e.g. "تصویر
+  // خودکار آماده نشد" when every image provider failed/was unconfigured.
+  // The draft (and later approval) always succeeds regardless.
+  imageAutopilotNote String?
+  images             ProductAiDraftImage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+enum ProductImageType {
+  REAL_SOURCE // found via an image search provider, not yet processed
+  PROCESSED_REAL // a REAL_SOURCE image after resize/compress/format pipeline (and optional background removal)
+  AI_GENERATED // synthesized by an image-generation provider — never a real photo
+  ADMIN_UPLOADED // manually uploaded by staff as a fallback when autopilot found nothing suitable
+}
+
+enum ProductAiDraftImageStatus {
+  CANDIDATE
+  APPROVED
+  REJECTED
+}
+
+// One candidate/chosen image for a ProductAiDraft. Nothing here is public —
+// only images with status APPROVED at the moment the draft itself is
+// approved are copied into the real Product (see AiProductService.approve).
+model ProductAiDraftImage {
+  id      String         @id @default(cuid())
+  draftId String
+  draft   ProductAiDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  imageType ProductImageType
+  status    ProductAiDraftImageStatus @default(CANDIDATE)
+  isMain    Boolean                   @default(false)
+  role      String? // "main" | "secondary" | "detail" | "lifestyle" — UI grouping hint only
+
+  // Locally-stored, servable URLs — url is the best-available rendition to
+  // preview/publish; webp/avif/thumbnail are optional extra renditions from
+  // the processing pipeline. The original downloaded/generated bytes are
+  // kept on disk separately (see ai-image module) and never overwritten.
+  url          String?
+  thumbnailUrl String?
+  webpUrl      String?
+  avifUrl      String?
+
+  // Provenance — always populated honestly; isOfficialSource is only ever
+  // true when the source provider itself asserts it (never inferred/guessed).
+  sourceUrl        String?
+  sourceProvider   String?
+  attribution      String?
+  isOfficialSource Boolean @default(false)
+
+  // Validation metadata captured from the real file, never from a
+  // client-supplied extension or header alone.
+  width           Int?
+  height          Int?
+  fileSizeBytes   Int?
+  format          String?
+  contentHash     String? // sha256 of the processed bytes, used for de-duplication
+  relevanceScore  Float? // 0–1, how well the candidate matched the requested product
+  rejectionReason String?
+
+  // Populated only for imageType = AI_GENERATED — required disclosure, never
+  // presented as a real manufacturer photo anywhere in the UI.
+  aiProvider      String?
+  aiPromptVersion String?
+  aiPrompt        String?
+  generatedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([draftId])
+  @@index([status])
+}
+
+// Per-operation cost/usage record for paid image providers (search,
+// background removal, generation) — lets AiImageAutopilotService enforce
+// AppSettings.imageAutopilotMonthlyBudgetToman before making another call.
+model AiUsageLog {
+  id        String   @id @default(cuid())
+  provider  String // e.g. "image-search", "background-removal", "image-generation"
+  operation String
+  draftId   String?
+  costToman Decimal? @db.Decimal(12, 2)
+  success   Boolean
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([provider, createdAt])
+}
+
+// ────────────────────────────── SEO + Content Autopilot (Sprint 4) ──────────────────────────────
+
+enum SeoSuggestionStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+// One AI-drafted SEO suggestion set for a real, live Product. Plain string
+// productId (no relation) — same trade-off as ProductAiDraft.publishedProductId:
+// keeps this table fully additive and never constrains the Product model.
+// Nothing here touches the live Product until approve() applies it, and even
+// then only the fields the admin actually accepted.
+model ProductSeoSuggestion {
+  id        String @id @default(cuid())
+  productId String
+
+  metaTitle             String?
+  metaDescription       String?
+  searchKeywords        String?
+  h1Suggestion          String? // informational only — NEVER auto-applied to Product.name
+  descriptionSuggestion String?
+  faq                   Json?
+  altTextSuggestions    Json? // { [productImageId]: altText }
+  internalLinks         Json? // [{ label, url }], restricted to real existing site URLs
+  sources               Json?
+  confidenceNote        String?
+
+  status          SeoSuggestionStatus @default(PENDING_REVIEW)
+  rejectionReason String?
+  appliedFields   Json? // which fields were actually applied on approve — audit trail
+
+  createdByUserId  String?
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@index([status])
+}
+
+enum ContentDraftType {
+  BLOG_POST
+  BUYING_GUIDE
+  COMPARISON
+  FAQ
+  EDUCATIONAL_ARTICLE
+  PRODUCT_INTRO
+  CATEGORY_CONTENT
+}
+
+enum ContentDraftStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  PUBLISHED
+}
+
+// AI-drafted site content. Publishing is always type-specific but always
+// reuses an existing system: BLOG_POST/BUYING_GUIDE/COMPARISON/FAQ/
+// EDUCATIONAL_ARTICLE become a real BlogPost row (the same table/admin flow
+// blog posts already use); PRODUCT_INTRO writes into that Product's own
+// description; CATEGORY_CONTENT writes into that Category's own
+// description. No second publishing system. productId/categoryId are plain
+// strings (no relation), same additive-only trade-off as ProductAiDraft.
+model ContentDraft {
+  id   String           @id @default(cuid())
+  type ContentDraftType
+
+  topic    String
+  keywords String?
+
+  title                String?
+  excerpt              String?
+  body                 String?
+  faq                  Json?
+  metaTitle            String?
+  metaDescription      String?
+  suggestedImagePrompt String?
+  internalLinks        Json? // [{ label, url }], restricted to real existing site URLs
+  sources              Json?
+
+  productId  String?
+  categoryId String?
+
+  status              ContentDraftStatus @default(PENDING_REVIEW)
+  rejectionReason     String?
+  publishedBlogPostId String?
+
+  createdByUserId  String?
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([type])
+}
+
+// ────────────────────────────── Runtime settings ──────────────────────────────
+
+// Single-row table (id is always 1) holding operator-configurable secrets and
+// settings that were previously only settable via .env — lets a SUPER_ADMIN
+// manage them from the admin dashboard instead of needing server access.
+// Each service falls back to its env var when the corresponding column here
+// is null, so nothing breaks for deployments that still prefer env-based config.
+model AppSettings {
+  id                   Int     @id @default(1)
+  zarinpalMerchantId   String?
+  idpayApiKey          String?
+  smsApiKey            String?
+  kavenegarOtpTemplate String?
+  melipayamakApiKey    String?
+  melipayamakSender    String?
+  anthropicApiKey      String?
+  anthropicModel       String?
+  openaiApiKey         String?
+  siteUrl              String?
+
+  // Image Autopilot (Sprint 2) — every field optional; the pipeline degrades
+  // gracefully (skips that step, never fails product preparation) when unset.
+  imageSearchProvider              String? // e.g. "bing" — the generic HTTP adapter's target
+  imageSearchApiKey                String?
+  removeBgApiKey                   String?
+  imageGenerationProvider          String? // defaults to "openai" (DALL·E) when a key is present
+  imageAutopilotMonthlyBudgetToman String? // parsed as a number where used; stored as text like every other setting
+
+  // SEO + Content Autopilot (Sprint 4)
+  // Gates only the LOW-RISK auto-apply path (meta description refinement,
+  // search keywords, image alt text) in SeoSuggestionService — title, H1,
+  // slug/URL, price, and technical specs are NEVER auto-applied regardless
+  // of this setting; they always require explicit admin approval.
+  seoAutoFixEnabled            String? // "true"/"false" as text, like every other setting; unset = off
+  seoContentMonthlyBudgetToman String? // separate pool from Image Autopilot's budget, same parsing convention
+
+  // Sales Autopilot (Sprint 5) — own budget pool, same parsing convention.
+  // Only the DISCOUNT/CAMPAIGN generators call the AI provider; CROSS_SELL
+  // and BUNDLE suggestions are pure rule-based reads of real order data and
+  // never touch this budget.
+  salesAiMonthlyBudgetToman String?
+
+  // News Autopilot (Sprint 6) — own budget pool, same parsing convention.
+  // Discovery/verification are rule-based; only draft translation/rewriting
+  // calls the AI provider.
+  newsMonthlyBudgetToman String?
+
+  // Store-only AI Product Seller (Sprint 6). storeAiStrictCatalogOnly unset
+  // (or any value other than the literal string "false") means STRICT ON —
+  // production must never silently run in a non-strict mode just because
+  // nobody has touched this setting yet. storeAiAllowAddToCart gates only
+  // whether the chat UI *offers* an add-to-cart action on a product card;
+  // the real POST /cart/items endpoint always enforces its own auth/stock
+  // rules regardless of this flag.
+  storeAiEnabled            String? // "true"/"false"; unset = on (same convention as seoAutoFixEnabled's inverse — see resolveStoreAiSettings)
+  storeAiMaxResults         String? // parsed as int; default 5 when unset
+  storeAiMonthlyBudgetToman String?
+  storeAiRateLimitPerMinute String? // parsed as int; default 10 per user when unset
+  storeAiAllowAddToCart     String? // "true"/"false"; unset = on
+  storeAiStrictCatalogOnly  String? // "true"/"false"; unset = on (the required production default)
+
+  // Smart Electrical Consultant (Sprint 7). Unset (or anything other than
+  // the literal string "false") means ON, same convention as every other
+  // enable flag above.
+  electricalConsultantEnabled String?
+
+  // AI Autonomous Mode (Sprint 8) — the ONE setting in this table that
+  // inverts the usual convention: default is OFF, so it only turns on with
+  // the literal string "true". Even when on, it only ever lets AI execute
+  // pre-approved, low-risk, non-financial, non-publishing operations —
+  // price/discount/publish/campaign/stock/purchase/promotional-message
+  // actions always require explicit owner approval regardless of this flag
+  // (enforced in code, not just documented here).
+  aiAutonomousMode String?
+
+  // Owner Daily/Weekly Report — AI Owner Summary (Sprint 8 §8). The AI here
+  // only narrates numbers the backend already computed from real data; it
+  // never computes a number itself. Standard convention: unset (or anything
+  // other than the literal string "false") = ON. Own budget pool, same
+  // parsing convention as every other AI feature's *MonthlyBudgetToman.
+  ownerReportAiSummaryEnabled     String?
+  ownerReportAiMonthlyBudgetToman String?
+
+  // 3D Homepage/Product Experience (Sprint 9) — "false" turns the whole 3D
+  // layer off and falls back to the prior static 2D storefront; unset means
+  // ON, consistent with every other feature-enable flag in this table.
+  site3dEnabled String?
+
+  updatedAt DateTime @updatedAt
+}
+
+// ────────────────────────────── Sales Autopilot (Sprint 5) ──────────────────────────────
+
+enum SalesRecommendationType {
+  CROSS_SELL
+  BUNDLE
+  DISCOUNT
+  CAMPAIGN
+  ABANDONED_CART
+}
+
+enum SalesRecommendationSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum SalesRecommendationStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  ACTIVE
+}
+
+// A single AI/rule-based sales suggestion — cross-sell pairing, bundle
+// packaging, discount idea, or campaign concept. Plain string productIds
+// (no relation) mirrors ProductAiDraft/ProductSeoSuggestion/ContentDraft:
+// no back-reference fields needed on the heavily-used Product model.
+//
+// CRITICAL: approving a suggestion NEVER mutates real commerce state by
+// itself. CROSS_SELL/BUNDLE approval just marks the suggestion reviewed —
+// nothing to apply. DISCOUNT approval never touches Product.basePrice/
+// compareAtPrice or creates a DiscountCode; the admin does that manually
+// through the existing Pricing admin pages, informed by the suggestion.
+// CAMPAIGN has an extra APPROVED -> ACTIVE step, but "ACTIVE" only marks
+// the idea as the admin's current greenlit initiative for their own
+// tracking — there is no campaign-execution/send system in this app, and
+// Sprint 5 does not build one.
+model SalesRecommendation {
+  id       String                      @id @default(cuid())
+  type     SalesRecommendationType
+  severity SalesRecommendationSeverity @default(MEDIUM)
+
+  title          String
+  reason         String // human-readable explanation citing real numbers
+  supportingData Json? // the real numbers the reason was built from
+  productIds     Json? // string[] of real Product ids this suggestion involves
+  payload        Json? // type-specific structured data (bundle items, discount %, campaign copy, ...)
+  confidenceNote String?
+  sources        Json? // for AI-generated reasoning (discount/campaign): what grounded it
+
+  status          SalesRecommendationStatus @default(PENDING_REVIEW)
+  rejectionReason String?
+
+  createdByUserId  String?
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([type])
+}
+
+// ────────────────────────────── Electrical News Autopilot (Sprint 6) ──────────────────────────────
+
+// An admin-configured RSS/Atom feed the discovery job reads from — never a
+// scraped or bypassed page. Fetching is always a plain, robots.txt-respecting
+// GET of a feed URL the admin themselves added; there is no HTML scraping,
+// no login/paywall bypass, and no crawling beyond the feed itself.
+model NewsSource {
+  id       String  @id @default(cuid())
+  name     String
+  feedUrl  String
+  category String? // free-text hint, e.g. "روشنایی", "خانه هوشمند" — informational only
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum NewsItemStatus {
+  DISCOVERED
+  VERIFIED
+  AI_DRAFT
+  PENDING_REVIEW
+  APPROVED
+  PUBLISHED
+  REJECTED
+}
+
+enum NewsImageSource {
+  SOURCE
+  SOURCE_SEARCH
+  AI_GENERATED
+}
+
+// One discovered article, carried through discovery -> verification ->
+// AI draft -> admin approval -> publish. Plain string sourceId (no relation)
+// mirrors every other Sprint 3-5 draft model — no back-reference needed on
+// NewsSource. duplicateOfId points at the NewsItem this one was recognized
+// as a duplicate/near-duplicate of (also a plain string), so a later admin
+// can trace why it was set aside without deleting the row.
+model NewsItem {
+  id          String @id @default(cuid())
+  sourceId    String
+  sourceName  String
+  sourceUrl   String // the original article URL — always kept, always shown
+  contentHash String // sha256 of sourceUrl, for cheap exact-duplicate detection
+
+  rawTitle     String
+  rawSummary   String?
+  language     String? // best-effort tag ("fa", "en", ...) from the feed, informational only
+  publishedAt  DateTime? // the source's own claimed publish date
+  discoveredAt DateTime  @default(now())
+
+  status          NewsItemStatus @default(DISCOVERED)
+  duplicateOfId   String?
+  similarGroupKey String? // normalized-title key used to cluster near-duplicates for admin review
+  confidenceNote  String? // e.g. "تاریخ انتشار در منبع ثبت نشده" — uncertainties the AI/verification step flagged
+
+  // AI-drafted fields (Sultan Noor's own rewritten/translated content —
+  // never the source text verbatim). All null until generateDraft() runs.
+  draftTitle           String?
+  draftExcerpt         String?
+  draftBody            String?
+  category             String?
+  tags                 String?
+  seoTitle             String?
+  metaDescription      String?
+  keywords             String?
+  faq                  Json?
+  confirmingSources    Json? // [{ url, title }] — independent sources that corroborate this story, if any were found
+  suggestedImagePrompt String?
+
+  imageUrl           String?
+  imageSource        NewsImageSource?
+  imageIsAiGenerated Boolean          @default(false)
+  imageAttribution   String?
+
+  publishedBlogPostId String?
+  rejectionReason     String?
+
+  createdByUserId  String?
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([contentHash])
+  @@index([similarGroupKey])
+}
+
+// ────────────────────────────── Smart Electrical Consultant (Sprint 7) ──────────────────────────────
+
+enum ConsultationStatus {
+  COLLECTING_INFO
+  READY
+  CART_ADDED
+}
+
+// One customer's structured need-analysis + generated shopping packages.
+// Deliberately structured fields (not a free chat transcript like
+// AiConversation) — the consultant is a guided wizard, not open chat.
+// Only the fields the customer actually answers are filled in; nothing is
+// ever guessed to fill a gap. packagesJson is a point-in-time snapshot for
+// display/history only — price and stock are always re-validated for real
+// against the Catalog at generatePackages()/addToCart() time, never trusted
+// from this stored snapshot.
+model ElectricalConsultation {
+  id     String             @id @default(cuid())
+  userId String?
+  user   User?              @relation(fields: [userId], references: [id])
+  status ConsultationStatus @default(COLLECTING_INFO)
+
+  areaSqm      Int?
+  bedrooms     Int?
+  livingRooms  Int?
+  kitchens     Int?
+  bathrooms    Int?
+  otherRooms   Int?
+  hasStaircase Boolean?
+  buildingType String?
+
+  // Freeform customer preference text (e.g. "پریزها سفید باشند") plus the
+  // structured filters parsed from it — parsing is rule-based (see
+  // preference-parser.ts), never left to free LLM interpretation.
+  preferencesText  String?
+  preferredBrandId String?
+  cheapestOnly     Boolean @default(false)
+  higherQuality    Boolean @default(false)
+
+  // { ECONOMIC: PackageLine[], STANDARD: PackageLine[], PROFESSIONAL: PackageLine[] },
+  // only the tiers that had at least one real matching product are present.
+  packagesJson        Json?
+  selectedTier        String?
+  cartAddedAt         DateTime?
+  // Item keys the calculator asked for but no real, in-stock Sultan Noor
+  // product could be found for — real, honest "no match" signal for the AI
+  // Control Center, never fabricated.
+  noMatchItemKeysJson Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+// Admin-configured calculation rule for one shopping-list item type (§12).
+// If no active rule exists for an item key, the consultant simply omits
+// that item from the list — it never invents a product/category mapping on
+// its own. categoryId/priorityBrandIds are plain ids (no relation), same
+// convention as NewsItem.sourceId — kept independent of Category/Brand
+// lifecycle so this rule survives even if the admin later renames things.
+model ConsultantItemRule {
+  id      String @id @default(cuid())
+  itemKey String @unique
+  label   String
+
+  categoryId String? // real Category to search within; null = catalog-wide keyword search only
+  keywords   String? // comma-separated fallback search keywords when categoryId is unset or too narrow
+
+  minQuantity      Int     @default(0)
+  maxQuantity      Int?
+  priorityBrandIds String? // comma-separated Brand ids, most-preferred first — drives the PROFESSIONAL/STANDARD tier pick
+
+  // Optional curated allow-list of real Product ids — when set, only these
+  // (still re-validated live for price/stock/PUBLISHED status) are eligible,
+  // narrowing the rule beyond category/keywords.
+  allowedProductIdsJson Json?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ────────────────────────────── Inventory Forecast & Reorder (Sprint 8) ──────────────────────────────
+
+enum ReorderRecommendationStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  EXECUTED
+}
+
+// One AI-suggested restock recommendation for a real, currently-published
+// product with real sales history. Computation (sell-through rate, days
+// remaining, risk level) always happens in InventoryForecastService — this
+// row is only ever created once real thresholds are actually crossed, and
+// is a saved snapshot for the approval workflow, not the live source of
+// truth (the live forecast is always recomputed fresh on read). AI is never
+// allowed to place a purchase order itself: approve() only creates a real
+// DRAFT PurchaseOrder (Sprint 1's existing purchasing system) for staff to
+// review and actually place — EXECUTED means that draft was created,
+// nothing more.
+model ReorderRecommendation {
+  id          String @id @default(cuid())
+  productId   String
+  productName String
+
+  currentStock      Int
+  avgDailySales     Float
+  daysRemaining     Float?
+  riskLevel         String // NORMAL | REVIEW | LOW | CRITICAL
+  suggestedQuantity Int
+  reasoning         String
+
+  status          ReorderRecommendationStatus @default(PENDING_REVIEW)
+  rejectionReason String?
+
+  // Set only once a real PurchaseOrder was actually created on approval —
+  // null if the product has no real supplier on file, in which case the
+  // recommendation stays a pure suggestion (never a fabricated order).
+  purchaseOrderId String?
+
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([productId])
+}

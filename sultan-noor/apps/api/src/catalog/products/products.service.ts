@@ -1,0 +1,584 @@
+import { BadRequestException, Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
+import { Prisma, Role } from '@prisma/client';
+import * as path from 'path';
+import * as XLSX from 'xlsx';
+import AdmZip from 'adm-zip';
+import { PrismaService } from '../../prisma/prisma.service';
+import { SearchService } from '../../search/search.service';
+import { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
+import { deleteUploadedImage, saveUploadedImage } from '../../common/utils/image-upload.util';
+import { ActivityLogService } from '../../activity/activity-log.service';
+import { CreateProductDto, ListProductsQueryDto, UpdateProductDto } from './dto/product.dto';
+
+const IMAGE_EXTENSION_MIME: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+};
+
+const IMAGE_DIR = process.env.PRODUCT_IMAGE_STORAGE_DIR ?? path.join(process.cwd(), 'storage', 'products');
+
+// Unicode-aware: keeps Persian letters/digits as-is (only replacing
+// whitespace/punctuation), so a Persian category or brand name imported
+// from a spreadsheet gets a readable, stable slug instead of an empty
+// string (which a Latin-only slugify would produce).
+export function slugify(value: string): string {
+  const base = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '');
+  return base || `item-${Date.now()}`;
+}
+
+const productInclude = {
+  brand: true,
+  category: true,
+  images: { orderBy: { position: 'asc' as const } },
+  variants: true,
+};
+
+const STAFF_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN, Role.STAFF];
+
+function isStaff(requester: AuthenticatedUser | undefined): boolean {
+  return !!requester && STAFF_ROLES.includes(requester.role as Role);
+}
+
+@Injectable()
+export class ProductsService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(ProductsService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private search: SearchService,
+    private activityLog: ActivityLogService,
+  ) {}
+
+  // Meilisearch only learns about a product on create/update — a catalog
+  // that predates the search index (or an index that was ever wiped) would
+  // otherwise stay permanently unsearchable. Re-syncing everything once per
+  // boot is cheap (indexProduct is a Meilisearch upsert) and self-heals that.
+  async onApplicationBootstrap() {
+    try {
+      const products = await this.prisma.product.findMany({
+        include: { brand: true, category: true, images: { take: 1, orderBy: { position: 'asc' } } },
+      });
+      await Promise.all(products.map((p) => this.search.indexProduct(this.toSearchDoc(p))));
+    } catch (err) {
+      this.logger.warn(`همگام‌سازی اولیه‌ی نمایه‌ی جستجو ناموفق بود: ${(err as Error).message}`);
+    }
+  }
+
+  async list(query: ListProductsQueryDto, requester?: AuthenticatedUser) {
+    const staff = isStaff(requester);
+    const where: Prisma.ProductWhereInput = {
+      categoryId: query.categoryId,
+      brandId: query.brandId,
+      // Only staff may request non-published products; everyone else always
+      // sees the published catalog regardless of what they pass.
+      status: staff ? (query.status ?? 'PUBLISHED') : 'PUBLISHED',
+    };
+    const [items, total] = await Promise.all([
+      this.prisma.product.findMany({
+        where,
+        include: productInclude,
+        skip: query.skip,
+        take: query.take ?? 24,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.product.count({ where }),
+    ]);
+    return { items: await this.withStock(await this.withRatings(items)), total };
+  }
+
+  async get(idOrSlug: string, requester?: AuthenticatedUser) {
+    const staff = isStaff(requester);
+    const product = await this.prisma.product.findFirst({
+      where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }], ...(staff ? {} : { status: 'PUBLISHED' }) },
+      include: {
+        ...productInclude,
+        // Supplier contacts and B2B wholesale price tiers are internal data
+        // — never returned to anonymous/customer callers.
+        ...(staff ? { supplier: true, priceTiers: { include: { customerGroup: true } } } : {}),
+      },
+    });
+    if (!product) throw new NotFoundException('محصول یافت نشد');
+    const [withRating] = await this.withRatings([product]);
+    const [withStock] = await this.withStock([withRating]);
+
+    if (!requester) return withStock;
+
+    // Real, non-fabricated browsing signal for Personalized Recommendations
+    // (Sprint 8) — only recorded for real logged-in customers viewing the
+    // real published catalog, never for staff previewing drafts.
+    if (!staff) {
+      this.activityLog.record({ userId: requester.id, event: 'product.view', metadata: { productId: product.id } }).catch(() => undefined);
+    }
+
+    const subscription = await this.prisma.stockSubscription.findUnique({
+      where: { userId_productId: { userId: requester.id, productId: product.id } },
+    });
+    return { ...withStock, restockSubscribed: !!subscription && !subscription.notifiedAt };
+  }
+
+  // Related products from the same category, excluding the current product —
+  // there is no real purchase-affinity data yet, so this single real rail is
+  // the honest substitute for a separate "complementary products" list.
+  async related(productId: string, categoryId: string | null, take = 8) {
+    if (!categoryId) return [];
+    const items = await this.prisma.product.findMany({
+      where: { categoryId, status: 'PUBLISHED', id: { not: productId } },
+      include: productInclude,
+      take,
+      orderBy: { createdAt: 'desc' },
+    });
+    return this.withStock(await this.withRatings(items));
+  }
+
+  async relatedForProduct(idOrSlug: string, take = 8) {
+    const product = await this.prisma.product.findFirst({
+      where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+      select: { id: true, categoryId: true },
+    });
+    if (!product) return [];
+    return this.related(product.id, product.categoryId, take);
+  }
+
+  // Real-time, fully-hydrated product data (current price, current stock,
+  // real rating) for a set of ids — the single source of truth the Store-
+  // only AI Product Seller (Sprint 6) reads from. Only PUBLISHED products
+  // are ever returned: a search hit for a draft/archived product must never
+  // reach a customer through the AI chat any more than through normal
+  // browsing. Silently drops ids that don't resolve to a real, published
+  // product instead of erroring — the caller decides what "not found" means.
+  async getManyByIds(ids: string[]) {
+    if (ids.length === 0) return [];
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: ids }, status: 'PUBLISHED' },
+      include: productInclude,
+    });
+    const orderById = new Map(ids.map((id, i) => [id, i]));
+    const sorted = products.sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0));
+    return this.withStock(await this.withRatings(sorted));
+  }
+
+  // Real best-sellers computed from actual delivered/paid order quantities —
+  // never a fabricated ranking. Products with zero sales are simply excluded.
+  async bestSellers(take = 8) {
+    const grouped = await this.prisma.orderItem.groupBy({
+      by: ['productId'],
+      _sum: { quantity: true },
+      orderBy: { _sum: { quantity: 'desc' } },
+      take,
+    });
+    if (grouped.length === 0) return [];
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: grouped.map((g) => g.productId) }, status: 'PUBLISHED' },
+      include: productInclude,
+    });
+    const orderById = new Map(grouped.map((g, i) => [g.productId, i]));
+    const sorted = products.sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0));
+    return this.withStock(await this.withRatings(sorted));
+  }
+
+  // Real co-purchase cross-sell: other products that showed up in the same
+  // orders as this one, ranked by combined quantity actually sold together —
+  // not a fabricated pairing. Falls back to the same-category rail when
+  // there's no purchase history yet for this product (new store/product).
+  async frequentlyBoughtWith(idOrSlug: string, take = 6) {
+    const product = await this.prisma.product.findFirst({
+      where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+      select: { id: true, categoryId: true },
+    });
+    if (!product) return [];
+
+    const ordersWithProduct = await this.prisma.orderItem.findMany({
+      where: { productId: product.id },
+      select: { orderId: true },
+      distinct: ['orderId'],
+    });
+    const orderIds = ordersWithProduct.map((o) => o.orderId);
+    if (orderIds.length === 0) return this.related(product.id, product.categoryId, take);
+
+    const grouped = await this.prisma.orderItem.groupBy({
+      by: ['productId'],
+      where: { orderId: { in: orderIds }, productId: { not: product.id } },
+      _sum: { quantity: true },
+      orderBy: { _sum: { quantity: 'desc' } },
+      take,
+    });
+    if (grouped.length === 0) return this.related(product.id, product.categoryId, take);
+
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: grouped.map((g) => g.productId) }, status: 'PUBLISHED' },
+      include: productInclude,
+    });
+    const orderById = new Map(grouped.map((g, i) => [g.productId, i]));
+    const sorted = products.sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0));
+    return this.withStock(await this.withRatings(sorted));
+  }
+
+  // Aggregates real available stock (quantity - reserved) across every
+  // variant/warehouse for a product — the business has a single physical
+  // location, so this total is the honest, non-fabricated stock signal
+  // (no multi-branch breakdown is invented).
+  private async withStock<T extends { id: string; variants: { id: string }[] }>(
+    products: T[],
+  ): Promise<(T & { totalStock: number })[]> {
+    if (products.length === 0) return [];
+    const variantIds = products.flatMap((p) => p.variants.map((v) => v.id));
+    if (variantIds.length === 0) return products.map((p) => ({ ...p, totalStock: 0 }));
+    const stocks = await this.prisma.stock.findMany({
+      where: { productVariantId: { in: variantIds } },
+      select: { productVariantId: true, quantity: true, reservedQuantity: true },
+    });
+    const stockByVariant = new Map<string, number>();
+    for (const s of stocks) {
+      const available = Math.max(0, s.quantity - s.reservedQuantity);
+      stockByVariant.set(s.productVariantId, (stockByVariant.get(s.productVariantId) ?? 0) + available);
+    }
+    return products.map((p) => ({
+      ...p,
+      totalStock: p.variants.reduce((sum, v) => sum + (stockByVariant.get(v.id) ?? 0), 0),
+    }));
+  }
+
+  // Attaches a real average rating + review count computed from approved
+  // reviews (never fabricated) — avgRating is null when there are none yet.
+  private async withRatings<T extends { id: string }>(products: T[]): Promise<(T & { avgRating: number | null; reviewCount: number })[]> {
+    if (products.length === 0) return [];
+    const stats = await this.prisma.review.groupBy({
+      by: ['productId'],
+      where: { productId: { in: products.map((p) => p.id) }, isApproved: true },
+      _avg: { rating: true },
+      _count: { rating: true },
+    });
+    const statsByProduct = new Map(stats.map((s) => [s.productId, s]));
+    return products.map((p) => {
+      const stat = statsByProduct.get(p.id);
+      return {
+        ...p,
+        avgRating: stat?._avg.rating ?? null,
+        reviewCount: stat?._count.rating ?? 0,
+      };
+    });
+  }
+
+  // Internal existence lookup for update()/remove(), which are already staff-gated
+  // at the controller level — must not apply the public PUBLISHED-only filter.
+  private async findRawById(id: string) {
+    const product = await this.prisma.product.findUnique({ where: { id } });
+    if (!product) throw new NotFoundException('محصول یافت نشد');
+    return product;
+  }
+
+  async create(dto: CreateProductDto) {
+    const product = await this.prisma.product.create({
+      data: {
+        name: dto.name,
+        slug: dto.slug,
+        description: dto.description,
+        status: dto.status,
+        brandId: dto.brandId,
+        categoryId: dto.categoryId,
+        supplierId: dto.supplierId,
+        basePrice: dto.basePrice,
+        compareAtPrice: dto.compareAtPrice,
+        minWholesaleQty: dto.minWholesaleQty,
+        metaTitle: dto.metaTitle,
+        metaDescription: dto.metaDescription,
+        variants: dto.variants?.length
+          ? { create: dto.variants.map((v) => ({ sku: v.sku, attributes: v.attributes, price: v.price, weightGrams: v.weightGrams })) }
+          : undefined,
+        images: dto.imageUrls?.length
+          ? { create: dto.imageUrls.map((url, position) => ({ url, position })) }
+          : undefined,
+      },
+      include: productInclude,
+    });
+
+    await this.reindex(product.id);
+    return product;
+  }
+
+  // Bulk product import from a CSV or Excel (.xlsx) spreadsheet. Each row is
+  // one product with a single variant — a real, honest boundary: a
+  // spreadsheet row can't cleanly express a product's full variant matrix,
+  // so multi-variant products still need the normal admin UI afterward.
+  // Rows are processed independently so one bad row (duplicate slug/sku,
+  // missing required field, unknown brand/category name) doesn't abort the
+  // whole batch — the caller gets a per-row report instead.
+  async bulkImport(file: Express.Multer.File, warehouseId?: string) {
+    if (warehouseId) {
+      const warehouse = await this.prisma.warehouse.findUnique({ where: { id: warehouseId } });
+      if (!warehouse) throw new BadRequestException('انبار انتخاب‌شده یافت نشد');
+    }
+
+    let rows: Record<string, unknown>[];
+    try {
+      // A real .xlsx is a ZIP archive (starts with the "PK" magic bytes) and
+      // declares its own encoding internally, so reading it as a buffer is
+      // correct. A .csv is plain text with no such declaration — reading it
+      // as a raw buffer makes SheetJS guess the codepage and mangle any
+      // non-ASCII (Persian) text, so it must be decoded as UTF-8 first and
+      // handed over as a string instead.
+      const isZipBased = file.buffer.length > 2 && file.buffer[0] === 0x50 && file.buffer[1] === 0x4b;
+      const workbook = isZipBased
+        ? XLSX.read(file.buffer, { type: 'buffer' })
+        : XLSX.read(file.buffer.toString('utf-8').replace(/^\uFEFF/, ''), { type: 'string' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    } catch {
+      throw new BadRequestException('فایل قابل خواندن نیست؛ باید یک فایل CSV یا Excel معتبر باشد');
+    }
+    if (rows.length === 0) throw new BadRequestException('فایل هیچ ردیف داده‌ای ندارد');
+
+    const [brands, categories] = await Promise.all([
+      this.prisma.brand.findMany({ select: { id: true, name: true } }),
+      this.prisma.category.findMany({ select: { id: true, name: true } }),
+    ]);
+    const brandByName = new Map(brands.map((b) => [b.name.trim().toLowerCase(), b.id]));
+    const categoryByName = new Map(categories.map((c) => [c.name.trim().toLowerCase(), c.id]));
+
+    const errors: { row: number; message: string }[] = [];
+    let created = 0;
+
+    for (let i = 0; i < rows.length; i++) {
+      // +2: 1 to move from 0-index to 1-index, +1 for the header row —
+      // matches the row number the staff member actually sees in Excel.
+      const rowNumber = i + 2;
+      const row = rows[i];
+      const get = (key: string) => String(row[key] ?? '').trim();
+
+      const name = get('name');
+      const slug = get('slug');
+      const sku = get('sku');
+      if (!name || !slug || !sku) {
+        errors.push({ row: rowNumber, message: 'ستون‌های name، slug و sku الزامی هستند' });
+        continue;
+      }
+      // A row with no real price yet (e.g. an accounting-system export that
+      // never had a sale price) is saved as a hidden draft with a 0 price
+      // instead of being rejected or accidentally published for sale at a
+      // fabricated price — staff can price and publish it later from the
+      // product edit form.
+      const basePriceRaw = get('basePrice');
+      const parsedBasePrice = Number(basePriceRaw);
+      const hasRealPrice = basePriceRaw !== '' && Number.isFinite(parsedBasePrice) && parsedBasePrice > 0;
+      const basePrice = hasRealPrice ? parsedBasePrice : 0;
+      const status: 'PUBLISHED' | 'DRAFT' = hasRealPrice ? 'PUBLISHED' : 'DRAFT';
+
+      const brandName = get('brand');
+      let brandId = brandName ? brandByName.get(brandName.toLowerCase()) : undefined;
+      if (brandName && !brandId) {
+        const brand = await this.prisma.brand.create({ data: { name: brandName, slug: slugify(brandName) } });
+        brandId = brand.id;
+        brandByName.set(brandName.toLowerCase(), brandId);
+      }
+      const categoryName = get('category');
+      let categoryId = categoryName ? categoryByName.get(categoryName.toLowerCase()) : undefined;
+      if (categoryName && !categoryId) {
+        const category = await this.prisma.category.create({ data: { name: categoryName, slug: slugify(categoryName) } });
+        categoryId = category.id;
+        categoryByName.set(categoryName.toLowerCase(), categoryId);
+      }
+
+      const compareAtPriceRaw = get('compareAtPrice');
+      const priceRaw = get('price');
+      const weightGramsRaw = get('weightGrams');
+      const quantityRaw = get('quantity');
+
+      try {
+        const product = await this.create({
+          name,
+          slug,
+          description: get('description') || undefined,
+          status,
+          brandId,
+          categoryId,
+          basePrice,
+          compareAtPrice: compareAtPriceRaw ? Number(compareAtPriceRaw) : undefined,
+          variants: [
+            {
+              sku,
+              attributes: {},
+              price: priceRaw ? Number(priceRaw) : basePrice,
+              weightGrams: weightGramsRaw ? Number(weightGramsRaw) : undefined,
+            },
+          ],
+        });
+
+        const quantity = quantityRaw ? Number(quantityRaw) : 0;
+        if (warehouseId && quantity > 0) {
+          const variant = product.variants[0];
+          await this.prisma.stock.upsert({
+            where: { warehouseId_productVariantId: { warehouseId, productVariantId: variant.id } },
+            create: { warehouseId, productVariantId: variant.id, quantity },
+            update: { quantity: { increment: quantity } },
+          });
+        }
+
+        created++;
+      } catch (err) {
+        // Prisma's unique-constraint error (duplicate slug/sku) is the
+        // expected failure mode here — surface it as a row-level message
+        // rather than a raw Prisma error code.
+        const message =
+          err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002'
+            ? 'اسلاگ یا کد کالا (SKU) تکراری است'
+            : 'خطای غیرمنتظره در ثبت این ردیف';
+        errors.push({ row: rowNumber, message });
+      }
+    }
+
+    return { totalRows: rows.length, created, failed: errors.length, errors };
+  }
+
+  async update(id: string, dto: UpdateProductDto) {
+    await this.findRawById(id);
+    const product = await this.prisma.product.update({
+      where: { id },
+      data: dto,
+      include: productInclude,
+    });
+    await this.reindex(product.id);
+    return product;
+  }
+
+  async remove(id: string) {
+    await this.findRawById(id);
+    await this.prisma.product.delete({ where: { id } });
+    await this.search.removeProduct(id);
+    return { success: true };
+  }
+
+  // baseUrl is the request's own scheme+host (e.g. https://74211.xyz or
+  // http://localhost:4000) — every other place in the app that renders
+  // product.images[].url treats it as a ready-to-use absolute URL, exactly
+  // like the manually-pasted external URLs the imageUrls field already
+  // supports, so this stores one instead of a relative path.
+  async addImage(productId: string, file: Express.Multer.File, baseUrl: string) {
+    await this.findRawById(productId);
+    const filename = saveUploadedImage(file, IMAGE_DIR);
+
+    const position = await this.prisma.productImage.count({ where: { productId } });
+    const image = await this.prisma.productImage.create({
+      data: { productId, url: `${baseUrl}/api/product-images/${filename}`, position },
+    });
+    await this.reindex(productId);
+    return image;
+  }
+
+  // Bulk-attaches product images from a single ZIP: each image file's name
+  // (without extension) is matched case-insensitively against a product
+  // variant's SKU. Meant for staff who have gathered real product photos
+  // (e.g. from a supplier's own catalog) and don't want to attach them one
+  // by one through the single-image upload form.
+  async bulkImportImages(file: Express.Multer.File, baseUrl: string) {
+    let zip: AdmZip;
+    try {
+      zip = new AdmZip(file.buffer);
+    } catch {
+      throw new BadRequestException('فایل قابل خواندن نیست؛ باید یک فایل ZIP معتبر باشد');
+    }
+
+    const entries = zip.getEntries().filter((e) => !e.isDirectory);
+    if (entries.length === 0) throw new BadRequestException('فایل ZIP هیچ عکسی ندارد');
+
+    const variants = await this.prisma.productVariant.findMany({ select: { sku: true, productId: true } });
+    const productIdBySku = new Map(variants.map((v) => [v.sku.toLowerCase(), v.productId]));
+
+    let matched = 0;
+    const unmatched: string[] = [];
+    const touchedProductIds = new Set<string>();
+
+    for (const entry of entries) {
+      const base = path.basename(entry.entryName);
+      const extension = path.extname(base).toLowerCase();
+      const skuKey = path.basename(base, extension).toLowerCase();
+      const mimetype = IMAGE_EXTENSION_MIME[extension];
+      const productId = productIdBySku.get(skuKey);
+
+      if (!mimetype || !productId) {
+        unmatched.push(base);
+        continue;
+      }
+
+      const buffer = entry.getData();
+      const pseudoFile = { buffer, size: buffer.length, mimetype } as Express.Multer.File;
+      try {
+        const filename = saveUploadedImage(pseudoFile, IMAGE_DIR);
+        const position = await this.prisma.productImage.count({ where: { productId } });
+        await this.prisma.productImage.create({
+          data: { productId, url: `${baseUrl}/api/product-images/${filename}`, position },
+        });
+        touchedProductIds.add(productId);
+        matched++;
+      } catch {
+        unmatched.push(base);
+      }
+    }
+
+    await Promise.all(Array.from(touchedProductIds).map((id) => this.reindex(id)));
+    return { totalFiles: entries.length, matched, unmatched };
+  }
+
+  async removeImage(imageId: string) {
+    const image = await this.prisma.productImage.findUnique({ where: { id: imageId } });
+    if (!image) throw new NotFoundException('تصویر یافت نشد');
+
+    await this.prisma.productImage.delete({ where: { id: imageId } });
+    deleteUploadedImage(image.url, IMAGE_DIR);
+    await this.reindex(image.productId);
+    return { success: true };
+  }
+
+  private async reindex(productId: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      include: { brand: true, category: true, images: { take: 1, orderBy: { position: 'asc' } } },
+    });
+    if (!product) return;
+    await this.search.indexProduct(this.toSearchDoc(product));
+  }
+
+  private toSearchDoc(product: {
+    id: string;
+    name: string;
+    slug: string;
+    description: string | null;
+    basePrice: Prisma.Decimal;
+    status: string;
+    brand: { name: string } | null;
+    category: { name: string } | null;
+    images: { url: string }[];
+  }) {
+    return {
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+      description: product.description,
+      brandName: product.brand?.name ?? null,
+      categoryName: product.category?.name ?? null,
+      basePrice: Number(product.basePrice),
+      status: product.status,
+      imageUrl: product.images[0]?.url ?? null,
+    };
+  }
+
+  // Resolves the unit price for a product given the buyer's customer group and
+  // requested quantity — this is what powers B2B tiered / wholesale pricing.
+  async resolveUnitPrice(productId: string, customerGroupId: string | null, quantity: number): Promise<number> {
+    const product = await this.prisma.product.findUniqueOrThrow({ where: { id: productId } });
+
+    if (!customerGroupId) return Number(product.basePrice);
+
+    const tier = await this.prisma.priceTier.findFirst({
+      where: { productId, customerGroupId, minQuantity: { lte: quantity } },
+      orderBy: { minQuantity: 'desc' },
+    });
+
+    return tier ? Number(tier.unitPrice) : Number(product.basePrice);
+  }
+}
