@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Vazirmatn } from "next/font/google";
+import { Vazirmatn, Sora } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
@@ -18,6 +18,14 @@ import { JsonLd, SITE_URL } from "@/lib/jsonld";
 const vazirmatn = Vazirmatn({
   variable: "--font-vazirmatn",
   subsets: ["arabic"],
+});
+
+// Latin/numeral display font for technical labels and headline accents,
+// per the "Architectural Luminescence" design system — Vazirmatn remains
+// the font for all Persian body text.
+const sora = Sora({
+  variable: "--font-sora",
+  subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
@@ -47,7 +55,7 @@ const websiteJsonLd = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fa" dir="rtl" className={`${vazirmatn.variable} h-full antialiased`}>
+    <html lang="fa" dir="rtl" className={`${vazirmatn.variable} ${sora.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
         <JsonLd data={organizationJsonLd} />
         <JsonLd data={websiteJsonLd} />

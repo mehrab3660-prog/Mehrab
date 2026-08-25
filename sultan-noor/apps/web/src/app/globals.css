@@ -12,21 +12,22 @@
    text-brand/60, etc). A var(--brand)-style indirection here silently
    collapses every opacity variant to the fully opaque color instead. */
 @theme {
-  --color-background: #050a12;
-  --color-foreground: #f3f1ea;
-  --color-muted: #9aa3b5;
-  --color-brand: #f5b82e;
-  --color-brand-light: #ffd873;
-  --color-brand-dark: #c9910f;
-  --color-surface: #0b1220;
-  --color-surface-2: #101b2e;
-  --color-border-color: #1c2740;
+  --color-background: #131313;
+  --color-foreground: #e5e2e1;
+  --color-muted: #d3c4b1;
+  --color-brand: #f7bf59;
+  --color-brand-light: #ffdeaa;
+  --color-brand-dark: #d9a441;
+  --color-surface: #1c1b1b;
+  --color-surface-2: #201f1f;
+  --color-border-color: #4f4536;
   --color-accent-cyan: #35d0e0;
   --color-accent-purple: #8b6bf0;
 }
 
 @theme inline {
   --font-sans: var(--font-vazirmatn);
+  --font-display: var(--font-sora), var(--font-vazirmatn);
 }
 
 * {
