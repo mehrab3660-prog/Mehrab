@@ -2,8 +2,10 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { api, ApiError } from "@/lib/api";
+import { easeOut } from "@/lib/motion";
 
 const RESEND_COOLDOWN_SECONDS = 120;
 const OTP_LENGTH = 5;
@@ -48,14 +50,22 @@ function OtpDigitInput({ value, onChange, autoFocus }: { value: string; onChange
     inputRefs.current[Math.min(pasted.length, OTP_LENGTH - 1)]?.focus();
   }
 
+  const center = (OTP_LENGTH - 1) / 2;
+
   return (
     <div dir="ltr" className="flex justify-center gap-2 sm:gap-3">
       {digits.map((digit, i) => (
-        <input
+        <motion.input
           key={i}
-          ref={(el) => {
+          ref={(el: HTMLInputElement | null) => {
             inputRefs.current[i] = el;
           }}
+          // Boxes deal in like a fanned hand of cards — each one starts
+          // tilted away from center and settles flat, staggered left to
+          // right — then behave as plain boxes once settled.
+          initial={{ opacity: 0, y: 18, rotate: (i - center) * 7, scale: 0.9 }}
+          animate={{ opacity: 1, y: 0, rotate: 0, scale: 1 }}
+          transition={{ duration: 0.45, delay: i * 0.07, ease: easeOut }}
           autoFocus={autoFocus && i === 0}
           inputMode="numeric"
           autoComplete="one-time-code"
@@ -66,7 +76,7 @@ function OtpDigitInput({ value, onChange, autoFocus }: { value: string; onChange
           onChange={(e) => handleChange(i, e.target.value)}
           onKeyDown={(e) => handleKeyDown(i, e)}
           onPaste={handlePaste}
-          className="h-14 w-12 rounded-xl border border-border-color bg-background text-center text-xl font-bold text-foreground shadow-inner outline-none transition focus:border-brand focus:shadow-[0_0_0_3px_rgba(245,184,46,0.25)] sm:h-16 sm:w-14"
+          className="h-14 w-12 rounded-xl border border-border-color bg-background text-center text-xl font-bold text-foreground shadow-inner outline-none transition-colors focus:border-brand focus:shadow-[0_0_0_3px_rgba(245,184,46,0.25)] sm:h-16 sm:w-14"
         />
       ))}
     </div>
