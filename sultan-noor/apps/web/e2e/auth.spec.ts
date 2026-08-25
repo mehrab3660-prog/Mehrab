@@ -20,9 +20,11 @@ test.describe("Authentication", () => {
     await page.goto("/login", { waitUntil: "networkidle" });
     await page.fill('input[placeholder*="موبایل"]', phone);
     await page.click('button:has-text("دریافت کد تایید")');
-    await expect(page.locator('input[placeholder="کد تایید"]')).toBeVisible({ timeout: 8000 });
+    const firstDigit = page.locator('[data-testid="otp-digit-input"]').first();
+    await expect(firstDigit).toBeVisible({ timeout: 8000 });
 
-    await page.fill('input[placeholder="کد تایید"]', "00000");
+    await firstDigit.click();
+    await page.keyboard.type("00000");
     await page.click('button:has-text("تایید و ورود")');
 
     await expect(page.locator("text=کد تایید نادرست است")).toBeVisible();

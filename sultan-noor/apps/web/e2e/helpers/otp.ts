@@ -30,10 +30,12 @@ export async function loginViaOtp(page: Page, phone: string, fullName = "کار�
   await page.goto("/login", { waitUntil: "networkidle" });
   await page.fill('input[placeholder*="موبایل"]', phone);
   await page.click('button:has-text("دریافت کد تایید")');
-  await expect(page.locator('input[placeholder="کد تایید"]')).toBeVisible({ timeout: 8000 });
+  const firstDigit = page.locator('[data-testid="otp-digit-input"]').first();
+  await expect(firstDigit).toBeVisible({ timeout: 8000 });
 
   const otp = latestOtp(phone);
-  await page.fill('input[placeholder="کد تایید"]', otp);
+  await firstDigit.click();
+  await page.keyboard.type(otp);
   // The name field only renders for a phone that isn't registered yet (see
   // GET /auth/user-exists) — an existing account (e.g. the seeded super
   // admin) skips straight to the code, so only fill it in if it's there.

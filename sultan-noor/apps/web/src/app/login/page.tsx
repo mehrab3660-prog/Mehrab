@@ -1,11 +1,77 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { api, ApiError } from "@/lib/api";
 
 const RESEND_COOLDOWN_SECONDS = 120;
+const OTP_LENGTH = 5;
+
+// Masks a phone for display without hiding which number the SMS actually
+// went to, e.g. 09123456789 -> 0912•••6789.
+function maskPhone(phone: string) {
+  if (phone.length < 8) return phone;
+  return `${phone.slice(0, 4)}•••${phone.slice(-4)}`;
+}
+
+// A row of individually-boxed digit inputs bound to the same `code` string
+// as a plain text field would be — auto-advances on type, steps back on
+// backspace, and accepts a full pasted code in one go.
+function OtpDigitInput({ value, onChange, autoFocus }: { value: string; onChange: (v: string) => void; autoFocus?: boolean }) {
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const digits = Array.from({ length: OTP_LENGTH }, (_, i) => value[i] ?? "");
+
+  function setDigit(index: number, digit: string) {
+    const next = digits.slice();
+    next[index] = digit;
+    onChange(next.join("").slice(0, OTP_LENGTH));
+  }
+
+  function handleChange(index: number, raw: string) {
+    const digit = raw.replace(/\D/g, "").slice(-1);
+    setDigit(index, digit);
+    if (digit && index < OTP_LENGTH - 1) inputRefs.current[index + 1]?.focus();
+  }
+
+  function handleKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Backspace" && !digits[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, OTP_LENGTH);
+    if (!pasted) return;
+    e.preventDefault();
+    onChange(pasted);
+    inputRefs.current[Math.min(pasted.length, OTP_LENGTH - 1)]?.focus();
+  }
+
+  return (
+    <div dir="ltr" className="flex justify-center gap-2 sm:gap-3">
+      {digits.map((digit, i) => (
+        <input
+          key={i}
+          ref={(el) => {
+            inputRefs.current[i] = el;
+          }}
+          autoFocus={autoFocus && i === 0}
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={1}
+          data-testid="otp-digit-input"
+          aria-label={`رقم ${i + 1} کد تایید`}
+          value={digit}
+          onChange={(e) => handleChange(i, e.target.value)}
+          onKeyDown={(e) => handleKeyDown(i, e)}
+          onPaste={handlePaste}
+          className="h-14 w-12 rounded-xl border border-border-color bg-background text-center text-xl font-bold text-foreground shadow-inner outline-none transition focus:border-brand focus:shadow-[0_0_0_3px_rgba(245,184,46,0.25)] sm:h-16 sm:w-14"
+        />
+      ))}
+    </div>
+  );
+}
 
 function LoginPageContent() {
   const { requestOtp, verifyOtp } = useAuth();
@@ -119,15 +185,15 @@ function LoginPageContent() {
           </button>
         </form>
       ) : (
-        <form onSubmit={handleVerifyOtp} className="space-y-4">
-          <p className="text-sm text-foreground/60">کد تایید ارسال‌شده به {phone} را وارد کنید.</p>
-          <input
-            required
-            placeholder="کد تایید"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            className="w-full rounded-lg border border-border-color bg-background px-3 py-2"
-          />
+        <form onSubmit={handleVerifyOtp} className="space-y-5 rounded-2xl border border-border-color bg-surface p-6 shadow-lg">
+          <div className="text-center">
+            <h2 className="text-lg font-bold">کد تایید را وارد کنید</h2>
+            <p className="mt-1 text-sm text-foreground/60">
+              یک کد {OTP_LENGTH} رقمی به شماره‌ی <span className="font-bold text-foreground">{maskPhone(phone)}</span> پیامک شد.
+            </p>
+          </div>
+
+          <OtpDigitInput value={code} onChange={setCode} autoFocus />
 
           {isNewUser && (
             <>
