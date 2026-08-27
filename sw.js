@@ -1,13 +1,13 @@
 const CACHE_NAME = "invoice-archive-v2";
 const SHELL_FILES = [
-  "/",
-  "/style.css",
-  "/app.js",
-  "/manifest.json",
-  "/icons/icon-180.png",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
-  "/fonts/estedad-arabic.woff2",
+  "./",
+  "style.css",
+  "app.js",
+  "manifest.json",
+  "icons/icon-180.png",
+  "icons/icon-192.png",
+  "icons/icon-512.png",
+  "fonts/estedad-arabic.woff2",
 ];
 
 self.addEventListener("install", (event) => {
