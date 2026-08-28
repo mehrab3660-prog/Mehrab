@@ -186,7 +186,7 @@ let state = { invoices: [], filter: "", supplierFilter: null, editingId: null, p
 
 const $ = (sel) => document.querySelector(sel);
 
-const screens = { list: $("#screen-list"), form: $("#screen-form"), detail: $("#screen-detail") };
+const screens = { list: $("#screen-list"), form: $("#screen-form"), detail: $("#screen-detail"), settings: $("#screen-settings") };
 
 function showScreen(name) {
   Object.values(screens).forEach((s) => s.classList.add("hidden"));
@@ -713,28 +713,186 @@ $("#search-input").addEventListener("input", (e) => {
   renderList();
 });
 
-$("#btn-menu").addEventListener("click", () => $("#menu-overlay").classList.remove("hidden"));
-$("#menu-cancel").addEventListener("click", () => $("#menu-overlay").classList.add("hidden"));
-$("#menu-overlay").addEventListener("click", (e) => {
-  if (e.target.id === "menu-overlay") $("#menu-overlay").classList.add("hidden");
+$("#btn-menu").addEventListener("click", () => {
+  showScreen("settings");
+  updateFaceIdUI();
 });
+$("#settings-back").addEventListener("click", () => showScreen("list"));
 $("#btn-export").addEventListener("click", async () => {
-  $("#menu-overlay").classList.add("hidden");
   await exportBackup();
 });
 $("#import-input").addEventListener("change", async (e) => {
   const file = e.target.files[0];
-  $("#menu-overlay").classList.add("hidden");
   if (file) await importBackup(file);
   e.target.value = "";
 });
 
-const APP_PASSWORD = "3660";
+const DEFAULT_PASSWORD = "3660";
+
+function getAppPassword() {
+  return localStorage.getItem("appPassword") || DEFAULT_PASSWORD;
+}
+
+function setAppPassword(pw) {
+  localStorage.setItem("appPassword", pw);
+}
+
+$("#settings-change-password").addEventListener("click", () => {
+  $("#pw-current").value = "";
+  $("#pw-new").value = "";
+  $("#pw-confirm").value = "";
+  $("#pw-error").classList.add("hidden");
+  $("#password-change-overlay").classList.remove("hidden");
+});
+$("#pw-cancel").addEventListener("click", () => {
+  $("#password-change-overlay").classList.add("hidden");
+});
+$("#password-change-overlay").addEventListener("click", (e) => {
+  if (e.target.id === "password-change-overlay") $("#password-change-overlay").classList.add("hidden");
+});
+$("#pw-save").addEventListener("click", () => {
+  const cur = $("#pw-current").value;
+  const next = $("#pw-new").value;
+  const confirm = $("#pw-confirm").value;
+  const errEl = $("#pw-error");
+
+  if (cur !== getAppPassword()) {
+    errEl.textContent = "رمز فعلی درست نیست";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  if (!next || next.length < 3) {
+    errEl.textContent = "رمز جدید باید حداقل ۳ کاراکتر باشه";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  if (next !== confirm) {
+    errEl.textContent = "تکرار رمز جدید مطابقت نداره";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  setAppPassword(next);
+  $("#password-change-overlay").classList.add("hidden");
+  toast("رمز عبور تغییر کرد");
+});
+
+/* ---------- Face ID / Touch ID (WebAuthn) ---------- */
+const FACE_ID_CRED_KEY = "faceIdCredentialId";
+
+function b64urlToBytes(b64url) {
+  const b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(b64 + "===".slice((b64.length + 3) % 4));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+function bytesToB64url(bytes) {
+  let bin = "";
+  const arr = new Uint8Array(bytes);
+  for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+async function faceIdAvailable() {
+  try {
+    return !!(window.PublicKeyCredential && (await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()));
+  } catch (e) {
+    return false;
+  }
+}
+
+function faceIdEnabled() {
+  return !!localStorage.getItem(FACE_ID_CRED_KEY);
+}
+
+async function registerFaceId() {
+  const challenge = crypto.getRandomValues(new Uint8Array(32));
+  const userId = crypto.getRandomValues(new Uint8Array(16));
+  const credential = await navigator.credentials.create({
+    publicKey: {
+      challenge,
+      rp: { name: "آرشیو فاکتور" },
+      user: { id: userId, name: "shop-owner", displayName: "آرشیو فاکتور" },
+      pubKeyCredParams: [
+        { type: "public-key", alg: -7 },
+        { type: "public-key", alg: -257 },
+      ],
+      authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+      timeout: 60000,
+      attestation: "none",
+    },
+  });
+  if (!credential) throw new Error("no credential");
+  localStorage.setItem(FACE_ID_CRED_KEY, bytesToB64url(new Uint8Array(credential.rawId)));
+}
+
+async function verifyFaceId() {
+  const credId = localStorage.getItem(FACE_ID_CRED_KEY);
+  if (!credId) return false;
+  const challenge = crypto.getRandomValues(new Uint8Array(32));
+  const assertion = await navigator.credentials.get({
+    publicKey: {
+      challenge,
+      allowCredentials: [{ id: b64urlToBytes(credId), type: "public-key", transports: ["internal"] }],
+      userVerification: "required",
+      timeout: 60000,
+    },
+  });
+  return !!assertion;
+}
+
+async function updateFaceIdUI() {
+  const available = await faceIdAvailable();
+  const row = $("#settings-faceid-row");
+  const note = $("#settings-faceid-unavailable");
+  const toggle = $("#settings-faceid-toggle");
+  if (!available) {
+    row.classList.add("hidden");
+    note.classList.remove("hidden");
+  } else {
+    row.classList.remove("hidden");
+    note.classList.add("hidden");
+    const enabled = faceIdEnabled();
+    toggle.classList.toggle("active", enabled);
+    toggle.setAttribute("aria-checked", String(enabled));
+  }
+  $("#lock-faceid-btn").classList.toggle("hidden", !(available && faceIdEnabled()));
+}
+
+$("#settings-faceid-toggle").addEventListener("click", async () => {
+  const currentlyEnabled = faceIdEnabled();
+  if (currentlyEnabled) {
+    localStorage.removeItem(FACE_ID_CRED_KEY);
+    await updateFaceIdUI();
+    toast("Face ID غیرفعال شد");
+    return;
+  }
+  try {
+    await registerFaceId();
+    await updateFaceIdUI();
+    toast("Face ID فعال شد");
+  } catch (e) {
+    toast("فعال‌سازی Face ID انجام نشد");
+  }
+});
+
+$("#lock-faceid-btn").addEventListener("click", async () => {
+  try {
+    const ok = await verifyFaceId();
+    if (ok) {
+      $("#screen-lock").classList.add("hidden");
+      $("#lock-error").classList.add("hidden");
+      showScreen("list");
+    }
+  } catch (e) {
+    /* کاربر لغو کرد یا شناسایی نشد */
+  }
+});
 
 $("#lock-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const val = $("#lock-input").value;
-  if (val === APP_PASSWORD) {
+  if (val === getAppPassword()) {
     $("#screen-lock").classList.add("hidden");
     $("#lock-error").classList.add("hidden");
     showScreen("list");
@@ -745,6 +903,7 @@ $("#lock-form").addEventListener("submit", (e) => {
   }
 });
 $("#lock-input").focus();
+updateFaceIdUI();
 
 refreshList();
 
