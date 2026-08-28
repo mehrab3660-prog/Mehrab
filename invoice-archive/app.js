@@ -310,8 +310,40 @@ function renderList() {
       </div>
     `;
     card.addEventListener("click", () => openDetail(inv.id));
+    if (inv.photo) {
+      const thumbNode = card.querySelector(".thumb");
+      thumbNode.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openViewer(inv.photo);
+      });
+    }
     container.appendChild(card);
   }
+}
+
+function openViewer(blob) {
+  if (!blob) return;
+  const content = $("#viewer-content");
+  content.innerHTML = "";
+  if (isImageFile(blob)) {
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(blob);
+    img.alt = "";
+    content.appendChild(img);
+  } else if (isPdfFile(blob)) {
+    const iframe = document.createElement("iframe");
+    iframe.src = URL.createObjectURL(blob);
+    iframe.title = "فایل";
+    content.appendChild(iframe);
+  } else {
+    return;
+  }
+  $("#viewer-overlay").classList.remove("hidden");
+}
+
+function closeViewer() {
+  $("#viewer-overlay").classList.add("hidden");
+  $("#viewer-content").innerHTML = "";
 }
 
 function escapeHtml(s) {
@@ -456,11 +488,13 @@ async function saveForm() {
 }
 
 let currentDetailId = null;
+let currentDetailPhoto = null;
 
 async function openDetail(id) {
   const inv = await dbGet(id);
   if (!inv) return;
   currentDetailId = id;
+  currentDetailPhoto = inv.photo || null;
 
   const img = $("#detail-photo");
   const pdfWrap = $("#detail-pdf-wrap");
@@ -667,6 +701,12 @@ $("#btn-edit").addEventListener("click", async () => {
 $("#btn-delete").addEventListener("click", deleteCurrentDetail);
 $("#btn-share").addEventListener("click", shareCurrentDetail);
 $("#btn-download").addEventListener("click", downloadCurrentFile);
+$("#detail-photo").addEventListener("click", () => openViewer(currentDetailPhoto));
+
+$("#viewer-close").addEventListener("click", closeViewer);
+$("#viewer-content").addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) closeViewer();
+});
 
 $("#search-input").addEventListener("input", (e) => {
   state.filter = e.target.value;
