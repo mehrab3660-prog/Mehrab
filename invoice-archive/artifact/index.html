@@ -1747,24 +1747,36 @@ async function importBackup(file) {
     return;
   }
   const items = data.items || [];
-  let failedPhotos = 0;
+  let repairedPhotos = 0;
+  let brokenPhotos = 0;
   for (const it of items) {
     let photo = null;
     if (it.photo) {
       try {
-        photo = base64ToBlob(it.photo);
-        if (!photo.size) throw new Error("empty blob");
+        const rawBlob = base64ToBlob(it.photo);
+        if (!rawBlob.size) throw new Error("empty blob");
+        if (rawBlob.type && rawBlob.type.startsWith("image/")) {
+          try {
+            photo = await normalizeImageFile(rawBlob);
+            repairedPhotos += 1;
+          } catch (e2) {
+            photo = rawBlob;
+            brokenPhotos += 1;
+          }
+        } else {
+          photo = rawBlob;
+        }
       } catch (e) {
         photo = null;
-        failedPhotos += 1;
+        brokenPhotos += 1;
       }
     }
     await dbPut({ title: it.title, amount: it.amount, date: it.date, note: it.note, photo, updatedAt: Date.now() });
   }
   await refreshList();
   toast(
-    failedPhotos > 0
-      ? `${items.length} فاکتور بازیابی شد (${failedPhotos} عکس/فایل خراب بود)`
+    brokenPhotos > 0
+      ? `${items.length} فاکتور بازیابی شد (${brokenPhotos} عکس/فایل هنوز خراب بود)`
       : `${items.length} فاکتور بازیابی شد`
   );
 }
