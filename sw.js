@@ -1,4 +1,4 @@
-const CACHE_NAME = "invoice-archive-v3";
+const CACHE_NAME = "invoice-archive-v4";
 const SHELL_FILES = [
   "./",
   "style.css",
