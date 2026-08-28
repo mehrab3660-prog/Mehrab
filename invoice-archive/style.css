@@ -672,3 +672,107 @@
 
 .invoice-card .thumb { cursor: zoom-in; }
 #detail-photo { cursor: zoom-in; }
+
+.lock-faceid-btn { margin-top: 12px; width: 100%; max-width: 280px; }
+
+.settings-body {
+  padding: 18px;
+  padding-bottom: calc(var(--safe-bottom) + 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.settings-section { display: flex; flex-direction: column; gap: 8px; }
+
+.settings-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-muted);
+  margin: 0 4px;
+}
+
+.settings-card {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.settings-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  font-family: inherit;
+  font-size: 14.5px;
+  color: var(--ink);
+  text-align: right;
+  cursor: pointer;
+}
+.settings-card > .settings-row:last-child { border-bottom: none; }
+.settings-row-static { cursor: default; }
+
+.settings-row-icon {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--ink-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.settings-row-icon svg { width: 17px; height: 17px; }
+.settings-icon-danger { background: var(--danger-soft); color: var(--danger); }
+.settings-icon-accent { background: var(--surface-2); color: var(--accent); }
+.settings-icon-gold { background: var(--gold-soft); color: var(--gold-ink); }
+
+.settings-row-label { flex: 1; }
+.settings-row-value { color: var(--ink-muted); font-variant-numeric: tabular-nums; font-size: 13px; }
+.settings-chevron { width: 16px; height: 16px; color: var(--ink-muted); flex-shrink: 0; }
+
+.settings-note {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  padding: 10px 14px;
+  margin: 0;
+}
+
+.settings-toggle {
+  flex-shrink: 0;
+  width: 42px;
+  height: 25px;
+  border-radius: 999px;
+  background: var(--border);
+  border: none;
+  position: relative;
+  cursor: pointer;
+  padding: 0;
+}
+.settings-toggle-knob {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  transition: right 0.15s ease;
+}
+.settings-toggle.active { background: var(--accent); }
+.settings-toggle.active .settings-toggle-knob { right: 19px; }
+
+.password-change-body {
+  padding: 6px 20px calc(var(--safe-bottom) + 10px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.password-change-title { font-family: "Noto Naskh Arabic", "Estedad", serif; font-size: 18px; margin: 0 0 4px; text-align: center; }

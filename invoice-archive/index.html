@@ -30,12 +30,16 @@
       <button type="submit" class="btn primary">ورود</button>
     </form>
     <p id="lock-error" class="lock-error hidden">رمز اشتباهه، دوباره امتحان کنید</p>
+    <button type="button" id="lock-faceid-btn" class="btn primary lock-faceid-btn hidden">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M4 16v2a2 2 0 0 0 2 2h2M20 8V6a2 2 0 0 0-2-2h-2M20 16v2a2 2 0 0 1-2 2h-2M9 10v1M15 10v1M9 15c.7.7 1.7 1 3 1s2.3-.3 3-1"/></svg>
+      ورود با Face ID
+    </button>
   </div>
 </section>
 
 <section id="screen-list" class="screen hidden">
   <header class="topbar">
-    <button id="btn-menu" class="icon-btn" title="پشتیبان‌گیری" aria-label="منو">
+    <button id="btn-menu" class="icon-btn" title="تنظیمات" aria-label="تنظیمات">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.2" fill="currentColor" stroke="none"/></svg>
     </button>
     <h1>آرشیو فاکتور</h1>
@@ -161,18 +165,99 @@
   </div>
 </section>
 
-<div id="menu-overlay" class="overlay hidden">
-  <div class="sheet">
-    <button id="btn-export" class="sheet-item">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg>
-      خروجی گرفتن از همه‌ی فاکتورها (پشتیبان)
+<section id="screen-settings" class="screen hidden">
+  <header class="topbar">
+    <button id="settings-back" class="icon-btn" aria-label="بازگشت">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M5 12l6-6M5 12l6 6"/></svg>
     </button>
-    <label for="import-input" class="sheet-item">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"/><path d="m7 16 5 5 5-5"/><path d="M5 3h14"/></svg>
-      بازیابی از فایل پشتیبان
-    </label>
-    <input type="file" id="import-input" accept="application/json" class="hidden">
-    <button id="menu-cancel" class="sheet-item cancel">انصراف</button>
+    <h1>تنظیمات</h1>
+    <span class="icon-btn" style="visibility:hidden">&nbsp;</span>
+  </header>
+
+  <div class="settings-body">
+    <section class="settings-section">
+      <h2 class="settings-label">امنیت</h2>
+      <div class="settings-card">
+        <button id="settings-change-password" class="settings-row">
+          <span class="settings-row-icon settings-icon-danger">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.5 12.5 19 4M19 4h-4M19 4v4"/></svg>
+          </span>
+          <span class="settings-row-label">تغییر رمز عبور</span>
+          <svg class="settings-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+        </button>
+        <div id="settings-faceid-row" class="settings-row settings-row-static hidden">
+          <span class="settings-row-icon settings-icon-accent">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M4 16v2a2 2 0 0 0 2 2h2M20 8V6a2 2 0 0 0-2-2h-2M20 16v2a2 2 0 0 1-2 2h-2M9 10v1M15 10v1M9 15c.7.7 1.7 1 3 1s2.3-.3 3-1"/></svg>
+          </span>
+          <span class="settings-row-label">ورود با Face ID</span>
+          <button type="button" id="settings-faceid-toggle" class="settings-toggle" role="switch" aria-checked="false"><span class="settings-toggle-knob"></span></button>
+        </div>
+        <p id="settings-faceid-unavailable" class="settings-note hidden">Face ID/Touch ID روی این مرورگر در دسترس نیست.</p>
+      </div>
+    </section>
+
+    <section class="settings-section">
+      <h2 class="settings-label">پشتیبان‌گیری</h2>
+      <div class="settings-card">
+        <button id="btn-export" class="settings-row">
+          <span class="settings-row-icon settings-icon-gold">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg>
+          </span>
+          <span class="settings-row-label">خروجی گرفتن از همه‌ی فاکتورها</span>
+          <svg class="settings-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+        </button>
+        <label for="import-input" class="settings-row">
+          <span class="settings-row-icon settings-icon-gold">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"/><path d="m7 16 5 5 5-5"/><path d="M5 3h14"/></svg>
+          </span>
+          <span class="settings-row-label">بازیابی از فایل پشتیبان</span>
+          <svg class="settings-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+        </label>
+        <input type="file" id="import-input" accept="application/json" class="hidden">
+      </div>
+    </section>
+
+    <section class="settings-section">
+      <h2 class="settings-label">درباره</h2>
+      <div class="settings-card">
+        <div class="settings-row settings-row-static">
+          <span class="settings-row-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="8" r="0.6" fill="currentColor" stroke="none"/></svg>
+          </span>
+          <span class="settings-row-label">آرشیو فاکتور</span>
+        </div>
+        <div class="settings-row settings-row-static">
+          <span class="settings-row-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 1 0 5.4L12 14.4l-2.7-2.7a4 4 0 1 1 5.4-5.4Z"/><path d="M9.3 17.7a4 4 0 0 1 0-5.4L12 9.6l2.7 2.7a4 4 0 1 1-5.4 5.4Z"/></svg>
+          </span>
+          <span class="settings-row-label">نسخه</span>
+          <span class="settings-row-value">۱.۱.۰</span>
+        </div>
+      </div>
+    </section>
+  </div>
+</section>
+
+<div id="password-change-overlay" class="overlay hidden">
+  <div class="sheet">
+    <div class="password-change-body">
+      <h2 class="password-change-title">تغییر رمز عبور</h2>
+      <div class="field">
+        <label for="pw-current">رمز فعلی</label>
+        <input type="password" id="pw-current" inputmode="numeric" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="pw-new">رمز جدید</label>
+        <input type="password" id="pw-new" inputmode="numeric" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="pw-confirm">تکرار رمز جدید</label>
+        <input type="password" id="pw-confirm" inputmode="numeric" autocomplete="off">
+      </div>
+      <p id="pw-error" class="lock-error hidden"></p>
+      <button type="button" id="pw-save" class="btn primary">ذخیره رمز جدید</button>
+      <button type="button" id="pw-cancel" class="sheet-item cancel">انصراف</button>
+    </div>
   </div>
 </div>
 
