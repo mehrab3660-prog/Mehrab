@@ -316,6 +316,18 @@ function renderList() {
         e.stopPropagation();
         openViewer(inv.photo);
       });
+      if (thumbNode.tagName === "IMG") {
+        thumbNode.addEventListener("error", () => {
+          const fallback = document.createElement("div");
+          fallback.className = "thumb pdf-thumb";
+          fallback.textContent = "!";
+          fallback.addEventListener("click", (e) => {
+            e.stopPropagation();
+            openViewer(inv.photo);
+          });
+          thumbNode.replaceWith(fallback);
+        }, { once: true });
+      }
     }
     container.appendChild(card);
   }
@@ -327,6 +339,9 @@ function openViewer(blob) {
   content.innerHTML = "";
   if (isImageFile(blob)) {
     const img = document.createElement("img");
+    img.onerror = () => {
+      content.innerHTML = '<p class="viewer-error">عکس خراب شده و قابل نمایش نیست</p>';
+    };
     img.src = URL.createObjectURL(blob);
     img.alt = "";
     content.appendChild(img);
@@ -507,6 +522,12 @@ async function openDetail(id) {
   pdfFrame.src = "about:blank";
 
   if (isImageFile(inv.photo)) {
+    img.onerror = () => {
+      img.classList.add("hidden");
+      $("#detail-file-badge").textContent = "!";
+      $("#detail-file-name").textContent = "عکس خراب شده و قابل نمایش نیست";
+      generic.classList.remove("hidden");
+    };
     img.src = URL.createObjectURL(inv.photo);
     img.classList.remove("hidden");
   } else if (isPdfFile(inv.photo)) {
@@ -658,11 +679,26 @@ async function importBackup(file) {
     return;
   }
   const items = data.items || [];
+  let failedPhotos = 0;
   for (const it of items) {
-    await dbPut({ title: it.title, amount: it.amount, date: it.date, note: it.note, photo: it.photo ? base64ToBlob(it.photo) : null, updatedAt: Date.now() });
+    let photo = null;
+    if (it.photo) {
+      try {
+        photo = base64ToBlob(it.photo);
+        if (!photo.size) throw new Error("empty blob");
+      } catch (e) {
+        photo = null;
+        failedPhotos += 1;
+      }
+    }
+    await dbPut({ title: it.title, amount: it.amount, date: it.date, note: it.note, photo, updatedAt: Date.now() });
   }
   await refreshList();
-  toast(`${items.length} فاکتور بازیابی شد`);
+  toast(
+    failedPhotos > 0
+      ? `${items.length} فاکتور بازیابی شد (${failedPhotos} عکس/فایل خراب بود)`
+      : `${items.length} فاکتور بازیابی شد`
+  );
 }
 
 $("#btn-add").addEventListener("click", () => openForm(null));
