@@ -1401,7 +1401,7 @@ function renderList() {
   }
 }
 
-function openViewer(blob) {
+async function openViewer(blob) {
   if (!blob) return;
   const content = $("#viewer-content");
   content.innerHTML = "";
@@ -1414,10 +1414,14 @@ function openViewer(blob) {
     img.alt = "";
     content.appendChild(img);
   } else if (isPdfFile(blob)) {
-    const iframe = document.createElement("iframe");
-    iframe.src = URL.createObjectURL(blob);
-    iframe.title = "فایل";
-    content.appendChild(iframe);
+    if (await isPdfBlobValid(blob)) {
+      const iframe = document.createElement("iframe");
+      iframe.src = URL.createObjectURL(blob);
+      iframe.title = "فایل";
+      content.appendChild(iframe);
+    } else {
+      content.innerHTML = '<p class="viewer-error">فایل PDF خراب شده و قابل نمایش نیست</p>';
+    }
   } else {
     return;
   }
@@ -1599,8 +1603,14 @@ async function openDetail(id) {
     img.src = URL.createObjectURL(inv.photo);
     img.classList.remove("hidden");
   } else if (isPdfFile(inv.photo)) {
-    pdfFrame.src = URL.createObjectURL(inv.photo);
-    pdfWrap.classList.remove("hidden");
+    if (await isPdfBlobValid(inv.photo)) {
+      pdfFrame.src = URL.createObjectURL(inv.photo);
+      pdfWrap.classList.remove("hidden");
+    } else {
+      $("#detail-file-badge").textContent = "!";
+      $("#detail-file-name").textContent = "فایل PDF خراب شده و قابل نمایش نیست";
+      generic.classList.remove("hidden");
+    }
   } else if (inv.photo) {
     $("#detail-file-badge").textContent = fileBadgeLabel(inv.photo);
     $("#detail-file-name").textContent = fileDisplayName(inv.photo);
@@ -1763,6 +1773,9 @@ async function importBackup(file) {
             photo = rawBlob;
             brokenPhotos += 1;
           }
+        } else if (rawBlob.type === "application/pdf") {
+          photo = rawBlob;
+          if (!(await isPdfBlobValid(rawBlob))) brokenPhotos += 1;
         } else {
           photo = rawBlob;
         }
@@ -1820,6 +1833,19 @@ function normalizeImageFile(file) {
   });
 }
 
+async function isPdfBlobValid(blob) {
+  try {
+    if (!blob || !blob.size) return false;
+    const buf = await blob.slice(0, 5).arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let header = "";
+    for (let i = 0; i < bytes.length; i++) header += String.fromCharCode(bytes[i]);
+    return header === "%PDF-";
+  } catch (e) {
+    return false;
+  }
+}
+
 $("#photo-input").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -1832,6 +1858,13 @@ $("#photo-input").addEventListener("change", async (e) => {
       e.target.value = "";
       return;
     }
+  } else if (file.type === "application/pdf") {
+    if (!(await isPdfBlobValid(file))) {
+      toast("این فایل PDF سالم نیست، یه فایل دیگه انتخاب کنید");
+      e.target.value = "";
+      return;
+    }
+    state.photoBlob = file;
   } else {
     state.photoBlob = file;
   }
