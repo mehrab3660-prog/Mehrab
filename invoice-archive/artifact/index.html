@@ -1784,10 +1784,45 @@ $("#date-picker-overlay").addEventListener("click", (e) => {
   if (e.target.id === "date-picker-overlay") closeDatePicker();
 });
 
-$("#photo-input").addEventListener("change", (e) => {
+function normalizeImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error("canvas export failed"));
+      }, "image/jpeg", 0.9);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("decode failed"));
+    };
+    img.src = url;
+  });
+}
+
+$("#photo-input").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  state.photoBlob = file;
+  if (file.type && file.type.startsWith("image/")) {
+    toast("در حال آماده‌سازی عکس...");
+    try {
+      state.photoBlob = await normalizeImageFile(file);
+    } catch (err) {
+      toast("این عکس قابل خوندن نیست، یه عکس دیگه انتخاب کنید");
+      e.target.value = "";
+      return;
+    }
+  } else {
+    state.photoBlob = file;
+  }
   state.photoRemoved = false;
   updatePhotoPreview();
 });
