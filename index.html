@@ -15,7 +15,22 @@
 </head>
 <body>
 
-<section id="screen-list" class="screen">
+<section id="screen-lock" class="screen">
+  <div class="lock-body">
+    <div class="lock-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+    </div>
+    <h1>آرشیو فاکتور</h1>
+    <p class="muted">برای باز کردن، رمز رو وارد کنید</p>
+    <form id="lock-form" autocomplete="off">
+      <input type="password" id="lock-input" inputmode="numeric" placeholder="رمز عبور" autocomplete="off">
+      <button type="submit" class="btn primary">ورود</button>
+    </form>
+    <p id="lock-error" class="lock-error hidden">رمز اشتباهه، دوباره امتحان کنید</p>
+  </div>
+</section>
+
+<section id="screen-list" class="screen hidden">
   <header class="topbar">
     <button id="btn-menu" class="icon-btn" title="پشتیبان‌گیری" aria-label="منو">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.2" fill="currentColor" stroke="none"/></svg>

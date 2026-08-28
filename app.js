@@ -689,6 +689,23 @@ $("#import-input").addEventListener("change", async (e) => {
   e.target.value = "";
 });
 
+const APP_PASSWORD = "3660";
+
+$("#lock-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const val = $("#lock-input").value;
+  if (val === APP_PASSWORD) {
+    $("#screen-lock").classList.add("hidden");
+    $("#lock-error").classList.add("hidden");
+    showScreen("list");
+  } else {
+    $("#lock-error").classList.remove("hidden");
+    $("#lock-input").value = "";
+    $("#lock-input").focus();
+  }
+});
+$("#lock-input").focus();
+
 refreshList();
 
 if ("serviceWorker" in navigator) {
