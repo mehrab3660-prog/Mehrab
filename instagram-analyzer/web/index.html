@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>آنالیز هوشمند اینستاگرام</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<header>
+  <h1>آنالیز هوشمند اینستاگرام</h1>
+</header>
+
+<main>
+  <section id="accounts-view">
+    <div class="login-card">
+      <h2>اتصال اکانت با یوزرنیم و پسورد</h2>
+      <p class="warning">
+        ⚠️ این روش از API غیررسمی اینستاگرام استفاده می‌کند (نه API رسمی متا).
+        خلاف قوانین اینستاگرامه و ریسک محدود/مسدود شدن اکانت داره. فقط با اکانت
+        خودتان و با آگاهی از این ریسک استفاده کنید.
+      </p>
+      <form id="login-form">
+        <input type="text" id="login-username" placeholder="یوزرنیم اینستاگرام" required />
+        <input type="password" id="login-password" placeholder="پسورد" required />
+        <div id="verify-row" class="hidden">
+          <input type="text" id="login-code" placeholder="کد تأیید ارسال‌شده" />
+        </div>
+        <button type="submit" class="btn">ورود و اتصال</button>
+      </form>
+      <p id="login-message"></p>
+      <details>
+        <summary>یا از طریق API رسمی متا (نیاز به ساخت اپ در Meta for Developers)</summary>
+        <a class="btn secondary" href="/auth/login">اتصال با API رسمی</a>
+      </details>
+    </div>
+
+    <h2>اکانت‌های متصل</h2>
+    <div id="accounts-list" class="grid"></div>
+  </section>
+
+  <section id="account-detail" class="hidden">
+    <button id="back-btn" class="btn secondary">بازگشت</button>
+    <div id="account-header"></div>
+    <div class="actions">
+      <button id="sync-btn" class="btn">به‌روزرسانی داده‌ها</button>
+      <button id="analyze-btn" class="btn">تحلیل با هوش‌مصنوعی</button>
+    </div>
+
+    <h3>گزارش‌های هوش‌مصنوعی</h3>
+    <div id="reports-list"></div>
+
+    <h3>پست‌های اخیر</h3>
+    <table id="media-table">
+      <thead>
+        <tr><th>کپشن</th><th>لایک</th><th>کامنت</th><th>ریچ</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>
