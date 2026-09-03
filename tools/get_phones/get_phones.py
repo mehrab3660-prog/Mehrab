@@ -82,7 +82,7 @@ class ScraperWorker(threading.Thread):
                 password_box.clear()
                 password_box.send_keys(self.password)
                 password_box.send_keys(Keys.ENTER)
-                wait.until(lambda d: "Login" not in d.title)
+                wait.until(lambda d: "Login" not in d.title and "ورود" not in d.page_source)
             except TimeoutException:
                 pass
 
@@ -104,7 +104,7 @@ class ScraperWorker(threading.Thread):
                 try:
                     driver.get(url)
 
-                    if "Login" in driver.title:
+                    if "Login" in driver.title or "ورود" in driver.page_source:
                         try_login()
                         driver.get(url)
 
