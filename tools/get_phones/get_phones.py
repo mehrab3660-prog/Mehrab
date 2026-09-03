@@ -5,7 +5,7 @@ import threading
 import queue
 import time
 import traceback
-from tkinter import Tk, StringVar, IntVar, BooleanVar, filedialog, Menu, END
+from tkinter import Tk, StringVar, BooleanVar, filedialog, Menu, END
 from tkinter import ttk, scrolledtext
 
 # در بیلد --windowed (بدون کنسول)، ویندوز stdout/stderr رو None می‌ذاره؛ هر
@@ -210,14 +210,9 @@ class App:
         opts = ttk.LabelFrame(main, text="تنظیمات اجرا", padding=10)
         opts.pack(fill="x", pady=5)
 
-        ttk.Label(opts, text="تعداد مرورگر هم‌زمان:").grid(row=0, column=0, sticky="e", padx=5, pady=4)
-        self.workers_var = IntVar(value=4)
-        ttk.Spinbox(opts, from_=1, to=10, textvariable=self.workers_var, width=5).grid(
-            row=0, column=1, sticky="w", padx=5)
-
         self.headless_var = BooleanVar(value=True)
         ttk.Checkbutton(opts, text="اجرای بی‌صدا (Headless)", variable=self.headless_var).grid(
-            row=0, column=2, sticky="w", padx=15)
+            row=0, column=0, sticky="w", padx=5)
 
         fileframe = ttk.LabelFrame(main, text="فایل کدها", padding=10)
         fileframe.pack(fill="x", pady=5)
@@ -325,7 +320,8 @@ class App:
         self.stop_btn.config(state="normal")
         self.status_label.config(text=f"در حال شروع {self.total} کد...")
 
-        n_workers = min(self.workers_var.get(), self.total)
+        # فقط یک مرورگر: همه کدها پشت سر هم توی همون یک پنجره پردازش می‌شن.
+        n_workers = 1
         self.workers = [
             ScraperWorker(
                 worker_id=i + 1,
