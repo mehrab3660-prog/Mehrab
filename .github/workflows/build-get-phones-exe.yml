@@ -37,7 +37,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          python -m PyInstaller --onefile --windowed --name get_phones --noconfirm get_phones.py
+          python -m PyInstaller --onefile --windowed --name get_phones --collect-all selenium --noconfirm get_phones.py
 
       - name: Upload exe artifact
         uses: actions/upload-artifact@v4

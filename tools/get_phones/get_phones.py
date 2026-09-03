@@ -1,10 +1,20 @@
 import os
+import sys
 import subprocess
 import threading
 import queue
 import time
+import traceback
 from tkinter import Tk, StringVar, IntVar, BooleanVar, filedialog, END
 from tkinter import ttk, scrolledtext
+
+# در بیلد --windowed (بدون کنسول)، ویندوز stdout/stderr رو None می‌ذاره؛ هر
+# print/log داخلی (مثلاً از خود Selenium) با AttributeError کرش می‌کنه و
+# Thread بی‌صدا می‌میره. اینجا یک stream خالی جایگزینشون می‌کنیم.
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w")
 
 import pandas as pd
 from selenium import webdriver
@@ -14,7 +24,7 @@ from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 BASE_URL = "https://petrol.symfa.ir/TestCenters/Receptions/Details?ReceptionId="
 FIREFOX_PATH_CANDIDATES = [
@@ -43,11 +53,14 @@ class ScraperWorker(threading.Thread):
         self.stop_event = stop_event
 
     def run(self):
+        self.on_log(f"[Worker {self.worker_id}] در حال باز کردن مرورگر...")
         try:
             driver = self._build_driver()
-        except WebDriverException as exc:
+        except Exception as exc:
             self.on_log(f"[Worker {self.worker_id}] خطا در راه‌اندازی مرورگر: {exc}")
+            self.on_log(traceback.format_exc())
             return
+        self.on_log(f"[Worker {self.worker_id}] مرورگر آماده است.")
 
         wait = WebDriverWait(driver, PAGE_WAIT_TIMEOUT)
 
@@ -100,7 +113,7 @@ class ScraperWorker(threading.Thread):
                         "پلاک": get_text("پلاک:"),
                     }
                     ok = row["شماره"] != "پیدا نشد"
-                except WebDriverException as exc:
+                except Exception as exc:
                     row = {
                         "کد پذیرش": code, "شماره": "خطا", "تاریخ ثبت": "خطا",
                         "تاریخ انقضا": "خطا", "پلاک": "خطا",
@@ -113,6 +126,8 @@ class ScraperWorker(threading.Thread):
 
                 self.on_progress(ok)
                 self.on_log(f"[Worker {self.worker_id}] {code} {'✓' if ok else '✗'}")
+        except Exception:
+            self.on_log(f"[Worker {self.worker_id}] خطای غیرمنتظره:\n{traceback.format_exc()}")
         finally:
             driver.quit()
 
