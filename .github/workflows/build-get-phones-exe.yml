@@ -1,0 +1,46 @@
+name: Build get_phones exe
+
+on:
+  push:
+    branches:
+      - "**"
+    paths:
+      - "tools/get_phones/**"
+      - ".github/workflows/build-get-phones-exe.yml"
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: tools/get_phones
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        # shell: bash + "set -e" so a single failed package install fails the
+        # build loudly instead of silently shipping a broken exe (pwsh does
+        # not stop on a non-zero exit code by default).
+        shell: bash
+        run: |
+          set -e
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
+
+      - name: Build exe
+        shell: bash
+        run: |
+          set -e
+          python -m PyInstaller --onefile --windowed --name get_phones --noconfirm get_phones.py
+
+      - name: Upload exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: get_phones-windows-exe
+          path: tools/get_phones/dist/get_phones.exe
