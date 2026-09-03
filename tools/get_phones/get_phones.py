@@ -5,7 +5,7 @@ import threading
 import queue
 import time
 import traceback
-from tkinter import Tk, StringVar, IntVar, BooleanVar, filedialog, END
+from tkinter import Tk, StringVar, IntVar, BooleanVar, filedialog, Menu, END
 from tkinter import ttk, scrolledtext
 
 # در بیلد --windowed (بدون کنسول)، ویندوز stdout/stderr رو None می‌ذاره؛ هر
@@ -148,6 +148,21 @@ class ScraperWorker(threading.Thread):
         return webdriver.Firefox(service=service, options=options)
 
 
+def add_context_menu(widget):
+    """منوی راست‌کلیک برش/کپی/جای‌گذاری/انتخاب همه برای Entry (پیش‌فرض Tkinter نداره)."""
+    menu = Menu(widget, tearoff=0)
+    menu.add_command(label="برش", command=lambda: widget.event_generate("<<Cut>>"))
+    menu.add_command(label="کپی", command=lambda: widget.event_generate("<<Copy>>"))
+    menu.add_command(label="جای‌گذاری", command=lambda: widget.event_generate("<<Paste>>"))
+    menu.add_separator()
+    menu.add_command(label="انتخاب همه", command=lambda: widget.select_range(0, "end"))
+
+    def show_menu(event):
+        menu.tk_popup(event.x_root, event.y_root)
+
+    widget.bind("<Button-3>", show_menu)
+
+
 class App:
     def __init__(self, root):
         self.root = root
@@ -168,11 +183,15 @@ class App:
 
         ttk.Label(cred, text="نام کاربری:").grid(row=0, column=0, sticky="e", padx=5, pady=4)
         self.username_var = StringVar()
-        ttk.Entry(cred, textvariable=self.username_var).grid(row=0, column=1, sticky="ew", padx=5)
+        username_entry = ttk.Entry(cred, textvariable=self.username_var)
+        username_entry.grid(row=0, column=1, sticky="ew", padx=5)
+        add_context_menu(username_entry)
 
         ttk.Label(cred, text="رمز عبور:").grid(row=1, column=0, sticky="e", padx=5, pady=4)
         self.password_var = StringVar()
-        ttk.Entry(cred, textvariable=self.password_var, show="*").grid(row=1, column=1, sticky="ew", padx=5)
+        password_entry = ttk.Entry(cred, textvariable=self.password_var, show="*")
+        password_entry.grid(row=1, column=1, sticky="ew", padx=5)
+        add_context_menu(password_entry)
         cred.columnconfigure(1, weight=1)
 
         opts = ttk.LabelFrame(main, text="تنظیمات اجرا", padding=10)
