@@ -33,11 +33,27 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install pyinstaller
 
+      - name: Download geckodriver
+        # geckodriver مستقیم داخل exe بسته‌بندی می‌شود تا کاربر نهایی موقع
+        # اجرا نیازی به دسترسی اینترنت برای دانلود درایور نداشته باشد
+        # (Selenium Manager در شبکه‌های محدود/فایروال‌دار می‌تواند بی‌نهایت
+        # هنگ کند).
+        shell: bash
+        run: |
+          set -e
+          api_url="https://api.github.com/repos/mozilla/geckodriver/releases/latest"
+          dl_url=$(curl -sSL "$api_url" | grep browser_download_url | grep win64 | grep -v aarch64 | cut -d '"' -f4)
+          echo "Downloading $dl_url"
+          curl -sSL -o geckodriver.zip "$dl_url"
+          unzip -o geckodriver.zip
+          rm geckodriver.zip
+          ls -la geckodriver.exe
+
       - name: Build exe
         shell: bash
         run: |
           set -e
-          python -m PyInstaller --onefile --windowed --name get_phones --collect-all selenium --noconfirm get_phones.py
+          python -m PyInstaller --onefile --windowed --name get_phones --collect-all selenium --add-binary "geckodriver.exe;." --noconfirm get_phones.py
 
       - name: Upload exe artifact
         uses: actions/upload-artifact@v4

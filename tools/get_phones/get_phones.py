@@ -35,6 +35,15 @@ PAGE_WAIT_TIMEOUT = 8
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
+def resource_path(filename):
+    """مسیر فایل بسته‌شده داخل exe (PyInstaller onefile) یا کنار اسکریپت."""
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, filename)
+
+
+GECKODRIVER_PATH = resource_path("geckodriver.exe")
+
+
 class ScraperWorker(threading.Thread):
     """یک مرورگر مستقل که از صف مشترک کد می‌گیرد و پردازش می‌کند."""
 
@@ -141,9 +150,13 @@ class ScraperWorker(threading.Thread):
             options.add_argument("--headless")
         options.set_preference("permissions.default.image", 2)
 
-        # geckodriver به‌صورت خودکار توسط Selenium Manager دانلود/مدیریت می‌شود
-        # (نیازی به بسته‌بندی/نصب دستی geckodriver نیست)
-        service = Service()
+        # geckodriver داخل خود exe بسته‌بندی شده (بدون نیاز به اینترنت در لحظه
+        # اجرا). اگه پیدا نشد (مثلاً اجرا از روی سورس)، به Selenium Manager
+        # برمی‌گردیم.
+        if os.path.exists(GECKODRIVER_PATH):
+            service = Service(GECKODRIVER_PATH)
+        else:
+            service = Service()
         service.creation_flags = NO_WINDOW
         return webdriver.Firefox(service=service, options=options)
 
