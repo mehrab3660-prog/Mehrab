@@ -18,6 +18,7 @@
     python scrape_symfa.py
 """
 
+import re
 import requests
 from bs4 import BeautifulSoup
 import openpyxl
@@ -29,6 +30,18 @@ OUTPUT_FILE = "result.xlsx"
 
 # کل مقدار هدر Cookie که از مرورگر کپی کردی رو اینجا جایگزین کن
 COOKIE = "اینجا کوکی کپی‌شده از مرورگر رو جایگزین کن"
+
+if "جایگزین" in COOKIE:
+    raise SystemExit(
+        "کوکی رو توی متغیر COOKIE بالای فایل جایگزین نکردی. "
+        "طبق راهنمای بالای فایل، کوکی رو از DevTools کپی کن و اینجا بذار."
+    )
+
+# موقع کپی از DevTools فارسی، گاهی کاراکترهای نامرئی (مثل نشانه‌ی راست‌به‌چپ)
+# قاطی متن کپی‌شده می‌شن که باعث خطای encode می‌شن؛ اینجا پاکشون می‌کنیم.
+COOKIE = re.sub(r"[^\x20-\x7e]", "", COOKIE).strip()
+if not COOKIE:
+    raise SystemExit("بعد از پاک‌سازی، مقدار COOKIE خالی موند - کوکی رو درست کپی نکردی.")
 
 HEADERS = {
     "Cookie": COOKIE,
