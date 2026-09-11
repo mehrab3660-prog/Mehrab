@@ -29,17 +29,54 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 CREDS_FILE = os.path.join(APP_DIR, "last_login.txt")
 OUTPUT_FILE = os.path.join(APP_DIR, "result.xlsx")
 
-# پالت رنگی
-COLOR_BG = "#f4f6f8"
-COLOR_HEADER = "#0f6d8c"
-COLOR_HEADER_TEXT = "#ffffff"
-COLOR_ACCENT = "#0f6d8c"
-COLOR_ACCENT_HOVER = "#0c5871"
-COLOR_CARD = "#ffffff"
-COLOR_BORDER = "#d7dde3"
-COLOR_TEXT = "#1f2933"
-COLOR_MUTED = "#6b7785"
+# پالت رنگی - تم تیره‌ی طلایی/سرمه‌ای
+COLOR_BG = "#0e1117"
+COLOR_HEADER_FROM = "#151a27"
+COLOR_HEADER_TO = "#241a3a"
+COLOR_HEADER_TEXT = "#e8c876"
+COLOR_ACCENT = "#c9a227"
+COLOR_ACCENT_HOVER = "#e0b830"
+COLOR_ACCENT_TEXT = "#171308"
+COLOR_CARD = "#171b26"
+COLOR_BORDER = "#2a3040"
+COLOR_TEXT = "#e8e6e3"
+COLOR_MUTED = "#8b94a7"
+COLOR_FIELD_BG = "#0f1320"
 FONT_FAMILY = "Segoe UI"
+
+
+def draw_car_icon(canvas, cx, cy, scale, color):
+    """یه سیلوئت ساده‌ی ماشین (به‌جای لوگو) روی Canvas می‌کشه."""
+    body = [
+        (-24, 3), (-24, -2), (-16, -2), (-11, -9), (4, -9),
+        (8, -2), (24, -2), (24, 3),
+    ]
+    scaled = [(cx + x * scale, cy + y * scale) for x, y in body]
+    canvas.create_polygon(scaled, fill=color, outline=color, smooth=True)
+    r = 4.5 * scale
+    for wx in (-12, 12):
+        wcx = cx + wx * scale
+        wcy = cy + 3 * scale
+        canvas.create_oval(wcx - r, wcy - r, wcx + r, wcy + r, fill="#0e1117", outline=color, width=1.5)
+
+
+def draw_gradient(canvas, width, height, color_from, color_to):
+    """یه گرادیان افقی روی یه Canvas می‌کشه (تک‌رنگ ttk نداره)."""
+
+    def hex_to_rgb(h):
+        h = h.lstrip("#")
+        return tuple(int(h[i : i + 2], 16) for i in (0, 2, 4))
+
+    r1, g1, b1 = hex_to_rgb(color_from)
+    r2, g2, b2 = hex_to_rgb(color_to)
+    steps = max(width, 1)
+    for i in range(steps):
+        t = i / steps
+        r = int(r1 + (r2 - r1) * t)
+        g = int(g1 + (g2 - g1) * t)
+        b = int(b1 + (b2 - b1) * t)
+        color = f"#{r:02x}{g:02x}{b:02x}"
+        canvas.create_line(i, 0, i, height, fill=color)
 
 
 def login(username, password):
@@ -111,31 +148,19 @@ def extract_plate(html):
 class App:
     def __init__(self, root):
         self.root = root
-        root.title("استخراج نتایج سیمفا")
+        root.title("استخراج پلاک")
         root.geometry("700x600")
         root.minsize(560, 460)
         root.configure(bg=COLOR_BG)
+        self._set_window_icon(root)
 
         style = ttk.Style(root)
         style.theme_use("clam")
-        style.configure("Header.TFrame", background=COLOR_HEADER)
-        style.configure(
-            "Header.TLabel",
-            background=COLOR_HEADER,
-            foreground=COLOR_HEADER_TEXT,
-            font=(FONT_FAMILY, 15, "bold"),
-        )
-        style.configure(
-            "SubHeader.TLabel",
-            background=COLOR_HEADER,
-            foreground="#d7ecf3",
-            font=(FONT_FAMILY, 9),
-        )
         style.configure("Card.TFrame", background=COLOR_CARD)
         style.configure(
             "Field.TLabel",
             background=COLOR_CARD,
-            foreground=COLOR_TEXT,
+            foreground=COLOR_ACCENT,
             font=(FONT_FAMILY, 10, "bold"),
         )
         style.configure(
@@ -147,38 +172,55 @@ class App:
         style.configure(
             "Accent.TButton",
             background=COLOR_ACCENT,
-            foreground="#ffffff",
-            font=(FONT_FAMILY, 10, "bold"),
-            padding=(16, 9),
+            foreground=COLOR_ACCENT_TEXT,
+            font=(FONT_FAMILY, 11, "bold"),
+            padding=(18, 10),
             borderwidth=0,
         )
         style.map(
             "Accent.TButton",
-            background=[("active", COLOR_ACCENT_HOVER), ("disabled", "#a9b6bd")],
+            background=[("active", COLOR_ACCENT_HOVER), ("disabled", "#4a4a42")],
+            foreground=[("disabled", "#8a8a80")],
         )
         style.configure(
             "Field.TEntry",
-            fieldbackground="#fbfcfd",
-            padding=6,
+            fieldbackground=COLOR_FIELD_BG,
+            foreground=COLOR_TEXT,
+            insertcolor=COLOR_TEXT,
+            bordercolor=COLOR_BORDER,
+            lightcolor=COLOR_BORDER,
+            darkcolor=COLOR_BORDER,
+            padding=8,
         )
+        style.map("Field.TEntry", bordercolor=[("focus", COLOR_ACCENT)])
         style.configure(
             "Accent.Horizontal.TProgressbar",
-            troughcolor="#e7ecef",
+            troughcolor=COLOR_FIELD_BG,
             background=COLOR_ACCENT,
-            thickness=8,
+            thickness=6,
         )
 
-        # ---------- هدر ----------
-        header = ttk.Frame(root, style="Header.TFrame")
+        # ---------- هدر (گرادیان سرمه‌ای/بنفش با عنوان طلایی) ----------
+        header_h = 92
+        header = tk.Canvas(root, height=header_h, highlightthickness=0, bd=0)
         header.pack(fill="x")
-        ttk.Label(header, text="استخراج نتایج سیمفا", style="Header.TLabel").pack(
-            anchor="e", padx=20, pady=(16, 0)
-        )
-        ttk.Label(
-            header,
-            text="پلاک و وضعیت مخزن پذیرش‌های گازسوز از gas.symfa.ir",
-            style="SubHeader.TLabel",
-        ).pack(anchor="e", padx=20, pady=(2, 16))
+
+        def render_header(event=None):
+            header.delete("all")
+            w = header.winfo_width() or root.winfo_width() or 700
+            draw_gradient(header, w, header_h, COLOR_HEADER_FROM, COLOR_HEADER_TO)
+            header.create_line(0, header_h - 1, w, header_h - 1, fill=COLOR_ACCENT, width=2)
+            draw_car_icon(header, w - 44, header_h // 2, 1.5, COLOR_ACCENT)
+            header.create_text(
+                w - 80,
+                header_h // 2,
+                text="استخراج پلاک",
+                fill=COLOR_HEADER_TEXT,
+                font=(FONT_FAMILY, 20, "bold"),
+                anchor="e",
+            )
+
+        header.bind("<Configure>", render_header)
 
         # ---------- بدنه ----------
         body = tk.Frame(root, bg=COLOR_BG)
@@ -237,6 +279,21 @@ class App:
             state="disabled",
         )
         self.log_box.pack(fill="both", expand=True, pady=(6, 0))
+
+    def _set_window_icon(self, root):
+        """آیکون پنجره/نوار وظیفه رو با یه لوگوی ساده‌ی ماشین می‌سازه (بدون فایل خارجی)."""
+        try:
+            size = 32
+            img = tk.PhotoImage(width=size, height=size)
+            img.put(COLOR_BG, to=(0, 0, size, size))
+            img.put(COLOR_ACCENT, to=(10, 11, 22, 17))  # کابین
+            img.put(COLOR_ACCENT, to=(4, 17, 28, 22))  # بدنه
+            img.put("#3a4155", to=(7, 21, 13, 27))  # چرخ جلو
+            img.put("#3a4155", to=(19, 21, 25, 27))  # چرخ عقب
+            self._icon_img = img  # جلوگیری از garbage collection
+            root.iconphoto(True, img)
+        except Exception:
+            pass
 
     def _load_creds(self):
         if os.path.exists(CREDS_FILE):
