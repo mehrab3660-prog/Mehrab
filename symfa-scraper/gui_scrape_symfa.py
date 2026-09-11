@@ -12,6 +12,7 @@
 """
 
 import os
+import re
 import threading
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
@@ -23,6 +24,7 @@ import openpyxl
 BASE = "https://gas.symfa.ir"
 LOGIN_URL = f"{BASE}/TestCenters/Home/Login"
 LIST_URL = f"{BASE}/TestCenters/GasReception"
+LIST_PAGE_URL = f"{BASE}/TestCenters/GasReception?Page={{}}"
 PRINT_URL = f"{BASE}/TestCenters/GasReception/PrintResult?ReceptionId={{}}"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -144,6 +146,17 @@ def extract_reception_rows(html):
         if code.isdigit():
             rows.append((plate, code))
     return rows
+
+
+def extract_max_page(html):
+    """شماره‌ی بزرگ‌ترین صفحه رو از دکمه‌های صفحه‌بندی پایین جدول پیدا می‌کنه."""
+    soup = BeautifulSoup(html, "html.parser")
+    pages = [1]
+    for a in soup.find_all("a", href=True):
+        m = re.search(r"[?&]Page=(\d+)", a["href"])
+        if m:
+            pages.append(int(m.group(1)))
+    return max(pages)
 
 
 def extract_tanks(html):
@@ -364,16 +377,38 @@ class App:
             self.log("در حال گرفتن لیست پذیرش‌ها...")
             resp = session.get(LIST_URL, timeout=30)
             resp.raise_for_status()
-            rows = extract_reception_rows(resp.text)
+            max_page = extract_max_page(resp.text)
+            self.log(f"{max_page} صفحه پیدا شد.")
+
+            rows = []
+            seen_codes = set()
+            for plate, code in extract_reception_rows(resp.text):
+                if code not in seen_codes:
+                    seen_codes.add(code)
+                    rows.append((plate, code))
+
+            for page in range(2, max_page + 1):
+                self.set_status(f"در حال گرفتن صفحه‌ی {page} از {max_page}...")
+                page_resp = session.get(LIST_PAGE_URL.format(page), timeout=30)
+                page_resp.raise_for_status()
+                for plate, code in extract_reception_rows(page_resp.text):
+                    if code not in seen_codes:
+                        seen_codes.add(code)
+                        rows.append((plate, code))
+
             self.log(f"{len(rows)} پذیرش پیدا شد.")
 
             results = []
             for i, (plate, code) in enumerate(rows, start=1):
                 self.set_status(f"در حال پردازش {i} از {len(rows)}...")
-                r = session.get(PRINT_URL.format(code), timeout=30)
-                r.raise_for_status()
-                actual_plate = extract_plate(r.text) or plate
-                tanks = extract_tanks(r.text)
+                try:
+                    r = session.get(PRINT_URL.format(code), timeout=30)
+                    r.raise_for_status()
+                    actual_plate = extract_plate(r.text) or plate
+                    tanks = extract_tanks(r.text)
+                except Exception as item_err:
+                    self.log(f"{code} - رد شد (خطا: {item_err})")
+                    continue
                 results.append(
                     {
                         "کد پذیرش": code,
