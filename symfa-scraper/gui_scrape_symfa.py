@@ -237,13 +237,13 @@ def build_report_workbook(one_tank_rows, two_tank_rows, rejected_rows, other_row
     ws.title = "گزارش"
     ws.sheet_view.rightToLeft = True
 
-    blocks = [
+    all_blocks = [
         ("تک‌مخزن", ["ردیف", "پلاک", "وضعیت"], one_tank_rows),
         ("دو‌مخزن", ["ردیف", "پلاک", "وضعیت ۱", "وضعیت ۲"], two_tank_rows),
         ("مردودی‌ها", ["ردیف", "پلاک", "وضعیت ۱", "وضعیت ۲"], rejected_rows),
+        ("سایر", ["ردیف", "پلاک", "توضیح"], other_rows),
     ]
-    if other_rows:
-        blocks.append(("سایر", ["ردیف", "پلاک", "توضیح"], other_rows))
+    blocks = [b for b in all_blocks if b[2]]  # فقط دسته‌هایی که موردی دارن
 
     col = 1
     for title, headers, rows in blocks:
