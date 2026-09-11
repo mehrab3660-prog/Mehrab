@@ -258,7 +258,7 @@ def build_report_workbook(one_tank_rows, two_tank_rows, rejected_rows, other_row
         col = next_col
 
     ws.page_setup.paperSize = ws.PAPERSIZE_A5
-    ws.page_setup.orientation = "landscape"
+    ws.page_setup.orientation = "portrait"
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 1
     ws.sheet_properties.pageSetUpPr.fitToPage = True
