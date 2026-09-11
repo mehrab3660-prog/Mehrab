@@ -20,6 +20,8 @@ from tkinter import ttk, scrolledtext, messagebox
 import requests
 from bs4 import BeautifulSoup
 import openpyxl
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 
 BASE = "https://gas.symfa.ir"
 LOGIN_URL = f"{BASE}/TestCenters/Home/Login"
@@ -178,6 +180,70 @@ def extract_plate(html):
     soup = BeautifulSoup(html, "html.parser")
     cell = soup.find("td", class_="PlaqueNumber")
     return cell.get_text(strip=True) if cell else ""
+
+
+# رنگ‌های خروجی اکسل (هم‌رنگ با تم برنامه)
+XLS_NAVY = "151A27"
+XLS_LIGHT = "F4F1E6"
+XLS_GREEN_FILL = "E5F5E6"
+XLS_GREEN_FONT = "1B7A2E"
+XLS_RED_FILL = "FBE7E7"
+XLS_RED_FONT = "B3241C"
+
+
+def style_report_sheet(ws, title, headers, data_rows):
+    """یه شیت اکسل با هدر رنگی، حاشیه، رنگ سبز/قرمز برای تایید/مردود و تنظیم پرینت می‌سازه."""
+    ws.sheet_view.rightToLeft = True
+
+    n_cols = len(headers)
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=n_cols)
+    title_cell = ws.cell(row=1, column=1, value=title)
+    title_cell.font = Font(size=14, bold=True, color=XLS_NAVY)
+    title_cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 30
+
+    header_row = 2
+    for col, h in enumerate(headers, start=1):
+        c = ws.cell(row=header_row, column=col, value=h)
+        c.font = Font(bold=True, color="FFFFFF", size=11)
+        c.fill = PatternFill("solid", fgColor=XLS_NAVY)
+        c.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[header_row].height = 22
+
+    thin = Side(style="thin", color="D0D0D0")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    status_cols = [i for i, h in enumerate(headers, start=1) if "وضعیت" in h]
+
+    for r_i, row in enumerate(data_rows, start=header_row + 1):
+        for c_i, val in enumerate(row, start=1):
+            cell = ws.cell(row=r_i, column=c_i, value=val)
+            cell.border = border
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            if (r_i - header_row) % 2 == 0:
+                cell.fill = PatternFill("solid", fgColor=XLS_LIGHT)
+            if c_i in status_cols:
+                if val == "تایید":
+                    cell.font = Font(bold=True, color=XLS_GREEN_FONT)
+                    cell.fill = PatternFill("solid", fgColor=XLS_GREEN_FILL)
+                elif val == "مردود":
+                    cell.font = Font(bold=True, color=XLS_RED_FONT)
+                    cell.fill = PatternFill("solid", fgColor=XLS_RED_FILL)
+
+    for col in range(1, n_cols + 1):
+        cell_lens = [len(str(headers[col - 1]))]
+        cell_lens += [len(str(row[col - 1])) for row in data_rows]
+        ws.column_dimensions[get_column_letter(col)].width = max(cell_lens, default=4) + 4
+
+    ws.freeze_panes = ws.cell(row=header_row + 1, column=1)
+    ws.print_title_rows = f"{header_row}:{header_row}"
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_margins.left = 0.4
+    ws.page_margins.right = 0.4
+    ws.page_margins.top = 0.5
+    ws.page_margins.bottom = 0.5
 
 
 class App:
@@ -420,17 +486,51 @@ class App:
                 )
                 self.log(f"{code} - {actual_plate} - {tanks}")
 
-            headers = ["کد پذیرش", "پلاک", "تعداد مخزن", "وضعیت مخزن ۱", "وضعیت مخزن ۲"]
+            one_tank = [r for r in results if r["تعداد مخزن"] == 1]
+            two_tank = [r for r in results if r["تعداد مخزن"] == 2]
+            other = [r for r in results if r["تعداد مخزن"] not in (1, 2)]
+
             wb = openpyxl.Workbook()
-            ws = wb.active
-            ws.title = "نتایج"
-            ws.append(headers)
-            for r in results:
-                ws.append([r[h] for h in headers])
+            wb.remove(wb.active)
+
+            headers1 = ["ردیف", "کد پذیرش", "پلاک", "وضعیت مخزن"]
+            rows1 = [
+                [i, r["کد پذیرش"], r["پلاک"], r["وضعیت مخزن ۱"]]
+                for i, r in enumerate(one_tank, start=1)
+            ]
+            style_report_sheet(
+                wb.create_sheet("یک مخزن"), "گزارش پذیرش‌های تک‌مخزن", headers1, rows1
+            )
+
+            headers2 = ["ردیف", "کد پذیرش", "پلاک", "وضعیت مخزن ۱", "وضعیت مخزن ۲"]
+            rows2 = [
+                [i, r["کد پذیرش"], r["پلاک"], r["وضعیت مخزن ۱"], r["وضعیت مخزن ۲"]]
+                for i, r in enumerate(two_tank, start=1)
+            ]
+            style_report_sheet(
+                wb.create_sheet("دو مخزن"), "گزارش پذیرش‌های دومخزنه", headers2, rows2
+            )
+
+            if other:
+                headers3 = ["ردیف", "کد پذیرش", "پلاک", "تعداد مخزن"]
+                rows3 = [
+                    [i, r["کد پذیرش"], r["پلاک"], r["تعداد مخزن"]]
+                    for i, r in enumerate(other, start=1)
+                ]
+                style_report_sheet(
+                    wb.create_sheet("سایر"), "سایر موارد", headers3, rows3
+                )
+
             wb.save(OUTPUT_FILE)
             self.log(f"ذخیره شد در: {OUTPUT_FILE}")
+            self.log(f"تک‌مخزن: {len(one_tank)} - دومخزنه: {len(two_tank)}")
             self.set_status(f"تمام شد - {len(results)} پذیرش")
-            messagebox.showinfo("تمام شد", f"{len(results)} پذیرش استخراج و در result.xlsx ذخیره شد.")
+            messagebox.showinfo(
+                "تمام شد",
+                f"{len(results)} پذیرش استخراج شد "
+                f"({len(one_tank)} تک‌مخزن، {len(two_tank)} دومخزنه) "
+                f"و در result.xlsx ذخیره شد.",
+            )
             try:
                 os.startfile(OUTPUT_FILE)
             except Exception:
