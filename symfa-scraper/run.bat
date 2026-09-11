@@ -1,4 +1,3 @@
 @echo off
 cd /d "%~dp0"
-python gui_scrape_symfa.py
-pause
+start "" pythonw.exe "%~dp0gui_scrape_symfa.py"
