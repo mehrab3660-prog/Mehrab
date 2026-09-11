@@ -2,17 +2,13 @@
 برنامه‌ی گرافیکی استخراج پلاک و وضعیت مخزن از سامانه سیمفا (gas.symfa.ir)
 
 نصب یک‌بار (خط فرمان):
-    pip install requests beautifulsoup4 openpyxl pillow
+    pip install requests beautifulsoup4 openpyxl
 
 اجرا:
     فایل run.vbs (یا run.bat) رو دابل‌کلیک کن.
 
 نام‌کاربری و رمز عبورت رو توی برنامه وارد کن؛ برنامه خودش با همون‌ها
 لاگین می‌کنه و دیگه نیازی به کپی‌کردن کوکی از DevTools نیست.
-
-لوگو: اگه یه فایل عکس به اسم car.jpg (یا car.png) کنار همین فایل
-بذاری، همون به‌عنوان لوگوی برنامه (هم توی هدر، هم آیکون پنجره)
-استفاده می‌شه. اگه نباشه، یه لوگوی ساده‌ی طراحی‌شده جایگزینش می‌شه.
 """
 
 import os
@@ -24,13 +20,6 @@ import requests
 from bs4 import BeautifulSoup
 import openpyxl
 
-try:
-    from PIL import Image, ImageTk
-
-    _PIL_READY = True
-except ImportError:
-    _PIL_READY = False
-
 BASE = "https://gas.symfa.ir"
 LOGIN_URL = f"{BASE}/TestCenters/Home/Login"
 LIST_URL = f"{BASE}/TestCenters/GasReception"
@@ -39,36 +28,6 @@ PRINT_URL = f"{BASE}/TestCenters/GasReception/PrintResult?ReceptionId={{}}"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 CREDS_FILE = os.path.join(APP_DIR, "last_login.txt")
 OUTPUT_FILE = os.path.join(APP_DIR, "result.xlsx")
-CAR_IMAGE_CANDIDATES = ["car.jpg", "car.jpeg", "car.png"]
-
-
-def find_car_image():
-    for name in CAR_IMAGE_CANDIDATES:
-        path = os.path.join(APP_DIR, name)
-        if os.path.exists(path):
-            return path
-    return None
-
-
-def load_car_photo(size):
-    """اگه فایل car.jpg/png کنار برنامه باشه و Pillow نصب باشه، یه تصویر
-    مربعی (کراپ‌شده از وسط) به اندازه‌ی size برمی‌گردونه؛ وگرنه None."""
-    if not _PIL_READY:
-        return None
-    path = find_car_image()
-    if not path:
-        return None
-    try:
-        img = Image.open(path).convert("RGB")
-        w, h = img.size
-        side = min(w, h)
-        left = (w - side) // 2
-        top = (h - side) // 2
-        img = img.crop((left, top, left + side, top + side))
-        img = img.resize((size, size), Image.LANCZOS)
-        return ImageTk.PhotoImage(img)
-    except Exception:
-        return None
 
 # پالت رنگی - تم تیره‌ی طلایی/سرمه‌ای
 COLOR_BG = "#0e1117"
@@ -86,19 +45,34 @@ COLOR_FIELD_BG = "#0f1320"
 FONT_FAMILY = "Segoe UI"
 
 
-def draw_car_icon(canvas, cx, cy, scale, color):
-    """یه سیلوئت ساده‌ی ماشین (به‌جای لوگو) روی Canvas می‌کشه."""
+def draw_car_icon(canvas, cx, cy, scale, color, bg="#0e1117"):
+    """یه سیلوئت ماشین (لوگوی برنامه) روی Canvas می‌کشه."""
     body = [
         (-24, 3), (-24, -2), (-16, -2), (-11, -9), (4, -9),
         (8, -2), (24, -2), (24, 3),
     ]
     scaled = [(cx + x * scale, cy + y * scale) for x, y in body]
     canvas.create_polygon(scaled, fill=color, outline=color, smooth=True)
+    # شیشه‌ی جلو/عقب (خط تفکیک کابین از بدنه)
+    canvas.create_line(
+        cx - 11 * scale, cy - 8 * scale, cx - 6 * scale, cy - 2 * scale,
+        fill=bg, width=max(1, int(1.3 * scale)),
+    )
+    canvas.create_line(
+        cx + 1 * scale, cy - 2 * scale, cx + 5 * scale, cy - 8 * scale,
+        fill=bg, width=max(1, int(1.3 * scale)),
+    )
+    # چراغ جلو
+    canvas.create_oval(
+        cx + 21 * scale, cy - 1 * scale, cx + 25 * scale, cy + 1.5 * scale,
+        fill="#fff3d0", outline="",
+    )
     r = 4.5 * scale
     for wx in (-12, 12):
         wcx = cx + wx * scale
         wcy = cy + 3 * scale
-        canvas.create_oval(wcx - r, wcy - r, wcx + r, wcy + r, fill="#0e1117", outline=color, width=1.5)
+        canvas.create_oval(wcx - r, wcy - r, wcx + r, wcy + r, fill=bg, outline=color, width=1.5)
+        canvas.create_oval(wcx - r * 0.4, wcy - r * 0.4, wcx + r * 0.4, wcy + r * 0.4, fill=color, outline="")
 
 
 def draw_gradient(canvas, width, height, color_from, color_to):
@@ -244,7 +218,6 @@ class App:
         # ---------- هدر (گرادیان سرمه‌ای/بنفش با عنوان طلایی) ----------
         header_h = 92
         logo_size = 60
-        self._header_photo = load_car_photo(logo_size)
         header = tk.Canvas(root, height=header_h, highlightthickness=0, bd=0)
         header.pack(fill="x")
 
@@ -255,20 +228,8 @@ class App:
             header.create_line(0, header_h - 1, w, header_h - 1, fill=COLOR_ACCENT, width=2)
             logo_cx = w - 20 - logo_size // 2
             logo_cy = header_h // 2
-            if self._header_photo is not None:
-                header.create_image(logo_cx, logo_cy, image=self._header_photo, anchor="center")
-                header.create_rectangle(
-                    logo_cx - logo_size // 2,
-                    logo_cy - logo_size // 2,
-                    logo_cx + logo_size // 2,
-                    logo_cy + logo_size // 2,
-                    outline=COLOR_ACCENT,
-                    width=2,
-                )
-                text_right = logo_cx - logo_size // 2 - 14
-            else:
-                draw_car_icon(header, logo_cx, logo_cy, 1.5, COLOR_ACCENT)
-                text_right = logo_cx - 40
+            draw_car_icon(header, logo_cx, logo_cy, 1.6, COLOR_ACCENT, bg=COLOR_HEADER_TO)
+            text_right = logo_cx - 44
             header.create_text(
                 text_right,
                 header_h // 2,
@@ -339,14 +300,8 @@ class App:
         self.log_box.pack(fill="both", expand=True, pady=(6, 0))
 
     def _set_window_icon(self, root):
-        """آیکون پنجره/نوار وظیفه: اول عکس واقعی car.jpg، وگرنه لوگوی طراحی‌شده."""
+        """آیکون پنجره/نوار وظیفه رو با یه لوگوی ساده‌ی ماشین می‌سازه (بدون فایل خارجی)."""
         try:
-            photo = load_car_photo(64)
-            if photo is not None:
-                self._icon_img = photo  # جلوگیری از garbage collection
-                root.iconphoto(True, photo)
-                return
-
             size = 32
             img = tk.PhotoImage(width=size, height=size)
             img.put(COLOR_BG, to=(0, 0, size, size))
