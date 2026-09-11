@@ -5,7 +5,7 @@
     pip install requests beautifulsoup4 openpyxl
 
 اجرا:
-    فایل run.bat رو دابل‌کلیک کن.
+    فایل run.vbs رو دابل‌کلیک کن (بدون پنجره‌ی سیاه cmd باز می‌شه).
 
 نحوه‌ی گرفتن کوکی از مرورگر (هر بار که کوکی منقضی/نامعتبر شد، دوباره لازمه):
     1. توی کروم وارد حساب کاربری‌ات توی gas.symfa.ir شو و برو صفحه‌ی
@@ -19,7 +19,7 @@ import os
 import re
 import threading
 import tkinter as tk
-from tkinter import scrolledtext, messagebox
+from tkinter import ttk, scrolledtext, messagebox
 
 import requests
 from bs4 import BeautifulSoup
@@ -32,6 +32,18 @@ PRINT_URL = f"{BASE}/TestCenters/GasReception/PrintResult?ReceptionId={{}}"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 COOKIE_FILE = os.path.join(APP_DIR, "last_cookie.txt")
 OUTPUT_FILE = os.path.join(APP_DIR, "result.xlsx")
+
+# پالت رنگی
+COLOR_BG = "#f4f6f8"
+COLOR_HEADER = "#0f6d8c"
+COLOR_HEADER_TEXT = "#ffffff"
+COLOR_ACCENT = "#0f6d8c"
+COLOR_ACCENT_HOVER = "#0c5871"
+COLOR_CARD = "#ffffff"
+COLOR_BORDER = "#d7dde3"
+COLOR_TEXT = "#1f2933"
+COLOR_MUTED = "#6b7785"
+FONT_FAMILY = "Segoe UI"
 
 
 def clean_cookie(raw):
@@ -92,20 +104,131 @@ class App:
     def __init__(self, root):
         self.root = root
         root.title("استخراج نتایج سیمفا")
-        root.geometry("640x480")
+        root.geometry("700x560")
+        root.minsize(560, 440)
+        root.configure(bg=COLOR_BG)
 
-        tk.Label(root, text="کوکی حساب کاربری (از DevTools):").pack(fill="x", padx=10, pady=(10, 0))
-        self.cookie_box = scrolledtext.ScrolledText(root, height=4)
-        self.cookie_box.pack(fill="x", padx=10, pady=5)
+        style = ttk.Style(root)
+        style.theme_use("clam")
+        style.configure("Header.TFrame", background=COLOR_HEADER)
+        style.configure(
+            "Header.TLabel",
+            background=COLOR_HEADER,
+            foreground=COLOR_HEADER_TEXT,
+            font=(FONT_FAMILY, 15, "bold"),
+        )
+        style.configure(
+            "SubHeader.TLabel",
+            background=COLOR_HEADER,
+            foreground="#d7ecf3",
+            font=(FONT_FAMILY, 9),
+        )
+        style.configure("Card.TFrame", background=COLOR_CARD)
+        style.configure(
+            "Field.TLabel",
+            background=COLOR_CARD,
+            foreground=COLOR_TEXT,
+            font=(FONT_FAMILY, 10, "bold"),
+        )
+        style.configure(
+            "Status.TLabel",
+            background=COLOR_CARD,
+            foreground=COLOR_MUTED,
+            font=(FONT_FAMILY, 9),
+        )
+        style.configure(
+            "Accent.TButton",
+            background=COLOR_ACCENT,
+            foreground="#ffffff",
+            font=(FONT_FAMILY, 10, "bold"),
+            padding=(16, 9),
+            borderwidth=0,
+        )
+        style.map(
+            "Accent.TButton",
+            background=[("active", COLOR_ACCENT_HOVER), ("disabled", "#a9b6bd")],
+        )
+        style.configure(
+            "Accent.Horizontal.TProgressbar",
+            troughcolor="#e7ecef",
+            background=COLOR_ACCENT,
+            thickness=8,
+        )
+
+        # ---------- هدر ----------
+        header = ttk.Frame(root, style="Header.TFrame")
+        header.pack(fill="x")
+        ttk.Label(header, text="استخراج نتایج سیمفا", style="Header.TLabel").pack(
+            anchor="e", padx=20, pady=(16, 0)
+        )
+        ttk.Label(
+            header,
+            text="پلاک و وضعیت مخزن پذیرش‌های گازسوز از gas.symfa.ir",
+            style="SubHeader.TLabel",
+        ).pack(anchor="e", padx=20, pady=(2, 16))
+
+        # ---------- بدنه ----------
+        body = tk.Frame(root, bg=COLOR_BG)
+        body.pack(fill="both", expand=True, padx=18, pady=16)
+
+        card = tk.Frame(body, bg=COLOR_CARD, highlightbackground=COLOR_BORDER, highlightthickness=1)
+        card.pack(fill="both", expand=True)
+
+        inner = tk.Frame(card, bg=COLOR_CARD)
+        inner.pack(fill="both", expand=True, padx=18, pady=16)
+
+        ttk.Label(inner, text="کوکی حساب کاربری", style="Field.TLabel").pack(
+            anchor="e", fill="x"
+        )
+        self.cookie_box = scrolledtext.ScrolledText(
+            inner,
+            height=4,
+            font=("Consolas", 9),
+            bg="#fbfcfd",
+            fg=COLOR_TEXT,
+            relief="solid",
+            borderwidth=1,
+            wrap="word",
+        )
+        self.cookie_box.pack(fill="x", pady=(6, 4))
         if os.path.exists(COOKIE_FILE):
             with open(COOKIE_FILE, "r", encoding="utf-8") as f:
                 self.cookie_box.insert("1.0", f.read())
 
-        self.start_btn = tk.Button(root, text="شروع استخراج", command=self.start)
-        self.start_btn.pack(pady=5)
+        ttk.Label(
+            inner,
+            text="از DevTools مرورگر (F12 → Network → GasReception → Headers → Cookie) کپی کن.",
+            style="Status.TLabel",
+        ).pack(anchor="e", fill="x", pady=(0, 12))
 
-        self.log_box = scrolledtext.ScrolledText(root, height=18, state="disabled")
-        self.log_box.pack(fill="both", expand=True, padx=10, pady=5)
+        action_row = tk.Frame(inner, bg=COLOR_CARD)
+        action_row.pack(fill="x", pady=(0, 10))
+        self.start_btn = ttk.Button(
+            action_row, text="▶  شروع استخراج", style="Accent.TButton", command=self.start
+        )
+        self.start_btn.pack(side="right")
+
+        self.status_var = tk.StringVar(value="آماده")
+        ttk.Label(action_row, textvariable=self.status_var, style="Status.TLabel").pack(
+            side="right", padx=(0, 14)
+        )
+
+        self.progress = ttk.Progressbar(
+            inner, style="Accent.Horizontal.TProgressbar", mode="indeterminate"
+        )
+        self.progress.pack(fill="x", pady=(0, 12))
+
+        ttk.Label(inner, text="گزارش اجرا", style="Field.TLabel").pack(anchor="e", fill="x")
+        self.log_box = scrolledtext.ScrolledText(
+            inner,
+            font=("Consolas", 9),
+            bg="#0f1720",
+            fg="#d7ecf3",
+            insertbackground="#d7ecf3",
+            relief="flat",
+            state="disabled",
+        )
+        self.log_box.pack(fill="both", expand=True, pady=(6, 0))
 
     def log(self, text):
         self.log_box.config(state="normal")
@@ -113,12 +236,17 @@ class App:
         self.log_box.see("end")
         self.log_box.config(state="disabled")
 
+    def set_status(self, text):
+        self.status_var.set(text)
+
     def start(self):
         cookie = clean_cookie(self.cookie_box.get("1.0", "end"))
         if not cookie:
             messagebox.showerror("خطا", "کوکی رو وارد کن.")
             return
         self.start_btn.config(state="disabled")
+        self.progress.start(12)
+        self.set_status("در حال اجرا...")
         threading.Thread(target=self.run, args=(cookie,), daemon=True).start()
 
     def run(self, cookie):
@@ -136,7 +264,8 @@ class App:
             self.log(f"{len(rows)} پذیرش پیدا شد.")
 
             results = []
-            for plate, code in rows:
+            for i, (plate, code) in enumerate(rows, start=1):
+                self.set_status(f"در حال پردازش {i} از {len(rows)}...")
                 r = session.get(PRINT_URL.format(code), timeout=30)
                 r.raise_for_status()
                 actual_plate = extract_plate(r.text) or plate
@@ -161,6 +290,7 @@ class App:
                 ws.append([r[h] for h in headers])
             wb.save(OUTPUT_FILE)
             self.log(f"ذخیره شد در: {OUTPUT_FILE}")
+            self.set_status(f"تمام شد - {len(results)} پذیرش")
             messagebox.showinfo("تمام شد", f"{len(results)} پذیرش استخراج و در result.xlsx ذخیره شد.")
             try:
                 os.startfile(OUTPUT_FILE)
@@ -168,8 +298,10 @@ class App:
                 pass
         except Exception as e:
             self.log(f"خطا: {e}")
+            self.set_status("خطا")
             messagebox.showerror("خطا", str(e))
         finally:
+            self.progress.stop()
             self.start_btn.config(state="normal")
 
 
