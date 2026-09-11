@@ -5,18 +5,13 @@
     pip install requests beautifulsoup4 openpyxl
 
 اجرا:
-    فایل run.vbs رو دابل‌کلیک کن (بدون پنجره‌ی سیاه cmd باز می‌شه).
+    فایل run.vbs (یا run.bat) رو دابل‌کلیک کن.
 
-نحوه‌ی گرفتن کوکی از مرورگر (هر بار که کوکی منقضی/نامعتبر شد، دوباره لازمه):
-    1. توی کروم وارد حساب کاربری‌ات توی gas.symfa.ir شو و برو صفحه‌ی
-       پذیرش‌های گازسوز (GasReception).
-    2. کلید F12 رو بزن، تب Network، فیلتر Doc رو بزن، صفحه رو رفرش کن (F5).
-    3. روی ردیف GasReception کلیک کن، تب Headers، زیر Request Headers
-       مقدار جلوی Cookie رو کپی کن و توی کادر بالای این برنامه پیست کن.
+نام‌کاربری و رمز عبورت رو توی برنامه وارد کن؛ برنامه خودش با همون‌ها
+لاگین می‌کنه و دیگه نیازی به کپی‌کردن کوکی از DevTools نیست.
 """
 
 import os
-import re
 import threading
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
@@ -26,11 +21,12 @@ from bs4 import BeautifulSoup
 import openpyxl
 
 BASE = "https://gas.symfa.ir"
+LOGIN_URL = f"{BASE}/TestCenters/Home/Login"
 LIST_URL = f"{BASE}/TestCenters/GasReception"
 PRINT_URL = f"{BASE}/TestCenters/GasReception/PrintResult?ReceptionId={{}}"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-COOKIE_FILE = os.path.join(APP_DIR, "last_cookie.txt")
+CREDS_FILE = os.path.join(APP_DIR, "last_login.txt")
 OUTPUT_FILE = os.path.join(APP_DIR, "result.xlsx")
 
 # پالت رنگی
@@ -46,12 +42,22 @@ COLOR_MUTED = "#6b7785"
 FONT_FAMILY = "Segoe UI"
 
 
-def clean_cookie(raw):
-    """کاراکترهای نامرئی احتمالی (مثل نشانه‌ی راست‌به‌چپ) رو پاک می‌کنه."""
-    raw = re.sub(r"[^\x20-\x7e]", "", raw).strip()
-    if raw.lower().startswith("cookie:"):
-        raw = raw[len("cookie:"):].strip()
-    return raw
+def login(username, password):
+    """با نام‌کاربری/رمز وارد می‌شود و یک session با کوکی معتبر برمی‌گرداند."""
+    session = requests.Session()
+    session.headers.update({"User-Agent": "Mozilla/5.0"})
+
+    # یه بار صفحه رو باز می‌کنیم تا کوکی اولیه‌ی سشن گرفته بشه
+    session.get(BASE, timeout=30)
+
+    resp = session.post(
+        LOGIN_URL,
+        data={"UserName": username, "Password": password, "IsSoft": ""},
+        timeout=30,
+        allow_redirects=True,
+    )
+    resp.raise_for_status()
+    return session
 
 
 def extract_reception_rows(html):
@@ -59,7 +65,9 @@ def extract_reception_rows(html):
     soup = BeautifulSoup(html, "html.parser")
     table = soup.find("table")
     if table is None or table.find("thead") is None or table.find("tbody") is None:
-        raise RuntimeError("جدول پذیرش‌ها پیدا نشد - احتمالاً کوکی منقضی شده یا اشتباهه.")
+        raise RuntimeError(
+            "جدول پذیرش‌ها پیدا نشد - احتمالاً نام‌کاربری یا رمز اشتباهه."
+        )
 
     headers = [th.get_text(strip=True) for th in table.find("thead").find_all("th")]
     plate_idx = next((i for i, h in enumerate(headers) if "پلاک" in h), None)
@@ -104,8 +112,8 @@ class App:
     def __init__(self, root):
         self.root = root
         root.title("استخراج نتایج سیمفا")
-        root.geometry("700x560")
-        root.minsize(560, 440)
+        root.geometry("700x600")
+        root.minsize(560, 460)
         root.configure(bg=COLOR_BG)
 
         style = ttk.Style(root)
@@ -149,6 +157,11 @@ class App:
             background=[("active", COLOR_ACCENT_HOVER), ("disabled", "#a9b6bd")],
         )
         style.configure(
+            "Field.TEntry",
+            fieldbackground="#fbfcfd",
+            padding=6,
+        )
+        style.configure(
             "Accent.Horizontal.TProgressbar",
             troughcolor="#e7ecef",
             background=COLOR_ACCENT,
@@ -177,32 +190,27 @@ class App:
         inner = tk.Frame(card, bg=COLOR_CARD)
         inner.pack(fill="both", expand=True, padx=18, pady=16)
 
-        ttk.Label(inner, text="کوکی حساب کاربری", style="Field.TLabel").pack(
-            anchor="e", fill="x"
-        )
-        self.cookie_box = scrolledtext.ScrolledText(
-            inner,
-            height=4,
-            font=("Consolas", 9),
-            bg="#fbfcfd",
-            fg=COLOR_TEXT,
-            relief="solid",
-            borderwidth=1,
-            wrap="word",
-        )
-        self.cookie_box.pack(fill="x", pady=(6, 4))
-        if os.path.exists(COOKIE_FILE):
-            with open(COOKIE_FILE, "r", encoding="utf-8") as f:
-                self.cookie_box.insert("1.0", f.read())
+        saved_user, saved_pass = self._load_creds()
 
-        ttk.Label(
-            inner,
-            text="از DevTools مرورگر (F12 → Network → GasReception → Headers → Cookie) کپی کن.",
-            style="Status.TLabel",
-        ).pack(anchor="e", fill="x", pady=(0, 12))
+        login_row = tk.Frame(inner, bg=COLOR_CARD)
+        login_row.pack(fill="x", pady=(0, 4))
+
+        user_col = tk.Frame(login_row, bg=COLOR_CARD)
+        user_col.pack(side="right", fill="x", expand=True, padx=(8, 0))
+        ttk.Label(user_col, text="نام‌کاربری", style="Field.TLabel").pack(anchor="e")
+        self.user_entry = ttk.Entry(user_col, style="Field.TEntry", justify="right")
+        self.user_entry.pack(fill="x", pady=(4, 0))
+        self.user_entry.insert(0, saved_user)
+
+        pass_col = tk.Frame(login_row, bg=COLOR_CARD)
+        pass_col.pack(side="right", fill="x", expand=True)
+        ttk.Label(pass_col, text="رمز عبور", style="Field.TLabel").pack(anchor="e")
+        self.pass_entry = ttk.Entry(pass_col, style="Field.TEntry", justify="right", show="•")
+        self.pass_entry.pack(fill="x", pady=(4, 0))
+        self.pass_entry.insert(0, saved_pass)
 
         action_row = tk.Frame(inner, bg=COLOR_CARD)
-        action_row.pack(fill="x", pady=(0, 10))
+        action_row.pack(fill="x", pady=(14, 10))
         self.start_btn = ttk.Button(
             action_row, text="▶  شروع استخراج", style="Accent.TButton", command=self.start
         )
@@ -230,6 +238,18 @@ class App:
         )
         self.log_box.pack(fill="both", expand=True, pady=(6, 0))
 
+    def _load_creds(self):
+        if os.path.exists(CREDS_FILE):
+            with open(CREDS_FILE, "r", encoding="utf-8") as f:
+                lines = f.read().splitlines()
+            if len(lines) >= 2:
+                return lines[0], lines[1]
+        return "", ""
+
+    def _save_creds(self, username, password):
+        with open(CREDS_FILE, "w", encoding="utf-8") as f:
+            f.write(username + "\n" + password)
+
     def log(self, text):
         self.log_box.config(state="normal")
         self.log_box.insert("end", text + "\n")
@@ -240,23 +260,24 @@ class App:
         self.status_var.set(text)
 
     def start(self):
-        cookie = clean_cookie(self.cookie_box.get("1.0", "end"))
-        if not cookie:
-            messagebox.showerror("خطا", "کوکی رو وارد کن.")
+        username = self.user_entry.get().strip()
+        password = self.pass_entry.get().strip()
+        if not username or not password:
+            messagebox.showerror("خطا", "نام‌کاربری و رمز عبور رو وارد کن.")
             return
         self.start_btn.config(state="disabled")
         self.progress.start(12)
-        self.set_status("در حال اجرا...")
-        threading.Thread(target=self.run, args=(cookie,), daemon=True).start()
+        self.set_status("در حال ورود...")
+        threading.Thread(target=self.run, args=(username, password), daemon=True).start()
 
-    def run(self, cookie):
+    def run(self, username, password):
         try:
-            with open(COOKIE_FILE, "w", encoding="utf-8") as f:
-                f.write(cookie)
+            self._save_creds(username, password)
 
-            session = requests.Session()
-            session.headers.update({"Cookie": cookie, "User-Agent": "Mozilla/5.0"})
+            self.log("در حال ورود به حساب کاربری...")
+            session = login(username, password)
 
+            self.set_status("در حال گرفتن لیست پذیرش‌ها...")
             self.log("در حال گرفتن لیست پذیرش‌ها...")
             resp = session.get(LIST_URL, timeout=30)
             resp.raise_for_status()
