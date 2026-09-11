@@ -46,33 +46,40 @@ FONT_FAMILY = "Segoe UI"
 
 
 def draw_car_icon(canvas, cx, cy, scale, color, bg="#0e1117"):
-    """یه سیلوئت ماشین (لوگوی برنامه) روی Canvas می‌کشه."""
-    body = [
-        (-24, 3), (-24, -2), (-16, -2), (-11, -9), (4, -9),
-        (8, -2), (24, -2), (24, 3),
-    ]
-    scaled = [(cx + x * scale, cy + y * scale) for x, y in body]
-    canvas.create_polygon(scaled, fill=color, outline=color, smooth=True)
-    # شیشه‌ی جلو/عقب (خط تفکیک کابین از بدنه)
+    """یه سیلوئت ماشین ساده و مسطح (flat) روی Canvas می‌کشه."""
+    # بدنه‌ی اصلی
+    canvas.create_rectangle(
+        cx - 24 * scale, cy - 2 * scale, cx + 24 * scale, cy + 4 * scale,
+        fill=color, outline=color,
+    )
+    # کابین (سقف)
+    canvas.create_polygon(
+        cx - 14 * scale, cy - 2 * scale,
+        cx - 9 * scale, cy - 10 * scale,
+        cx + 6 * scale, cy - 10 * scale,
+        cx + 10 * scale, cy - 2 * scale,
+        fill=color, outline=color,
+    )
+    # شیشه‌ی جلو/عقب
     canvas.create_line(
-        cx - 11 * scale, cy - 8 * scale, cx - 6 * scale, cy - 2 * scale,
-        fill=bg, width=max(1, int(1.3 * scale)),
+        cx - 10 * scale, cy - 9 * scale, cx - 6 * scale, cy - 2.5 * scale,
+        fill=bg, width=max(1, int(1.2 * scale)),
     )
     canvas.create_line(
-        cx + 1 * scale, cy - 2 * scale, cx + 5 * scale, cy - 8 * scale,
-        fill=bg, width=max(1, int(1.3 * scale)),
+        cx + 2 * scale, cy - 2.5 * scale, cx + 5 * scale, cy - 9 * scale,
+        fill=bg, width=max(1, int(1.2 * scale)),
     )
     # چراغ جلو
     canvas.create_oval(
-        cx + 21 * scale, cy - 1 * scale, cx + 25 * scale, cy + 1.5 * scale,
+        cx + 20 * scale, cy - 1 * scale, cx + 24 * scale, cy + 1.5 * scale,
         fill="#fff3d0", outline="",
     )
-    r = 4.5 * scale
-    for wx in (-12, 12):
+    # چرخ‌ها (توپر، بدون نقطه‌ی داخلی)
+    r = 4 * scale
+    wy = cy + 4 * scale
+    for wx in (-13, 13):
         wcx = cx + wx * scale
-        wcy = cy + 3 * scale
-        canvas.create_oval(wcx - r, wcy - r, wcx + r, wcy + r, fill=bg, outline=color, width=1.5)
-        canvas.create_oval(wcx - r * 0.4, wcy - r * 0.4, wcx + r * 0.4, wcy + r * 0.4, fill=color, outline="")
+        canvas.create_oval(wcx - r, wy - r, wcx + r, wy + r, fill="#3a4155", outline=bg, width=max(1, int(scale)))
 
 
 def draw_gradient(canvas, width, height, color_from, color_to):
