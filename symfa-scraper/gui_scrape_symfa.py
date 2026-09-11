@@ -201,30 +201,33 @@ def add_report_block(ws, start_col, title, headers, data_rows):
 
     ws.merge_cells(start_row=1, start_column=start_col, end_row=1, end_column=end_col)
     tcell = ws.cell(row=1, column=start_col, value=f"{title} ({len(data_rows)})")
-    tcell.font = Font(bold=True, size=11, color="FFFFFF")
+    tcell.font = Font(bold=True, size=14, color="FFFFFF")
     tcell.fill = PatternFill("solid", fgColor=XLS_NAVY)
     tcell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 22
 
     header_row = 2
     for i, h in enumerate(headers):
         c = ws.cell(row=header_row, column=start_col + i, value=h)
-        c.font = Font(bold=True, color=XLS_NAVY, size=9)
+        c.font = Font(bold=True, color=XLS_NAVY, size=12)
         c.fill = PatternFill("solid", fgColor=XLS_LIGHT)
         c.alignment = Alignment(horizontal="center", vertical="center")
         c.border = border
+    ws.row_dimensions[header_row].height = 20
 
     for offset, row in enumerate(data_rows):
         r_i = header_row + 1 + offset
+        ws.row_dimensions[r_i].height = 18
         for i, val in enumerate(row):
             cell = ws.cell(row=r_i, column=start_col + i, value=val)
             cell.border = border
             cell.alignment = Alignment(horizontal="center", vertical="center")
-            cell.font = Font(size=9)
+            cell.font = Font(size=12)
             if val == "تایید":
-                cell.font = Font(bold=True, size=9, color=XLS_GREEN_FONT)
+                cell.font = Font(bold=True, size=12, color=XLS_GREEN_FONT)
                 cell.fill = PatternFill("solid", fgColor=XLS_GREEN_FILL)
             elif val == "مردود":
-                cell.font = Font(bold=True, size=9, color=XLS_RED_FONT)
+                cell.font = Font(bold=True, size=12, color=XLS_RED_FONT)
                 cell.fill = PatternFill("solid", fgColor=XLS_RED_FILL)
 
     return end_col + 2  # یک ستون خالی به‌عنوان فاصله
@@ -239,7 +242,7 @@ def build_report_workbook(one_tank_rows, two_tank_rows, rejected_rows, other_row
 
     all_blocks = [
         ("تک‌مخزن", ["ردیف", "پلاک", "وضعیت"], one_tank_rows),
-        ("دو‌مخزن", ["ردیف", "پلاک", "وضعیت ۱", "وضعیت ۲"], two_tank_rows),
+        ("دو‌مخزن", ["ردیف", "پلاک", "وضعیت"], two_tank_rows),
         ("مردودی‌ها", ["ردیف", "پلاک", "وضعیت ۱", "وضعیت ۲"], rejected_rows),
         ("سایر", ["ردیف", "پلاک", "توضیح"], other_rows),
     ]
@@ -249,7 +252,7 @@ def build_report_workbook(one_tank_rows, two_tank_rows, rejected_rows, other_row
     for title, headers, rows in blocks:
         next_col = add_report_block(ws, col, title, headers, rows)
         for c in range(col, next_col - 1):
-            width = 6 if headers[c - col] == "ردیف" else 13
+            width = 7 if headers[c - col] == "ردیف" else 15
             ws.column_dimensions[get_column_letter(c)].width = width
         ws.column_dimensions[get_column_letter(next_col - 1)].width = 2
         col = next_col
@@ -507,21 +510,28 @@ class App:
                 )
                 self.log(f"{code} - {actual_plate} - {tanks}")
 
-            one_tank = [r for r in results if r["تعداد مخزن"] == 1]
-            two_tank = [r for r in results if r["تعداد مخزن"] == 2]
-            other = [r for r in results if r["تعداد مخزن"] not in (1, 2)]
             rejected = [
                 r for r in results
                 if "مردود" in (r["وضعیت مخزن ۱"], r["وضعیت مخزن ۲"])
             ]
+            rejected_codes = {r["کد پذیرش"] for r in rejected}
+
+            # تک‌مخزن/دومخزن فقط شامل موارد تاییدشده - مردودی‌ها جدا نشون داده می‌شن
+            one_tank = [
+                r for r in results
+                if r["تعداد مخزن"] == 1 and r["کد پذیرش"] not in rejected_codes
+            ]
+            two_tank = [
+                r for r in results
+                if r["تعداد مخزن"] == 2 and r["کد پذیرش"] not in rejected_codes
+            ]
+            other = [r for r in results if r["تعداد مخزن"] not in (1, 2)]
 
             one_tank_rows = [
-                [i, r["پلاک"], r["وضعیت مخزن ۱"]]
-                for i, r in enumerate(one_tank, start=1)
+                [i, r["پلاک"], "تایید"] for i, r in enumerate(one_tank, start=1)
             ]
             two_tank_rows = [
-                [i, r["پلاک"], r["وضعیت مخزن ۱"], r["وضعیت مخزن ۲"]]
-                for i, r in enumerate(two_tank, start=1)
+                [i, r["پلاک"], "تایید"] for i, r in enumerate(two_tank, start=1)
             ]
             rejected_rows = [
                 [i, r["پلاک"], r["وضعیت مخزن ۱"], r["وضعیت مخزن ۲"]]
