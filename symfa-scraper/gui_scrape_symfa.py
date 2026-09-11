@@ -15,8 +15,9 @@ import os
 import re
 import threading
 import tkinter as tk
-from datetime import datetime
+from datetime import datetime, timedelta
 from tkinter import ttk, scrolledtext, messagebox
+from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
@@ -27,7 +28,6 @@ from openpyxl.utils import get_column_letter
 BASE = "https://gas.symfa.ir"
 LOGIN_URL = f"{BASE}/TestCenters/Home/Login"
 LIST_URL = f"{BASE}/TestCenters/GasReception"
-LIST_PAGE_URL = f"{BASE}/TestCenters/GasReception?Page={{}}"
 PRINT_URL = f"{BASE}/TestCenters/GasReception/PrintResult?ReceptionId={{}}"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -81,6 +81,16 @@ def today_jalali_string():
     jy, jm, jd = gregorian_to_jalali(now.year, now.month, now.day)
     weekday = PERSIAN_WEEKDAYS[now.weekday()]
     return f"{weekday}، {jd} {PERSIAN_MONTHS[jm - 1]} {jy}"
+
+
+def jalali_date_str(dt):
+    """تاریخ رو به همون فرمتی که فیلتر سایت می‌خواد برمی‌گردونه: 1405/06/19"""
+    jy, jm, jd = gregorian_to_jalali(dt.year, dt.month, dt.day)
+    return f"{jy}/{jm:02d}/{jd:02d}"
+
+
+def jalali_days_ago(n):
+    return jalali_date_str(datetime.now() - timedelta(days=n))
 
 # پالت رنگی - تم تیره‌ی طلایی/سرمه‌ای
 COLOR_BG = "#0e1117"
@@ -172,6 +182,22 @@ def login(username, password):
     return session
 
 
+def fetch_reception_list(session, start_date, end_date):
+    """لیست پذیرش‌ها رو با فیلتر بازه‌ی تاریخ (شمسی، فرمت 1405/06/19) می‌گیره."""
+    resp = session.post(
+        LIST_URL,
+        data={
+            "StartDate": start_date,
+            "EndDate": end_date,
+            "ReceptionId": "",
+            "VIN": "",
+        },
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp
+
+
 def extract_reception_rows(html):
     """از جدول صفحه‌ی لیست، (پلاک، کد پذیرش) هر ردیف را برمی‌گرداند."""
     soup = BeautifulSoup(html, "html.parser")
@@ -199,15 +225,16 @@ def extract_reception_rows(html):
     return rows
 
 
-def extract_max_page(html):
-    """شماره‌ی بزرگ‌ترین صفحه رو از دکمه‌های صفحه‌بندی پایین جدول پیدا می‌کنه."""
+def extract_pagination_urls(html, current_url):
+    """آدرس کامل هر صفحه‌ی صفحه‌بندی رو برمی‌گردونه (شماره صفحه -> URL کامل)،
+    تا فیلترهای اعمال‌شده (مثل بازه‌ی تاریخ) موقع رفتن به صفحه‌ی بعد حفظ بشن."""
     soup = BeautifulSoup(html, "html.parser")
-    pages = [1]
+    urls = {1: current_url}
     for a in soup.find_all("a", href=True):
         m = re.search(r"[?&]Page=(\d+)", a["href"])
         if m:
-            pages.append(int(m.group(1)))
-    return max(pages)
+            urls[int(m.group(1))] = urljoin(current_url, a["href"])
+    return urls
 
 
 def extract_tanks(html):
@@ -382,6 +409,15 @@ class App:
             background=COLOR_ACCENT,
             thickness=6,
         )
+        style.configure(
+            "Preset.TButton",
+            background=COLOR_FIELD_BG,
+            foreground=COLOR_ACCENT,
+            font=(FONT_FAMILY, 9),
+            padding=(10, 5),
+            borderwidth=1,
+        )
+        style.map("Preset.TButton", background=[("active", COLOR_BORDER)])
 
         # ---------- هدر (گرادیان سرمه‌ای/بنفش با عنوان طلایی) ----------
         header_h = 92
@@ -438,6 +474,40 @@ class App:
         self.pass_entry.pack(fill="x", pady=(4, 0))
         self.pass_entry.insert(0, saved_pass)
 
+        date_row = tk.Frame(inner, bg=COLOR_CARD)
+        date_row.pack(fill="x", pady=(10, 4))
+
+        today_str = jalali_date_str(datetime.now())
+
+        to_col = tk.Frame(date_row, bg=COLOR_CARD)
+        to_col.pack(side="right", fill="x", expand=True, padx=(8, 0))
+        ttk.Label(to_col, text="تا تاریخ", style="Field.TLabel").pack(anchor="e")
+        self.to_date_entry = ttk.Entry(to_col, style="Field.TEntry", justify="right")
+        self.to_date_entry.pack(fill="x", pady=(4, 0))
+        self.to_date_entry.insert(0, today_str)
+
+        from_col = tk.Frame(date_row, bg=COLOR_CARD)
+        from_col.pack(side="right", fill="x", expand=True)
+        ttk.Label(from_col, text="از تاریخ", style="Field.TLabel").pack(anchor="e")
+        self.from_date_entry = ttk.Entry(from_col, style="Field.TEntry", justify="right")
+        self.from_date_entry.pack(fill="x", pady=(4, 0))
+        self.from_date_entry.insert(0, today_str)
+
+        preset_row = tk.Frame(inner, bg=COLOR_CARD)
+        preset_row.pack(fill="x", pady=(6, 0))
+        ttk.Button(
+            preset_row, text="امروز", style="Preset.TButton",
+            command=lambda: self._set_date_range(0, 0),
+        ).pack(side="right", padx=(6, 0))
+        ttk.Button(
+            preset_row, text="دیروز", style="Preset.TButton",
+            command=lambda: self._set_date_range(1, 1),
+        ).pack(side="right", padx=(6, 0))
+        ttk.Button(
+            preset_row, text="۷ روز اخیر", style="Preset.TButton",
+            command=lambda: self._set_date_range(7, 0),
+        ).pack(side="right")
+
         action_row = tk.Frame(inner, bg=COLOR_CARD)
         action_row.pack(fill="x", pady=(14, 10))
         self.start_btn = ttk.Button(
@@ -466,6 +536,12 @@ class App:
             state="disabled",
         )
         self.log_box.pack(fill="both", expand=True, pady=(6, 0))
+
+    def _set_date_range(self, from_days_ago, to_days_ago):
+        self.from_date_entry.delete(0, "end")
+        self.from_date_entry.insert(0, jalali_days_ago(from_days_ago))
+        self.to_date_entry.delete(0, "end")
+        self.to_date_entry.insert(0, jalali_days_ago(to_days_ago))
 
     def _set_window_icon(self, root):
         """آیکون پنجره/نوار وظیفه رو با یه لوگوی ساده‌ی ماشین می‌سازه (بدون فایل خارجی)."""
@@ -506,15 +582,22 @@ class App:
     def start(self):
         username = self.user_entry.get().strip()
         password = self.pass_entry.get().strip()
+        from_date = self.from_date_entry.get().strip()
+        to_date = self.to_date_entry.get().strip()
         if not username or not password:
             messagebox.showerror("خطا", "نام‌کاربری و رمز عبور رو وارد کن.")
+            return
+        if not from_date or not to_date:
+            messagebox.showerror("خطا", "از تاریخ و تا تاریخ رو وارد کن.")
             return
         self.start_btn.config(state="disabled")
         self.progress.start(12)
         self.set_status("در حال ورود...")
-        threading.Thread(target=self.run, args=(username, password), daemon=True).start()
+        threading.Thread(
+            target=self.run, args=(username, password, from_date, to_date), daemon=True
+        ).start()
 
-    def run(self, username, password):
+    def run(self, username, password, from_date, to_date):
         try:
             self._save_creds(username, password)
 
@@ -522,10 +605,10 @@ class App:
             session = login(username, password)
 
             self.set_status("در حال گرفتن لیست پذیرش‌ها...")
-            self.log("در حال گرفتن لیست پذیرش‌ها...")
-            resp = session.get(LIST_URL, timeout=30)
-            resp.raise_for_status()
-            max_page = extract_max_page(resp.text)
+            self.log(f"در حال گرفتن پذیرش‌های {from_date} تا {to_date}...")
+            resp = fetch_reception_list(session, from_date, to_date)
+            pagination = extract_pagination_urls(resp.text, resp.url)
+            max_page = max(pagination)
             self.log(f"{max_page} صفحه پیدا شد.")
 
             rows = []
@@ -537,7 +620,7 @@ class App:
 
             for page in range(2, max_page + 1):
                 self.set_status(f"در حال گرفتن صفحه‌ی {page} از {max_page}...")
-                page_resp = session.get(LIST_PAGE_URL.format(page), timeout=30)
+                page_resp = session.get(pagination[page], timeout=30)
                 page_resp.raise_for_status()
                 for plate, code in extract_reception_rows(page_resp.text):
                     if code not in seen_codes:
