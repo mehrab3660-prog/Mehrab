@@ -191,59 +191,83 @@ XLS_RED_FILL = "FBE7E7"
 XLS_RED_FONT = "B3241C"
 
 
-def style_report_sheet(ws, title, headers, data_rows):
-    """یه شیت اکسل با هدر رنگی، حاشیه، رنگ سبز/قرمز برای تایید/مردود و تنظیم پرینت می‌سازه."""
-    ws.sheet_view.rightToLeft = True
+REPORT_HEADERS = ["ردیف", "کد پذیرش", "پلاک", "وضعیت مخزن ۱", "وضعیت مخزن ۲"]
 
-    n_cols = len(headers)
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=n_cols)
-    title_cell = ws.cell(row=1, column=1, value=title)
-    title_cell.font = Font(size=14, bold=True, color=XLS_NAVY)
-    title_cell.alignment = Alignment(horizontal="center", vertical="center")
-    ws.row_dimensions[1].height = 30
 
-    header_row = 2
-    for col, h in enumerate(headers, start=1):
-        c = ws.cell(row=header_row, column=col, value=h)
-        c.font = Font(bold=True, color="FFFFFF", size=11)
-        c.fill = PatternFill("solid", fgColor=XLS_NAVY)
-        c.alignment = Alignment(horizontal="center", vertical="center")
-    ws.row_dimensions[header_row].height = 22
-
+def add_report_section(ws, start_row, section_title, data_rows):
+    """یه بخش (عنوان + هدر + ردیف‌ها) رو توی شیت اضافه می‌کنه و ردیف شروع بخش بعدی رو برمی‌گردونه."""
+    n_cols = len(REPORT_HEADERS)
     thin = Side(style="thin", color="D0D0D0")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
-    status_cols = [i for i, h in enumerate(headers, start=1) if "وضعیت" in h]
 
-    for r_i, row in enumerate(data_rows, start=header_row + 1):
+    ws.merge_cells(start_row=start_row, start_column=1, end_row=start_row, end_column=n_cols)
+    tcell = ws.cell(row=start_row, column=1, value=f"{section_title} ({len(data_rows)})")
+    tcell.font = Font(bold=True, size=12, color="FFFFFF")
+    tcell.fill = PatternFill("solid", fgColor=XLS_NAVY)
+    tcell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[start_row].height = 22
+
+    header_row = start_row + 1
+    for col, h in enumerate(REPORT_HEADERS, start=1):
+        c = ws.cell(row=header_row, column=col, value=h)
+        c.font = Font(bold=True, color=XLS_NAVY, size=10)
+        c.fill = PatternFill("solid", fgColor=XLS_LIGHT)
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        c.border = border
+
+    for offset, row in enumerate(data_rows):
+        r_i = header_row + 1 + offset
         for c_i, val in enumerate(row, start=1):
             cell = ws.cell(row=r_i, column=c_i, value=val)
             cell.border = border
             cell.alignment = Alignment(horizontal="center", vertical="center")
-            if (r_i - header_row) % 2 == 0:
-                cell.fill = PatternFill("solid", fgColor=XLS_LIGHT)
-            if c_i in status_cols:
-                if val == "تایید":
-                    cell.font = Font(bold=True, color=XLS_GREEN_FONT)
-                    cell.fill = PatternFill("solid", fgColor=XLS_GREEN_FILL)
-                elif val == "مردود":
-                    cell.font = Font(bold=True, color=XLS_RED_FONT)
-                    cell.fill = PatternFill("solid", fgColor=XLS_RED_FILL)
+            if val == "تایید":
+                cell.font = Font(bold=True, color=XLS_GREEN_FONT)
+                cell.fill = PatternFill("solid", fgColor=XLS_GREEN_FILL)
+            elif val == "مردود":
+                cell.font = Font(bold=True, color=XLS_RED_FONT)
+                cell.fill = PatternFill("solid", fgColor=XLS_RED_FILL)
 
-    for col in range(1, n_cols + 1):
-        cell_lens = [len(str(headers[col - 1]))]
-        cell_lens += [len(str(row[col - 1])) for row in data_rows]
-        ws.column_dimensions[get_column_letter(col)].width = max(cell_lens, default=4) + 4
+    return header_row + len(data_rows) + 2  # + یک ردیف خالی فاصله
 
-    ws.freeze_panes = ws.cell(row=header_row + 1, column=1)
-    ws.print_title_rows = f"{header_row}:{header_row}"
-    ws.page_setup.orientation = "landscape"
+
+def build_report_workbook(one_tank_rows, two_tank_rows, rejected_rows, other_rows):
+    """یه فایل اکسل تک‌شیت با بخش‌های تک‌مخزن/دومخزن/مردودی/سایر، آماده‌ی پرینت روی A5."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "گزارش"
+    ws.sheet_view.rightToLeft = True
+
+    n_cols = len(REPORT_HEADERS)
+    row = 1
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=n_cols)
+    title_cell = ws.cell(row=row, column=1, value="گزارش پذیرش‌های گازسوز")
+    title_cell.font = Font(size=14, bold=True, color=XLS_NAVY)
+    title_cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[row].height = 30
+    row += 2
+
+    row = add_report_section(ws, row, "تک‌مخزن", one_tank_rows)
+    row = add_report_section(ws, row, "دو‌مخزن", two_tank_rows)
+    row = add_report_section(ws, row, "مردودی‌ها", rejected_rows)
+    if other_rows:
+        row = add_report_section(ws, row, "سایر", other_rows)
+
+    widths = [6, 12, 16, 12, 12]
+    for col, w in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(col)].width = w
+
+    ws.page_setup.paperSize = ws.PAPERSIZE_A5
+    ws.page_setup.orientation = "portrait"
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 0
     ws.sheet_properties.pageSetUpPr.fitToPage = True
-    ws.page_margins.left = 0.4
-    ws.page_margins.right = 0.4
-    ws.page_margins.top = 0.5
-    ws.page_margins.bottom = 0.5
+    ws.page_margins.left = 0.3
+    ws.page_margins.right = 0.3
+    ws.page_margins.top = 0.4
+    ws.page_margins.bottom = 0.4
+
+    return wb
 
 
 class App:
@@ -489,46 +513,39 @@ class App:
             one_tank = [r for r in results if r["تعداد مخزن"] == 1]
             two_tank = [r for r in results if r["تعداد مخزن"] == 2]
             other = [r for r in results if r["تعداد مخزن"] not in (1, 2)]
+            rejected = [
+                r for r in results
+                if "مردود" in (r["وضعیت مخزن ۱"], r["وضعیت مخزن ۲"])
+            ]
 
-            wb = openpyxl.Workbook()
-            wb.remove(wb.active)
-
-            headers1 = ["ردیف", "کد پذیرش", "پلاک", "وضعیت مخزن"]
-            rows1 = [
-                [i, r["کد پذیرش"], r["پلاک"], r["وضعیت مخزن ۱"]]
+            one_tank_rows = [
+                [i, r["کد پذیرش"], r["پلاک"], r["وضعیت مخزن ۱"], ""]
                 for i, r in enumerate(one_tank, start=1)
             ]
-            style_report_sheet(
-                wb.create_sheet("یک مخزن"), "گزارش پذیرش‌های تک‌مخزن", headers1, rows1
-            )
-
-            headers2 = ["ردیف", "کد پذیرش", "پلاک", "وضعیت مخزن ۱", "وضعیت مخزن ۲"]
-            rows2 = [
+            two_tank_rows = [
                 [i, r["کد پذیرش"], r["پلاک"], r["وضعیت مخزن ۱"], r["وضعیت مخزن ۲"]]
                 for i, r in enumerate(two_tank, start=1)
             ]
-            style_report_sheet(
-                wb.create_sheet("دو مخزن"), "گزارش پذیرش‌های دومخزنه", headers2, rows2
-            )
+            rejected_rows = [
+                [i, r["کد پذیرش"], r["پلاک"], r["وضعیت مخزن ۱"], r["وضعیت مخزن ۲"]]
+                for i, r in enumerate(rejected, start=1)
+            ]
+            other_rows = [
+                [i, r["کد پذیرش"], r["پلاک"], f"{r['تعداد مخزن']} مخزن", ""]
+                for i, r in enumerate(other, start=1)
+            ]
 
-            if other:
-                headers3 = ["ردیف", "کد پذیرش", "پلاک", "تعداد مخزن"]
-                rows3 = [
-                    [i, r["کد پذیرش"], r["پلاک"], r["تعداد مخزن"]]
-                    for i, r in enumerate(other, start=1)
-                ]
-                style_report_sheet(
-                    wb.create_sheet("سایر"), "سایر موارد", headers3, rows3
-                )
-
+            wb = build_report_workbook(one_tank_rows, two_tank_rows, rejected_rows, other_rows)
             wb.save(OUTPUT_FILE)
             self.log(f"ذخیره شد در: {OUTPUT_FILE}")
-            self.log(f"تک‌مخزن: {len(one_tank)} - دومخزنه: {len(two_tank)}")
+            self.log(
+                f"تک‌مخزن: {len(one_tank)} - دومخزنه: {len(two_tank)} - مردودی: {len(rejected)}"
+            )
             self.set_status(f"تمام شد - {len(results)} پذیرش")
             messagebox.showinfo(
                 "تمام شد",
                 f"{len(results)} پذیرش استخراج شد "
-                f"({len(one_tank)} تک‌مخزن، {len(two_tank)} دومخزنه) "
+                f"({len(one_tank)} تک‌مخزن، {len(two_tank)} دومخزنه، {len(rejected)} مردودی) "
                 f"و در result.xlsx ذخیره شد.",
             )
             try:
