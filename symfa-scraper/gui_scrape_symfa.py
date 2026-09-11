@@ -191,81 +191,78 @@ XLS_RED_FILL = "FBE7E7"
 XLS_RED_FONT = "B3241C"
 
 
-REPORT_HEADERS = ["ردیف", "کد پذیرش", "پلاک", "وضعیت مخزن ۱", "وضعیت مخزن ۲"]
-
-
-def add_report_section(ws, start_row, section_title, data_rows):
-    """یه بخش (عنوان + هدر + ردیف‌ها) رو توی شیت اضافه می‌کنه و ردیف شروع بخش بعدی رو برمی‌گردونه."""
-    n_cols = len(REPORT_HEADERS)
+def add_report_block(ws, start_col, title, headers, data_rows):
+    """یه بلوک (عنوان + هدر + ردیف‌ها) رو کنار بلوک‌های قبلی (ستون به ستون) اضافه می‌کنه
+    و شماره‌ی ستون شروع بلوک بعدی رو برمی‌گردونه."""
+    n_cols = len(headers)
+    end_col = start_col + n_cols - 1
     thin = Side(style="thin", color="D0D0D0")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-    ws.merge_cells(start_row=start_row, start_column=1, end_row=start_row, end_column=n_cols)
-    tcell = ws.cell(row=start_row, column=1, value=f"{section_title} ({len(data_rows)})")
-    tcell.font = Font(bold=True, size=12, color="FFFFFF")
+    ws.merge_cells(start_row=1, start_column=start_col, end_row=1, end_column=end_col)
+    tcell = ws.cell(row=1, column=start_col, value=f"{title} ({len(data_rows)})")
+    tcell.font = Font(bold=True, size=11, color="FFFFFF")
     tcell.fill = PatternFill("solid", fgColor=XLS_NAVY)
     tcell.alignment = Alignment(horizontal="center", vertical="center")
-    ws.row_dimensions[start_row].height = 22
 
-    header_row = start_row + 1
-    for col, h in enumerate(REPORT_HEADERS, start=1):
-        c = ws.cell(row=header_row, column=col, value=h)
-        c.font = Font(bold=True, color=XLS_NAVY, size=10)
+    header_row = 2
+    for i, h in enumerate(headers):
+        c = ws.cell(row=header_row, column=start_col + i, value=h)
+        c.font = Font(bold=True, color=XLS_NAVY, size=9)
         c.fill = PatternFill("solid", fgColor=XLS_LIGHT)
         c.alignment = Alignment(horizontal="center", vertical="center")
         c.border = border
 
     for offset, row in enumerate(data_rows):
         r_i = header_row + 1 + offset
-        for c_i, val in enumerate(row, start=1):
-            cell = ws.cell(row=r_i, column=c_i, value=val)
+        for i, val in enumerate(row):
+            cell = ws.cell(row=r_i, column=start_col + i, value=val)
             cell.border = border
             cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.font = Font(size=9)
             if val == "تایید":
-                cell.font = Font(bold=True, color=XLS_GREEN_FONT)
+                cell.font = Font(bold=True, size=9, color=XLS_GREEN_FONT)
                 cell.fill = PatternFill("solid", fgColor=XLS_GREEN_FILL)
             elif val == "مردود":
-                cell.font = Font(bold=True, color=XLS_RED_FONT)
+                cell.font = Font(bold=True, size=9, color=XLS_RED_FONT)
                 cell.fill = PatternFill("solid", fgColor=XLS_RED_FILL)
 
-    return header_row + len(data_rows) + 2  # + یک ردیف خالی فاصله
+    return end_col + 2  # یک ستون خالی به‌عنوان فاصله
 
 
 def build_report_workbook(one_tank_rows, two_tank_rows, rejected_rows, other_rows):
-    """یه فایل اکسل تک‌شیت با بخش‌های تک‌مخزن/دومخزن/مردودی/سایر، آماده‌ی پرینت روی A5."""
+    """یه فایل اکسل تک‌شیت با بلوک‌های تک‌مخزن/دومخزن/مردودی/سایر کنار هم، همه روی یک صفحه‌ی A5."""
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "گزارش"
     ws.sheet_view.rightToLeft = True
 
-    n_cols = len(REPORT_HEADERS)
-    row = 1
-    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=n_cols)
-    title_cell = ws.cell(row=row, column=1, value="گزارش پذیرش‌های گازسوز")
-    title_cell.font = Font(size=14, bold=True, color=XLS_NAVY)
-    title_cell.alignment = Alignment(horizontal="center", vertical="center")
-    ws.row_dimensions[row].height = 30
-    row += 2
-
-    row = add_report_section(ws, row, "تک‌مخزن", one_tank_rows)
-    row = add_report_section(ws, row, "دو‌مخزن", two_tank_rows)
-    row = add_report_section(ws, row, "مردودی‌ها", rejected_rows)
+    blocks = [
+        ("تک‌مخزن", ["ردیف", "پلاک", "وضعیت"], one_tank_rows),
+        ("دو‌مخزن", ["ردیف", "پلاک", "وضعیت ۱", "وضعیت ۲"], two_tank_rows),
+        ("مردودی‌ها", ["ردیف", "پلاک", "وضعیت ۱", "وضعیت ۲"], rejected_rows),
+    ]
     if other_rows:
-        row = add_report_section(ws, row, "سایر", other_rows)
+        blocks.append(("سایر", ["ردیف", "پلاک", "توضیح"], other_rows))
 
-    widths = [6, 12, 16, 12, 12]
-    for col, w in enumerate(widths, start=1):
-        ws.column_dimensions[get_column_letter(col)].width = w
+    col = 1
+    for title, headers, rows in blocks:
+        next_col = add_report_block(ws, col, title, headers, rows)
+        for c in range(col, next_col - 1):
+            width = 6 if headers[c - col] == "ردیف" else 13
+            ws.column_dimensions[get_column_letter(c)].width = width
+        ws.column_dimensions[get_column_letter(next_col - 1)].width = 2
+        col = next_col
 
     ws.page_setup.paperSize = ws.PAPERSIZE_A5
-    ws.page_setup.orientation = "portrait"
+    ws.page_setup.orientation = "landscape"
     ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0
+    ws.page_setup.fitToHeight = 1
     ws.sheet_properties.pageSetUpPr.fitToPage = True
-    ws.page_margins.left = 0.3
-    ws.page_margins.right = 0.3
-    ws.page_margins.top = 0.4
-    ws.page_margins.bottom = 0.4
+    ws.page_margins.left = 0.2
+    ws.page_margins.right = 0.2
+    ws.page_margins.top = 0.3
+    ws.page_margins.bottom = 0.3
 
     return wb
 
@@ -519,19 +516,19 @@ class App:
             ]
 
             one_tank_rows = [
-                [i, r["کد پذیرش"], r["پلاک"], r["وضعیت مخزن ۱"], ""]
+                [i, r["پلاک"], r["وضعیت مخزن ۱"]]
                 for i, r in enumerate(one_tank, start=1)
             ]
             two_tank_rows = [
-                [i, r["کد پذیرش"], r["پلاک"], r["وضعیت مخزن ۱"], r["وضعیت مخزن ۲"]]
+                [i, r["پلاک"], r["وضعیت مخزن ۱"], r["وضعیت مخزن ۲"]]
                 for i, r in enumerate(two_tank, start=1)
             ]
             rejected_rows = [
-                [i, r["کد پذیرش"], r["پلاک"], r["وضعیت مخزن ۱"], r["وضعیت مخزن ۲"]]
+                [i, r["پلاک"], r["وضعیت مخزن ۱"], r["وضعیت مخزن ۲"]]
                 for i, r in enumerate(rejected, start=1)
             ]
             other_rows = [
-                [i, r["کد پذیرش"], r["پلاک"], f"{r['تعداد مخزن']} مخزن", ""]
+                [i, r["پلاک"], f"{r['تعداد مخزن']} مخزن"]
                 for i, r in enumerate(other, start=1)
             ]
 
