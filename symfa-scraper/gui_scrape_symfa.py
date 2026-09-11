@@ -15,6 +15,7 @@ import os
 import re
 import threading
 import tkinter as tk
+from datetime import datetime
 from tkinter import ttk, scrolledtext, messagebox
 
 import requests
@@ -32,6 +33,54 @@ PRINT_URL = f"{BASE}/TestCenters/GasReception/PrintResult?ReceptionId={{}}"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 CREDS_FILE = os.path.join(APP_DIR, "last_login.txt")
 OUTPUT_FILE = os.path.join(APP_DIR, "result.xlsx")
+
+PERSIAN_WEEKDAYS = ["دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه", "شنبه", "یکشنبه"]
+PERSIAN_MONTHS = [
+    "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
+    "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند",
+]
+
+
+def gregorian_to_jalali(gy, gm, gd):
+    """تبدیل تاریخ میلادی به شمسی (بدون نیاز به کتابخونه‌ی جداگانه)."""
+    g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
+    if gy > 1600:
+        jy = 979
+        gy -= 1600
+    else:
+        jy = 0
+        gy -= 621
+    gy2 = gy + 1 if gm > 2 else gy
+    days = (
+        365 * gy
+        + (gy2 + 3) // 4
+        - (gy2 + 99) // 100
+        + (gy2 + 399) // 400
+        - 80
+        + gd
+        + g_d_m[gm - 1]
+    )
+    jy += 33 * (days // 12053)
+    days %= 12053
+    jy += 4 * (days // 1461)
+    days %= 1461
+    if days > 365:
+        jy += (days - 1) // 365
+        days = (days - 1) % 365
+    if days < 186:
+        jm = 1 + days // 31
+        jd = 1 + (days % 31)
+    else:
+        jm = 7 + (days - 186) // 30
+        jd = 1 + ((days - 186) % 30)
+    return jy, jm, jd
+
+
+def today_jalali_string():
+    now = datetime.now()
+    jy, jm, jd = gregorian_to_jalali(now.year, now.month, now.day)
+    weekday = PERSIAN_WEEKDAYS[now.weekday()]
+    return f"{weekday}، {jd} {PERSIAN_MONTHS[jm - 1]} {jy}"
 
 # پالت رنگی - تم تیره‌ی طلایی/سرمه‌ای
 COLOR_BG = "#0e1117"
@@ -191,7 +240,7 @@ XLS_RED_FILL = "FBE7E7"
 XLS_RED_FONT = "B3241C"
 
 
-def add_report_block(ws, start_col, title, headers, data_rows):
+def add_report_block(ws, start_col, start_row, title, headers, data_rows):
     """یه بلوک (عنوان + هدر + ردیف‌ها) رو کنار بلوک‌های قبلی (ستون به ستون) اضافه می‌کنه
     و شماره‌ی ستون شروع بلوک بعدی رو برمی‌گردونه."""
     n_cols = len(headers)
@@ -199,14 +248,14 @@ def add_report_block(ws, start_col, title, headers, data_rows):
     thin = Side(style="thin", color="D0D0D0")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-    ws.merge_cells(start_row=1, start_column=start_col, end_row=1, end_column=end_col)
-    tcell = ws.cell(row=1, column=start_col, value=f"{title} ({len(data_rows)})")
+    ws.merge_cells(start_row=start_row, start_column=start_col, end_row=start_row, end_column=end_col)
+    tcell = ws.cell(row=start_row, column=start_col, value=f"{title} ({len(data_rows)})")
     tcell.font = Font(bold=True, size=14, color="FFFFFF")
     tcell.fill = PatternFill("solid", fgColor=XLS_NAVY)
     tcell.alignment = Alignment(horizontal="center", vertical="center")
-    ws.row_dimensions[1].height = 22
+    ws.row_dimensions[start_row].height = 22
 
-    header_row = 2
+    header_row = start_row + 1
     for i, h in enumerate(headers):
         c = ws.cell(row=header_row, column=start_col + i, value=h)
         c.font = Font(bold=True, color=XLS_NAVY, size=12)
@@ -247,10 +296,19 @@ def build_report_workbook(one_tank_rows, two_tank_rows, rejected_rows, other_row
         ("سایر", ["ردیف", "پلاک", "توضیح"], other_rows),
     ]
     blocks = [b for b in all_blocks if b[2]]  # فقط دسته‌هایی که موردی دارن
+    total_cols = sum(len(headers) for _, headers, _ in blocks) + (len(blocks) - 1)
 
+    date_row = 1
+    ws.merge_cells(start_row=date_row, start_column=1, end_row=date_row, end_column=max(total_cols, 1))
+    date_cell = ws.cell(row=date_row, column=1, value=today_jalali_string())
+    date_cell.font = Font(bold=True, size=12, color=XLS_NAVY)
+    date_cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[date_row].height = 22
+
+    block_row = date_row + 1
     col = 1
     for title, headers, rows in blocks:
-        next_col = add_report_block(ws, col, title, headers, rows)
+        next_col = add_report_block(ws, col, block_row, title, headers, rows)
         for c in range(col, next_col - 1):
             width = 7 if headers[c - col] == "ردیف" else 15
             ws.column_dimensions[get_column_letter(c)].width = width
