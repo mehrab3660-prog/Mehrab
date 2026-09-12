@@ -355,38 +355,64 @@ def add_report_block(ws, start_col, start_row, title, headers, data_rows):
     return end_col + 2  # یک ستون خالی به‌عنوان فاصله
 
 
-def build_report_workbook(one_tank_rows, two_tank_rows, rejected_rows, other_rows, date_label):
-    """یه فایل اکسل تک‌شیت با بلوک‌های تک‌مخزن/دومخزن/مردودی/سایر کنار هم، همه روی یک صفحه‌ی A5."""
+def build_report_workbook(
+    one_tank_rows, two_tank_rows, rejected_rows, other_rows, date_label,
+    stack_threshold=10,
+):
+    """یه فایل اکسل تک‌شیت با بلوک‌های تک‌مخزن/دومخزن/مردودی/سایر کنار هم، همه روی یک صفحه‌ی A5.
+
+    اگه تعداد ردیف‌های دو‌مخزن کم باشه (<= stack_threshold)، مردودی‌ها به‌جای
+    این‌که بلوک جدا و کنار هم بشن، همون زیر بلوک دو‌مخزن (توی همون ستون‌ها) میان.
+    """
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "گزارش"
     ws.sheet_view.rightToLeft = True
 
-    all_blocks = [
-        ("تک‌مخزن", ["ردیف", "پلاک", "وضعیت"], one_tank_rows),
-        ("دو‌مخزن", ["ردیف", "پلاک", "وضعیت"], two_tank_rows),
-        ("مردودی‌ها", ["ردیف", "پلاک", "وضعیت ۱", "وضعیت ۲"], rejected_rows),
-        ("سایر", ["ردیف", "پلاک", "توضیح"], other_rows),
-    ]
-    blocks = [b for b in all_blocks if b[2]]  # فقط دسته‌هایی که موردی دارن
-    total_cols = sum(len(headers) for _, headers, _ in blocks) + (len(blocks) - 1)
+    three_col_headers = ["ردیف", "پلاک", "وضعیت"]
+    stack_rejected = bool(two_tank_rows) and bool(rejected_rows) and len(two_tank_rows) <= stack_threshold
 
     date_row = 1
-    ws.merge_cells(start_row=date_row, start_column=1, end_row=date_row, end_column=max(total_cols, 1))
+    block_row = date_row + 1
+    col = 1
+
+    def place_block(title, headers, rows, start_row=block_row, start_col=None, advance_col=True):
+        nonlocal col
+        scol = col if start_col is None else start_col
+        next_col = add_report_block(ws, scol, start_row, title, headers, rows)
+        for c in range(scol, next_col - 1):
+            width = 7 if headers[c - scol] == "ردیف" else 15
+            ws.column_dimensions[get_column_letter(c)].width = width
+        ws.column_dimensions[get_column_letter(next_col - 1)].width = 2
+        end_row = start_row + 1 + len(rows)  # عنوان + هدر + ردیف‌ها
+        if advance_col:
+            col = next_col
+        return end_row, scol
+
+    if one_tank_rows:
+        place_block("تک‌مخزن", three_col_headers, one_tank_rows)
+
+    if two_tank_rows:
+        two_start_col = col
+        two_end_row, _ = place_block("دو‌مخزن", three_col_headers, two_tank_rows)
+        if stack_rejected:
+            place_block(
+                "مردودی‌ها", three_col_headers, rejected_rows,
+                start_row=two_end_row + 2, start_col=two_start_col, advance_col=False,
+            )
+
+    if rejected_rows and not stack_rejected:
+        place_block("مردودی‌ها", three_col_headers, rejected_rows)
+
+    if other_rows:
+        place_block("سایر", ["ردیف", "پلاک", "توضیح"], other_rows)
+
+    total_cols = max(col - 2, 1)
+    ws.merge_cells(start_row=date_row, start_column=1, end_row=date_row, end_column=total_cols)
     date_cell = ws.cell(row=date_row, column=1, value=date_label)
     date_cell.font = Font(bold=True, size=12, color=XLS_NAVY)
     date_cell.alignment = Alignment(horizontal="center", vertical="center")
     ws.row_dimensions[date_row].height = 22
-
-    block_row = date_row + 1
-    col = 1
-    for title, headers, rows in blocks:
-        next_col = add_report_block(ws, col, block_row, title, headers, rows)
-        for c in range(col, next_col - 1):
-            width = 7 if headers[c - col] == "ردیف" else 15
-            ws.column_dimensions[get_column_letter(c)].width = width
-        ws.column_dimensions[get_column_letter(next_col - 1)].width = 2
-        col = next_col
 
     ws.page_setup.paperSize = ws.PAPERSIZE_A5
     ws.page_setup.orientation = "portrait"
@@ -721,8 +747,7 @@ class App:
                 [i, r["پلاک"], "تایید"] for i, r in enumerate(two_tank, start=1)
             ]
             rejected_rows = [
-                [i, r["پلاک"], r["وضعیت مخزن ۱"], r["وضعیت مخزن ۲"]]
-                for i, r in enumerate(rejected, start=1)
+                [i, r["پلاک"], "مردود"] for i, r in enumerate(rejected, start=1)
             ]
             other_rows = [
                 [i, r["پلاک"], f"{r['تعداد مخزن']} مخزن"]
