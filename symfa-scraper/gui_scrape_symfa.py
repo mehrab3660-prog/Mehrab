@@ -357,15 +357,11 @@ def add_report_block(ws, start_col, start_row, title, headers, data_rows):
 
 def build_report_workbook(
     one_tank_rows, two_tank_rows, rejected_one_tank_rows, rejected_two_tank_rows,
-    other_rows, date_label, stack_threshold=10,
+    other_rows, date_label,
 ):
-    """یه فایل اکسل تک‌شیت با بلوک‌های تفکیک‌شده (تک‌مخزن/دومخزن/مردودی تک‌مخزن/
-    مردودی جفت‌مخزن/سایر) کنار هم، همه روی یک صفحه‌ی A5. هر پلاک فقط توی یکی از
-    بلوک‌ها میاد.
-
-    اگه تعداد ردیف‌های یه بلوک (تک‌مخزن یا دومخزن) کم باشه (<= stack_threshold)،
-    مردودیِ همون دسته به‌جای بلوک جدا و کنار هم، زیر همون بلوک (توی همون
-    ستون‌ها) میاد.
+    """یه فایل اکسل تک‌شیت با بلوک‌های تفکیک‌شده کنار هم، همه روی یک صفحه‌ی A5.
+    هر پلاک فقط توی یکی از بلوک‌ها میاد: تک‌مخزن، دو‌مخزن، و یه بلوک مشترک
+    «مردودی‌ها» که مردودی تک‌مخزن و مردودی جفت‌مخزن همیشه با هم و زیر هم توش میان.
     """
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -391,21 +387,28 @@ def build_report_workbook(
             col = next_col
         return end_row, scol
 
-    def place_with_rejected(title, rows, rejected_title, rejected_rows):
-        stack = bool(rows) and bool(rejected_rows) and len(rows) <= stack_threshold
-        if rows:
-            start_col = col
-            end_row, _ = place_block(title, three_col_headers, rows)
-            if stack:
-                place_block(
-                    rejected_title, three_col_headers, rejected_rows,
-                    start_row=end_row + 2, start_col=start_col, advance_col=False,
-                )
-        if rejected_rows and not stack:
-            place_block(rejected_title, three_col_headers, rejected_rows)
+    if one_tank_rows:
+        place_block("تک‌مخزن", three_col_headers, one_tank_rows)
 
-    place_with_rejected("تک‌مخزن", one_tank_rows, "مردودی تک‌مخزن", rejected_one_tank_rows)
-    place_with_rejected("دو‌مخزن", two_tank_rows, "مردودی جفت‌مخزن", rejected_two_tank_rows)
+    if two_tank_rows:
+        place_block("دو‌مخزن", three_col_headers, two_tank_rows)
+
+    # مردودی تک‌مخزن و مردودی جفت‌مخزن همیشه با هم، توی یه ستون مشترک، زیر هم
+    if rejected_one_tank_rows or rejected_two_tank_rows:
+        rej_col = col
+        row = block_row
+        if rejected_one_tank_rows:
+            row, _ = place_block(
+                "مردودی تک‌مخزن", three_col_headers, rejected_one_tank_rows,
+                start_row=row, start_col=rej_col, advance_col=False,
+            )
+            row += 2
+        if rejected_two_tank_rows:
+            place_block(
+                "مردودی جفت‌مخزن", three_col_headers, rejected_two_tank_rows,
+                start_row=row, start_col=rej_col, advance_col=False,
+            )
+        col = rej_col + len(three_col_headers) + 1
 
     if other_rows:
         place_block("سایر", ["ردیف", "پلاک", "توضیح"], other_rows)
