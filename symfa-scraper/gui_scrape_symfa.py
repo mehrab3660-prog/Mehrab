@@ -772,8 +772,20 @@ class App:
                 rejected_one_tank_rows, rejected_two_tank_rows, other_rows,
                 report_date_label(from_date, to_date),
             )
-            wb.save(OUTPUT_FILE)
-            self.log(f"ذخیره شد در: {OUTPUT_FILE}")
+            save_path = OUTPUT_FILE
+            try:
+                wb.save(save_path)
+            except PermissionError:
+                # فایل قبلی احتمالاً توی اکسل بازه - با اسم دیگه ذخیره می‌کنیم تا نتیجه از دست نره
+                save_path = os.path.join(
+                    APP_DIR, f"result_{datetime.now().strftime('%H%M%S')}.xlsx"
+                )
+                wb.save(save_path)
+                self.log(
+                    f"result.xlsx باز بود (احتمالاً توی اکسل) - "
+                    f"به‌جاش با اسم {os.path.basename(save_path)} ذخیره شد."
+                )
+            self.log(f"ذخیره شد در: {save_path}")
             self.log(
                 f"تک‌مخزن: {len(one_tank)} - دومخزنه: {len(two_tank)} - "
                 f"مردودی تک‌مخزن: {len(rejected_one_tank)} - مردودی جفت‌مخزن: {len(rejected_two_tank)}"
@@ -784,10 +796,10 @@ class App:
                 f"{len(results)} پذیرش استخراج شد "
                 f"({len(one_tank)} تک‌مخزن، {len(two_tank)} دومخزنه، "
                 f"{len(rejected_one_tank)} مردودی تک‌مخزن، {len(rejected_two_tank)} مردودی جفت‌مخزن) "
-                f"و در result.xlsx ذخیره شد.",
+                f"و در {os.path.basename(save_path)} ذخیره شد.",
             )
             try:
-                os.startfile(OUTPUT_FILE)
+                os.startfile(save_path)
             except Exception:
                 pass
         except Exception as e:
