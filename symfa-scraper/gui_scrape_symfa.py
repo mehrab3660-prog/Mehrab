@@ -729,22 +729,20 @@ class App:
             ]
             rejected_codes = {r["کد پذیرش"] for r in rejected}
 
-            # تک‌مخزن/دومخزن فقط شامل موارد تاییدشده - مردودی‌ها جدا نشون داده می‌شن
-            one_tank = [
-                r for r in results
-                if r["تعداد مخزن"] == 1 and r["کد پذیرش"] not in rejected_codes
-            ]
-            two_tank = [
-                r for r in results
-                if r["تعداد مخزن"] == 2 and r["کد پذیرش"] not in rejected_codes
-            ]
+            # تک‌مخزن/دومخزن شامل همه‌ی موارد می‌شه (چه تایید چه مردود)؛
+            # مردودی‌ها هم جدا (به‌صورت تکراری) نشون داده می‌شه تا زود دیده بشه.
+            one_tank = [r for r in results if r["تعداد مخزن"] == 1]
+            two_tank = [r for r in results if r["تعداد مخزن"] == 2]
             other = [r for r in results if r["تعداد مخزن"] not in (1, 2)]
 
+            def status_of(r):
+                return "مردود" if r["کد پذیرش"] in rejected_codes else "تایید"
+
             one_tank_rows = [
-                [i, r["پلاک"], "تایید"] for i, r in enumerate(one_tank, start=1)
+                [i, r["پلاک"], status_of(r)] for i, r in enumerate(one_tank, start=1)
             ]
             two_tank_rows = [
-                [i, r["پلاک"], "تایید"] for i, r in enumerate(two_tank, start=1)
+                [i, r["پلاک"], status_of(r)] for i, r in enumerate(two_tank, start=1)
             ]
             rejected_rows = [
                 [i, r["پلاک"], "مردود"] for i, r in enumerate(rejected, start=1)
