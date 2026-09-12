@@ -76,17 +76,63 @@ def gregorian_to_jalali(gy, gm, gd):
     return jy, jm, jd
 
 
+def jalali_to_gregorian(jy, jm, jd):
+    """تبدیل تاریخ شمسی به میلادی (معکوس gregorian_to_jalali)."""
+    jy += 1595
+    days = -355668 + (365 * jy) + (jy // 33) * 8 + (((jy % 33) + 3) // 4) + jd
+    days += (jm - 1) * 31 if jm < 7 else ((jm - 7) * 30) + 186
+    gy = 400 * (days // 146097)
+    days %= 146097
+    if days > 36524:
+        days -= 1
+        gy += 100 * (days // 36524)
+        days %= 36524
+        days += 1
+    gy += 4 * (days // 1461)
+    days %= 1461
+    if days > 365:
+        gy += (days - 1) // 365
+        days = (days - 1) % 365
+    gd = days + 1
+    leap = gy % 4 == 0 and (gy % 100 != 0 or gy % 400 == 0)
+    g_days_in_month = [31, 29 if leap else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    gm = 0
+    while gm < 12 and gd > g_days_in_month[gm]:
+        gd -= g_days_in_month[gm]
+        gm += 1
+    return gy, gm + 1, gd
+
+
+def jalali_weekday_label(jy, jm, jd):
+    """اسم روز هفته + تاریخ شمسی رو برای یه تاریخ شمسیِ دلخواه می‌سازه."""
+    gy, gm, gd = jalali_to_gregorian(jy, jm, jd)
+    weekday = PERSIAN_WEEKDAYS[datetime(gy, gm, gd).weekday()]
+    return f"{weekday}، {jd} {PERSIAN_MONTHS[jm - 1]} {jy}"
+
+
 def today_jalali_string():
     now = datetime.now()
     jy, jm, jd = gregorian_to_jalali(now.year, now.month, now.day)
-    weekday = PERSIAN_WEEKDAYS[now.weekday()]
-    return f"{weekday}، {jd} {PERSIAN_MONTHS[jm - 1]} {jy}"
+    return jalali_weekday_label(jy, jm, jd)
 
 
 def jalali_date_str(dt):
     """تاریخ رو به همون فرمتی که فیلتر سایت می‌خواد برمی‌گردونه: 1405/06/19"""
     jy, jm, jd = gregorian_to_jalali(dt.year, dt.month, dt.day)
     return f"{jy}/{jm:02d}/{jd:02d}"
+
+
+def report_date_label(from_date_str, to_date_str):
+    """برچسب تاریخ گزارش رو از روی بازه‌ی انتخاب‌شده (نه تاریخ اجرای برنامه) می‌سازه."""
+    try:
+        fy, fm, fd = (int(x) for x in from_date_str.split("/"))
+        ty, tm, td = (int(x) for x in to_date_str.split("/"))
+    except ValueError:
+        return f"{from_date_str} تا {to_date_str}"
+
+    if (fy, fm, fd) == (ty, tm, td):
+        return jalali_weekday_label(fy, fm, fd)
+    return f"از {jalali_weekday_label(fy, fm, fd)} تا {jalali_weekday_label(ty, tm, td)}"
 
 
 def jalali_days_ago(n):
@@ -309,7 +355,7 @@ def add_report_block(ws, start_col, start_row, title, headers, data_rows):
     return end_col + 2  # یک ستون خالی به‌عنوان فاصله
 
 
-def build_report_workbook(one_tank_rows, two_tank_rows, rejected_rows, other_rows):
+def build_report_workbook(one_tank_rows, two_tank_rows, rejected_rows, other_rows, date_label):
     """یه فایل اکسل تک‌شیت با بلوک‌های تک‌مخزن/دومخزن/مردودی/سایر کنار هم، همه روی یک صفحه‌ی A5."""
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -327,7 +373,7 @@ def build_report_workbook(one_tank_rows, two_tank_rows, rejected_rows, other_row
 
     date_row = 1
     ws.merge_cells(start_row=date_row, start_column=1, end_row=date_row, end_column=max(total_cols, 1))
-    date_cell = ws.cell(row=date_row, column=1, value=today_jalali_string())
+    date_cell = ws.cell(row=date_row, column=1, value=date_label)
     date_cell.font = Font(bold=True, size=12, color=XLS_NAVY)
     date_cell.alignment = Alignment(horizontal="center", vertical="center")
     ws.row_dimensions[date_row].height = 22
@@ -683,7 +729,10 @@ class App:
                 for i, r in enumerate(other, start=1)
             ]
 
-            wb = build_report_workbook(one_tank_rows, two_tank_rows, rejected_rows, other_rows)
+            wb = build_report_workbook(
+                one_tank_rows, two_tank_rows, rejected_rows, other_rows,
+                report_date_label(from_date, to_date),
+            )
             wb.save(OUTPUT_FILE)
             self.log(f"ذخیره شد در: {OUTPUT_FILE}")
             self.log(
