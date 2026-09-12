@@ -357,11 +357,14 @@ def add_report_block(ws, start_col, start_row, title, headers, data_rows):
 
 def build_report_workbook(
     one_tank_rows, two_tank_rows, rejected_one_tank_rows, rejected_two_tank_rows,
-    other_rows, date_label,
+    other_rows, date_label, stack_threshold=19,
 ):
     """یه فایل اکسل تک‌شیت با بلوک‌های تفکیک‌شده کنار هم، همه روی یک صفحه‌ی A5.
-    هر پلاک فقط توی یکی از بلوک‌ها میاد: تک‌مخزن، دو‌مخزن، و یه بلوک مشترک
-    «مردودی‌ها» که مردودی تک‌مخزن و مردودی جفت‌مخزن همیشه با هم و زیر هم توش میان.
+    هر پلاک فقط توی یکی از بلوک‌ها میاد: تک‌مخزن، دو‌مخزن، و مردودی تک‌مخزن/جفت‌مخزن
+    که همیشه با هم و زیر هم میان.
+
+    اگه مجموع مردودی‌ها کمتر از stack_threshold باشه، زیر بلوک دو‌مخزن (توی همون
+    ستون‌ها) میان؛ وگرنه بلوک جدا و مستقل خودشون رو می‌گیرن.
     """
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -387,27 +390,36 @@ def build_report_workbook(
             col = next_col
         return end_row, scol
 
-    if one_tank_rows:
-        place_block("تک‌مخزن", three_col_headers, one_tank_rows)
-
-    if two_tank_rows:
-        place_block("دو‌مخزن", three_col_headers, two_tank_rows)
-
-    # مردودی تک‌مخزن و مردودی جفت‌مخزن همیشه با هم، توی یه ستون مشترک، زیر هم
-    if rejected_one_tank_rows or rejected_two_tank_rows:
-        rej_col = col
-        row = block_row
+    def place_rejected_blocks(start_row, start_col):
+        row = start_row
         if rejected_one_tank_rows:
             row, _ = place_block(
                 "مردودی تک‌مخزن", three_col_headers, rejected_one_tank_rows,
-                start_row=row, start_col=rej_col, advance_col=False,
+                start_row=row, start_col=start_col, advance_col=False,
             )
             row += 2
         if rejected_two_tank_rows:
             place_block(
                 "مردودی جفت‌مخزن", three_col_headers, rejected_two_tank_rows,
-                start_row=row, start_col=rej_col, advance_col=False,
+                start_row=row, start_col=start_col, advance_col=False,
             )
+
+    if one_tank_rows:
+        place_block("تک‌مخزن", three_col_headers, one_tank_rows)
+
+    total_rejected = len(rejected_one_tank_rows) + len(rejected_two_tank_rows)
+    has_rejected = bool(rejected_one_tank_rows or rejected_two_tank_rows)
+    stack_under_two_tank = bool(two_tank_rows) and has_rejected and total_rejected < stack_threshold
+
+    if two_tank_rows:
+        two_start_col = col
+        two_end_row, _ = place_block("دو‌مخزن", three_col_headers, two_tank_rows)
+        if stack_under_two_tank:
+            place_rejected_blocks(two_end_row + 2, two_start_col)
+
+    if has_rejected and not stack_under_two_tank:
+        rej_col = col
+        place_rejected_blocks(block_row, rej_col)
         col = rej_col + len(three_col_headers) + 1
 
     if other_rows:
