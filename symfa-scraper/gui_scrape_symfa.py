@@ -356,13 +356,16 @@ def add_report_block(ws, start_col, start_row, title, headers, data_rows):
 
 
 def build_report_workbook(
-    one_tank_rows, two_tank_rows, rejected_rows, other_rows, date_label,
-    stack_threshold=10,
+    one_tank_rows, two_tank_rows, rejected_one_tank_rows, rejected_two_tank_rows,
+    other_rows, date_label, stack_threshold=10,
 ):
-    """یه فایل اکسل تک‌شیت با بلوک‌های تک‌مخزن/دومخزن/مردودی/سایر کنار هم، همه روی یک صفحه‌ی A5.
+    """یه فایل اکسل تک‌شیت با بلوک‌های تفکیک‌شده (تک‌مخزن/دومخزن/مردودی تک‌مخزن/
+    مردودی جفت‌مخزن/سایر) کنار هم، همه روی یک صفحه‌ی A5. هر پلاک فقط توی یکی از
+    بلوک‌ها میاد.
 
-    اگه تعداد ردیف‌های دو‌مخزن کم باشه (<= stack_threshold)، مردودی‌ها به‌جای
-    این‌که بلوک جدا و کنار هم بشن، همون زیر بلوک دو‌مخزن (توی همون ستون‌ها) میان.
+    اگه تعداد ردیف‌های یه بلوک (تک‌مخزن یا دومخزن) کم باشه (<= stack_threshold)،
+    مردودیِ همون دسته به‌جای بلوک جدا و کنار هم، زیر همون بلوک (توی همون
+    ستون‌ها) میاد.
     """
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -370,7 +373,6 @@ def build_report_workbook(
     ws.sheet_view.rightToLeft = True
 
     three_col_headers = ["ردیف", "پلاک", "وضعیت"]
-    stack_rejected = bool(two_tank_rows) and bool(rejected_rows) and len(two_tank_rows) <= stack_threshold
 
     date_row = 1
     block_row = date_row + 1
@@ -389,20 +391,21 @@ def build_report_workbook(
             col = next_col
         return end_row, scol
 
-    if one_tank_rows:
-        place_block("تک‌مخزن", three_col_headers, one_tank_rows)
+    def place_with_rejected(title, rows, rejected_title, rejected_rows):
+        stack = bool(rows) and bool(rejected_rows) and len(rows) <= stack_threshold
+        if rows:
+            start_col = col
+            end_row, _ = place_block(title, three_col_headers, rows)
+            if stack:
+                place_block(
+                    rejected_title, three_col_headers, rejected_rows,
+                    start_row=end_row + 2, start_col=start_col, advance_col=False,
+                )
+        if rejected_rows and not stack:
+            place_block(rejected_title, three_col_headers, rejected_rows)
 
-    if two_tank_rows:
-        two_start_col = col
-        two_end_row, _ = place_block("دو‌مخزن", three_col_headers, two_tank_rows)
-        if stack_rejected:
-            place_block(
-                "مردودی‌ها", three_col_headers, rejected_rows,
-                start_row=two_end_row + 2, start_col=two_start_col, advance_col=False,
-            )
-
-    if rejected_rows and not stack_rejected:
-        place_block("مردودی‌ها", three_col_headers, rejected_rows)
+    place_with_rejected("تک‌مخزن", one_tank_rows, "مردودی تک‌مخزن", rejected_one_tank_rows)
+    place_with_rejected("دو‌مخزن", two_tank_rows, "مردودی جفت‌مخزن", rejected_two_tank_rows)
 
     if other_rows:
         place_block("سایر", ["ردیف", "پلاک", "توضیح"], other_rows)
@@ -723,29 +726,41 @@ class App:
                 )
                 self.log(f"{code} - {actual_plate} - {tanks}")
 
-            rejected = [
-                r for r in results
+            rejected_codes = {
+                r["کد پذیرش"] for r in results
                 if "مردود" in (r["وضعیت مخزن ۱"], r["وضعیت مخزن ۲"])
-            ]
-            rejected_codes = {r["کد پذیرش"] for r in rejected}
+            }
 
-            # تک‌مخزن/دومخزن شامل همه‌ی موارد می‌شه (چه تایید چه مردود)؛
-            # مردودی‌ها هم جدا (به‌صورت تکراری) نشون داده می‌شه تا زود دیده بشه.
-            one_tank = [r for r in results if r["تعداد مخزن"] == 1]
-            two_tank = [r for r in results if r["تعداد مخزن"] == 2]
+            # هر پلاک فقط توی یه دسته میاد - قبول/مردود و تک‌مخزن/دومخزن کاملاً تفکیک شده
+            one_tank = [
+                r for r in results
+                if r["تعداد مخزن"] == 1 and r["کد پذیرش"] not in rejected_codes
+            ]
+            two_tank = [
+                r for r in results
+                if r["تعداد مخزن"] == 2 and r["کد پذیرش"] not in rejected_codes
+            ]
+            rejected_one_tank = [
+                r for r in results
+                if r["تعداد مخزن"] == 1 and r["کد پذیرش"] in rejected_codes
+            ]
+            rejected_two_tank = [
+                r for r in results
+                if r["تعداد مخزن"] == 2 and r["کد پذیرش"] in rejected_codes
+            ]
             other = [r for r in results if r["تعداد مخزن"] not in (1, 2)]
 
-            def status_of(r):
-                return "مردود" if r["کد پذیرش"] in rejected_codes else "تایید"
-
             one_tank_rows = [
-                [i, r["پلاک"], status_of(r)] for i, r in enumerate(one_tank, start=1)
+                [i, r["پلاک"], "تایید"] for i, r in enumerate(one_tank, start=1)
             ]
             two_tank_rows = [
-                [i, r["پلاک"], status_of(r)] for i, r in enumerate(two_tank, start=1)
+                [i, r["پلاک"], "تایید"] for i, r in enumerate(two_tank, start=1)
             ]
-            rejected_rows = [
-                [i, r["پلاک"], "مردود"] for i, r in enumerate(rejected, start=1)
+            rejected_one_tank_rows = [
+                [i, r["پلاک"], "مردود"] for i, r in enumerate(rejected_one_tank, start=1)
+            ]
+            rejected_two_tank_rows = [
+                [i, r["پلاک"], "مردود"] for i, r in enumerate(rejected_two_tank, start=1)
             ]
             other_rows = [
                 [i, r["پلاک"], f"{r['تعداد مخزن']} مخزن"]
@@ -753,19 +768,22 @@ class App:
             ]
 
             wb = build_report_workbook(
-                one_tank_rows, two_tank_rows, rejected_rows, other_rows,
+                one_tank_rows, two_tank_rows,
+                rejected_one_tank_rows, rejected_two_tank_rows, other_rows,
                 report_date_label(from_date, to_date),
             )
             wb.save(OUTPUT_FILE)
             self.log(f"ذخیره شد در: {OUTPUT_FILE}")
             self.log(
-                f"تک‌مخزن: {len(one_tank)} - دومخزنه: {len(two_tank)} - مردودی: {len(rejected)}"
+                f"تک‌مخزن: {len(one_tank)} - دومخزنه: {len(two_tank)} - "
+                f"مردودی تک‌مخزن: {len(rejected_one_tank)} - مردودی جفت‌مخزن: {len(rejected_two_tank)}"
             )
             self.set_status(f"تمام شد - {len(results)} پذیرش")
             messagebox.showinfo(
                 "تمام شد",
                 f"{len(results)} پذیرش استخراج شد "
-                f"({len(one_tank)} تک‌مخزن، {len(two_tank)} دومخزنه، {len(rejected)} مردودی) "
+                f"({len(one_tank)} تک‌مخزن، {len(two_tank)} دومخزنه، "
+                f"{len(rejected_one_tank)} مردودی تک‌مخزن، {len(rejected_two_tank)} مردودی جفت‌مخزن) "
                 f"و در result.xlsx ذخیره شد.",
             )
             try:
