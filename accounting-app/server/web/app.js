@@ -164,7 +164,7 @@ function createSearchableSelect(containerId, options, { placeholder = 'جستج�
     list = list.slice(0, 60);
     let html = '';
     if (allowEmpty && !q) html += `<div class="ss-item" data-value="">${emptyLabel}</div>`;
-    html += list.map(o => `<div class="ss-item" data-value="${o.value}">${o.label}</div>`).join('');
+    html += list.map(o => `<div class="ss-item" data-value="${o.value}">${escHtml(o.label)}</div>`).join('');
     dropdown.innerHTML = html || '<div class="ss-item muted">موردی پیدا نشد</div>';
     dropdown.classList.remove('hidden');
   }
@@ -654,14 +654,14 @@ async function loadNotifications() {
   (summary && summary.low_stock_items || []).forEach(it => {
     items.push({
       icon: it.stock_qty <= 0 ? '🔴' : '🟠',
-      text: `${it.name} — ${it.stock_qty <= 0 ? 'تمام شده' : 'موجودی کم: ' + fmt(it.stock_qty)}`,
+      text: `${escHtml(it.name)} — ${it.stock_qty <= 0 ? 'تمام شده' : 'موجودی کم: ' + fmt(it.stock_qty)}`,
       page: 'items',
     });
   });
   (checks || []).filter(c => c.due_date && c.due_date <= today).forEach(c => {
     items.push({
       icon: '💳',
-      text: `چک ${fmtRial(c.amount)} ریالی ${c.party_name || ''} — سررسید ${toFaDigits(c.due_date)}`,
+      text: `چک ${fmtRial(c.amount)} ریالی ${escHtml(c.party_name || '')} — سررسید ${toFaDigits(c.due_date)}`,
       page: 'checks',
     });
   });
@@ -1470,10 +1470,10 @@ async function loadDashboard() {
   // ---- یادآوری‌ها (کالای کم‌موجود + چک در انتظار) ----
   const reminders = [];
   (data.low_stock_items || []).forEach(it => {
-    reminders.push({ text: `${it.name} — ${it.stock_qty <= 0 ? 'تمام شده' : 'موجودی کم: ' + fmt(it.stock_qty)}`, color: it.stock_qty <= 0 ? 'danger' : 'warning' });
+    reminders.push({ text: `${escHtml(it.name)} — ${it.stock_qty <= 0 ? 'تمام شده' : 'موجودی کم: ' + fmt(it.stock_qty)}`, color: it.stock_qty <= 0 ? 'danger' : 'warning' });
   });
   pendingChecks.slice(0, 5).forEach(c => {
-    reminders.push({ text: `چک ${fmtRial(c.amount)} ریالی ${c.party_name || ''} — سررسید ${toFaDigits(c.due_date)}`, color: 'warning' });
+    reminders.push({ text: `چک ${fmtRial(c.amount)} ریالی ${escHtml(c.party_name || '')} — سررسید ${toFaDigits(c.due_date)}`, color: 'warning' });
   });
   $('#reminders-list').innerHTML = reminders.length
     ? reminders.slice(0, 8).map(r => `<li><span>${r.text}</span><span class="badge badge-${r.color === 'danger' ? 'red' : 'orange'}">!</span></li>`).join('')
@@ -1483,24 +1483,24 @@ async function loadDashboard() {
   const typeLabelShort = { sale: 'فروش', purchase: 'خرید', sale_return: 'مرجوعی فروش', purchase_return: 'مرجوعی خرید' };
   $('#dash-recent-invoices').innerHTML = (invoices || []).slice(0, 6).map(inv => `
     <tr>
-      <td>${inv.number || inv.id}</td>
+      <td>${escHtml(inv.number || inv.id)}</td>
       <td>${toJalaliDate(inv.date)}</td>
-      <td>${inv.party_name || '—'}</td>
+      <td>${escHtml(inv.party_name || '—')}</td>
       <td title="${wordsTitle(inv.total)}">${fmtRial(inv.total)} <span class="muted" style="font-size:11px">(${typeLabelShort[inv.invoice_type] || ''})</span></td>
     </tr>`).join('') || '<tr><td colspan="4" class="muted">فاکتوری ثبت نشده</td></tr>';
 
   // ---- موجودی کالاها / پرفروش‌ترین‌ها / بیشترین بدهکار ----
   $('#dash-stock-ranking').innerHTML = (stockRanking || []).slice(0, 5).map((it, i) =>
-    `<li><span><span class="insight-rank">${toFaDigits(i + 1)}</span>${it.name}${it.brand ? ' (' + it.brand + ')' : ''}</span><strong>${fmt(it.stock_qty)} ${it.unit}</strong></li>`
+    `<li><span><span class="insight-rank">${toFaDigits(i + 1)}</span>${escHtml(it.name)}${it.brand ? ' (' + escHtml(it.brand) + ')' : ''}</span><strong>${fmt(it.stock_qty)} ${escHtml(it.unit)}</strong></li>`
   ).join('') || '<li class="muted">کالایی ثبت نشده</li>';
 
   $('#dash-top-items').innerHTML = (topItems || []).slice(0, 5).map((it, i) =>
-    `<li><span><span class="insight-rank">${toFaDigits(i + 1)}</span>${it.name}</span><strong>${fmt(it.total_qty)} عدد</strong></li>`
+    `<li><span><span class="insight-rank">${toFaDigits(i + 1)}</span>${escHtml(it.name)}</span><strong>${fmt(it.total_qty)} عدد</strong></li>`
   ).join('') || '<li class="muted">فروشی در ۳۰ روز اخیر ثبت نشده</li>';
 
   const sortedDebtors = (debtors || []).slice().sort((a, b) => b.balance - a.balance);
   $('#dash-top-debtor').innerHTML = sortedDebtors.slice(0, 5).map((p, i) =>
-    `<li><span><span class="insight-rank">${toFaDigits(i + 1)}</span>${p.name}</span><strong title="${wordsTitle(p.balance)}" style="color:var(--danger)">${fmtRial(p.balance)}</strong></li>`
+    `<li><span><span class="insight-rank">${toFaDigits(i + 1)}</span>${escHtml(p.name)}</span><strong title="${wordsTitle(p.balance)}" style="color:var(--danger)">${fmtRial(p.balance)}</strong></li>`
   ).join('') || '<li class="muted">مشتری بدهکاری ثبت نشده ✅</li>';
 }
 
@@ -1525,7 +1525,7 @@ function renderItemsTable() {
       <td>
         ${it.photo_filename ? `<img src="/assets/${it.photo_filename}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;cursor:pointer" onclick="openItemPhotoModal(${it.id})">` : `<button class="btn btn-sm btn-secondary" onclick="openItemPhotoModal(${it.id})">+ عکس</button>`}
       </td>
-      <td>${it.code || '—'}</td><td>${it.name}</td><td>${it.category_id ? escHtml(catNameById[it.category_id] || '—') : '—'}</td><td>${it.brand || '—'}</td><td>${it.unit}</td>
+      <td>${escHtml(it.code || '—')}</td><td>${escHtml(it.name)}</td><td>${it.category_id ? escHtml(catNameById[it.category_id] || '—') : '—'}</td><td>${escHtml(it.brand || '—')}</td><td>${escHtml(it.unit)}</td>
       <td title="${it.purchase_price ? 'به حروف: ' + numberToPersianWords(it.purchase_price) + ' تومان' : ''}">${it.purchase_price === null ? '—' : fmtRial(it.purchase_price)}</td>
       <td title="${it.sale_price ? 'به حروف: ' + numberToPersianWords(it.sale_price) + ' تومان' : ''}">${fmtRial(it.sale_price)}</td>
       <td>${it.stock_qty <= 0 ? `<span class="badge badge-red">تمام شده${it.stock_qty < 0 ? ' (' + fmt(Math.abs(it.stock_qty)) + ' کسری)' : ''}</span>` : (it.stock_qty <= it.min_stock ? `<span class="badge badge-orange">${fmt(it.stock_qty)}</span>` : fmt(it.stock_qty))}</td>
@@ -1539,7 +1539,7 @@ function renderItemsTable() {
 function openEditItemModal(itemId) {
   const it = state.items.find(x => x.id === itemId);
   if (!it) return;
-  const catOptions = state.categories.map(c => `<option value="${c.id}"${it.category_id === c.id ? ' selected' : ''}>${c.name}</option>`).join('');
+  const catOptions = state.categories.map(c => `<option value="${c.id}"${it.category_id === c.id ? ' selected' : ''}>${escHtml(c.name)}</option>`).join('');
   openModal(`
     <h3>ویرایش کالا</h3>
     <div class="form-row"><div><label>کد/بارکد</label><input id="ei-code" value="${escHtml(it.code || '')}"></div><div><label>نام کالا</label><input id="ei-name" value="${escHtml(it.name || '')}"></div></div>
@@ -1676,7 +1676,7 @@ $('#btn-new-category').addEventListener('click', () => {
   });
 });
 $('#btn-new-item').addEventListener('click', () => {
-  const catOptions = state.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  const catOptions = state.categories.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('');
   openModal(`
     <h3>کالای جدید</h3>
     <div class="form-row"><div><label>کد/بارکد</label><input id="ni-code"></div><div><label>نام کالا</label><input id="ni-name"></div></div>
@@ -1713,9 +1713,9 @@ $('#btn-new-item').addEventListener('click', () => {
 async function showStockLedger(itemId) {
   const data = await api('GET', `/reports/stock-ledger/${itemId}`);
   if (!data) return;
-  const rows = data.ledger.map(r => `<tr><td>${toJalaliDate(r.date, true)}</td><td>${r.type}</td><td>${r.number || '—'}</td><td>${fmt(r.qty)}</td><td>${fmt(r.running_balance)}</td></tr>`).join('');
+  const rows = data.ledger.map(r => `<tr><td>${toJalaliDate(r.date, true)}</td><td>${escHtml(r.type)}</td><td>${escHtml(r.number || '—')}</td><td>${fmt(r.qty)}</td><td>${fmt(r.running_balance)}</td></tr>`).join('');
   openModal(`
-    <h3>گردش انبار: ${data.item.name}</h3>
+    <h3>گردش انبار: ${escHtml(data.item.name)}</h3>
     <table class="data-table"><thead><tr><th>تاریخ</th><th>نوع</th><th>شماره فاکتور</th><th>تعداد</th><th>مانده</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="muted">حرکتی ثبت نشده</td></tr>'}</tbody></table>
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">بستن</button></div>`);
 }
@@ -1942,7 +1942,7 @@ function loadInvoiceForm(type) {
     const grandTotal = Math.max(subtotal - discount, 0);
 
     const rowsHtml = cart.map(c => `
-      <tr><td>${c.item_name}</td><td>${fmt(c.qty)}</td><td>${fmtRial(c.unit_price)}</td><td>${fmtRial(c.qty * c.unit_price)}</td></tr>
+      <tr><td>${escHtml(c.item_name)}</td><td>${fmt(c.qty)}</td><td>${fmtRial(c.unit_price)}</td><td>${fmtRial(c.qty * c.unit_price)}</td></tr>
     `).join('');
 
     openModal(`
@@ -2018,7 +2018,7 @@ function renderCart(type) {
   const cartKey = type + 'Cart';
   const cart = state[cartKey];
   $(`#${type}-cart-tbody`).innerHTML = cart.map(c =>
-    `<tr><td>${c.item_name}</td><td>${fmt(c.qty)}</td>
+    `<tr><td>${escHtml(c.item_name)}</td><td>${fmt(c.qty)}</td>
      <td title="به حروف: ${numberToPersianWords(c.unit_price)} تومان">${fmtRial(c.unit_price)}</td>
      <td title="به حروف: ${numberToPersianWords(c.qty * c.unit_price)} تومان">${fmtRial(c.qty * c.unit_price)}</td>
      ${type === 'sale' ? `<td>${[c.serial_number ? escHtml(c.serial_number) : '', c.warranty_months ? `${c.warranty_months} ماه گارانتی` : ''].filter(Boolean).join(' / ') || '—'}</td>` : ''}</tr>`).join('');
@@ -2055,8 +2055,8 @@ async function loadHistory() {
   data.forEach(inv => { state.invoicesById[inv.id] = inv; });
   $('#history-tbody').innerHTML = data.map(inv => `
     <tr${inv.voided ? ' style="opacity:0.55"' : ''}>
-      <td>${inv.number || inv.id}${inv.voided ? ' <span class="badge badge-red">باطل‌شده</span>' : ''}</td><td>${typeLabel[inv.invoice_type] || inv.invoice_type}</td><td>${toJalaliDate(inv.date, true)}</td>
-      <td>${inv.party_name || '—'}</td><td>${inv.voided ? `دلیل ابطال: ${escHtml(inv.void_reason)}` : (inv.description || '—')}</td><td title="${wordsTitle(inv.total)}">${fmtRial(inv.total)}</td><td title="${wordsTitle(inv.paid)}">${fmtRial(inv.paid)}</td>
+      <td>${escHtml(inv.number || inv.id)}${inv.voided ? ' <span class="badge badge-red">باطل‌شده</span>' : ''}</td><td>${escHtml(typeLabel[inv.invoice_type] || inv.invoice_type)}</td><td>${toJalaliDate(inv.date, true)}</td>
+      <td>${escHtml(inv.party_name || '—')}</td><td>${inv.voided ? `دلیل ابطال: ${escHtml(inv.void_reason)}` : escHtml(inv.description || '—')}</td><td title="${wordsTitle(inv.total)}">${fmtRial(inv.total)}</td><td title="${wordsTitle(inv.paid)}">${fmtRial(inv.paid)}</td>
       <td>${escHtml(inv.created_by) || '—'}</td>
       <td>
         ${inv.voided ? '' : `
@@ -2233,7 +2233,7 @@ async function openEditInvoiceModal(invoiceId) {
 function renderEditInvoiceCart() {
   $('#edit-inv-cart-tbody').innerHTML = editInvoiceCart.map((c, i) => `
     <tr>
-      <td>${c.item_name}</td><td>${fmt(c.qty)}</td><td>${fmtRial(c.unit_price)}</td><td>${fmtRial(c.qty * c.unit_price)}</td>
+      <td>${escHtml(c.item_name)}</td><td>${fmt(c.qty)}</td><td>${fmtRial(c.unit_price)}</td><td>${fmtRial(c.qty * c.unit_price)}</td>
       <td><button class="btn btn-sm btn-danger" type="button" onclick="removeEditInvoiceCartRow(${i})">حذف</button></td>
     </tr>`).join('');
   const total = editInvoiceCart.reduce((s, c) => s + c.qty * c.unit_price, 0);
@@ -2328,7 +2328,7 @@ async function showSendInvoiceResult(inv) {
   $('#send-inv-title').textContent = `فاکتور ${inv.number || inv.id}`;
   $('#send-inv-summary').innerHTML = `
     <div class="item"><span class="k">نوع</span><span class="v">${typeLabel[inv.invoice_type] || inv.invoice_type}</span></div>
-    <div class="item"><span class="k">طرف‌حساب</span><span class="v">${inv.party_name || '—'}</span></div>
+    <div class="item"><span class="k">طرف‌حساب</span><span class="v">${escHtml(inv.party_name || '—')}</span></div>
     <div class="item"><span class="k">تاریخ</span><span class="v">${toJalaliDate(inv.date, true)}</span></div>
     <div class="item"><span class="k">جمع کل</span><span class="v">${fmtRial(inv.total)} ریال</span></div>`;
   $('#send-inv-result-card').classList.remove('hidden');
@@ -2377,13 +2377,13 @@ async function loadParties() {
   state.parties = parties || [];
   $('#parties-tbody').innerHTML = state.parties.map(p => `
     <tr>
-      <td>${p.name}${p.is_vip ? ' <span class="badge badge-green">VIP</span>' : ''}${p.note ? ` <span title="${p.note}">📝</span>` : ''}</td>
-      <td>${p.phone || '—'}</td><td>${p.type === 'customer' ? 'مشتری' : 'تامین‌کننده'}</td>
+      <td>${escHtml(p.name)}${p.is_vip ? ' <span class="badge badge-green">VIP</span>' : ''}${p.note ? ` <span title="${escHtml(p.note)}">📝</span>` : ''}</td>
+      <td>${escHtml(p.phone || '—')}</td><td>${p.type === 'customer' ? 'مشتری' : 'تامین‌کننده'}</td>
       <td>${p.balance > 0 ? `<span class="badge badge-orange" title="${wordsTitle(p.balance)}">${fmtRial(p.balance)}</span>` : (p.balance < 0 ? `<span class="badge badge-red" title="${wordsTitle(Math.abs(p.balance))}">${fmtRial(Math.abs(p.balance))}</span>` : '0')}</td>
       <td>${p.last_purchase ? toJalaliDate(p.last_purchase) : '—'}</td>
       <td>
         <button class="btn btn-sm btn-secondary" onclick="showLedger(${p.id})">ریز حساب</button>
-        <button class="btn btn-sm btn-success" onclick="settlePayment(${p.id}, '${p.name.replace(/'/g, "")}')">تسویه</button>
+        <button class="btn btn-sm btn-success" onclick="settlePayment(${p.id})">تسویه</button>
         <button class="btn btn-sm btn-secondary" onclick="openEditPartyModal(${p.id})">ویرایش</button>
       </td>
     </tr>`).join('');
@@ -2461,7 +2461,7 @@ async function showLedger(partyId) {
   if (!data) return;
   const rows = data.invoices.map(inv => `<tr><td>${toJalaliDate(inv.date, true)}</td><td>${inv.invoice_type}</td><td title="${wordsTitle(inv.total)}">${fmtRial(inv.total)}</td><td title="${wordsTitle(inv.paid)}">${fmtRial(inv.paid)}</td></tr>`).join('');
   openModal(`
-    <h3>ریز حساب: ${data.party.name}</h3>
+    <h3>ریز حساب: ${escHtml(data.party.name)}</h3>
     <p>مانده فعلی: <strong title="${wordsTitle(data.party.balance)}">${fmtRial(data.party.balance)} ریال</strong></p>
     <table class="data-table" style="margin-top:12px"><thead><tr><th>تاریخ</th><th>نوع</th><th>جمع کل (ریال)</th><th>پرداخت‌شده (ریال)</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">فاکتوری ثبت نشده</td></tr>'}</tbody></table>
     <div class="modal-actions">
@@ -2490,9 +2490,10 @@ async function showLedger(partyId) {
     });
   }
 }
-function settlePayment(partyId, partyName) {
+function settlePayment(partyId) {
+  const party = state.parties.find(x => x.id === partyId);
   openModal(`
-    <h3>تسویه حساب با ${partyName}</h3>
+    <h3>تسویه حساب با ${escHtml(party ? party.name : '')}</h3>
     <div class="field"><label>مبلغ (ریال)</label><input type="text" inputmode="decimal" id="settle-amount"><div class="words-hint" id="settle-amount-words"></div></div>
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="settle-btn">ثبت</button></div>`);
   attachThousandsFormatting($('#settle-amount'));
@@ -2741,17 +2742,17 @@ async function loadBankPage() {
   $('#bank-accounts-grid').innerHTML = state.bankAccounts.map(a => `
     <div class="stat-card primary" title="${wordsTitle(a.balance)}" style="position:relative">
       <button class="btn btn-ghost btn-sm" style="position:absolute;top:8px;left:8px;padding:2px 8px" onclick="openEditBankAccountModal(${a.id})">✏️</button>
-      <div class="stat-label">${a.name}${a.bank_name ? ' — ' + a.bank_name : ''}</div>
+      <div class="stat-label">${escHtml(a.name)}${a.bank_name ? ' — ' + escHtml(a.bank_name) : ''}</div>
       <div class="stat-value">${fmtRial(a.balance)} ریال</div>
       ${a.account_number ? `<div class="muted" style="font-size:11px;margin-top:4px">شماره حساب/کارت: <bdi dir="ltr">${escHtml(a.account_number)}</bdi></div>` : ''}
       ${a.iban ? `<div class="muted" style="font-size:11px">شبا: <bdi dir="ltr">${escHtml(a.iban)}</bdi></div>` : ''}
     </div>`).join('') || '<p class="muted">هنوز حساب بانکی تعریف نشده.</p>';
 
-  const bankOptions = state.bankAccounts.map(a => `<option value="bank:${a.id}">${a.name}</option>`).join('');
+  const bankOptions = state.bankAccounts.map(a => `<option value="bank:${a.id}">${escHtml(a.name)}</option>`).join('');
   $('#transfer-from').innerHTML = `<option value="cash:">صندوق</option>${bankOptions}`;
   $('#transfer-to').innerHTML = `<option value="cash:">صندوق</option>${bankOptions}`;
-  $('#bank-tx-account').innerHTML = state.bankAccounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
-  $('#statement-account').innerHTML = state.bankAccounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+  $('#bank-tx-account').innerHTML = state.bankAccounts.map(a => `<option value="${a.id}">${escHtml(a.name)}</option>`).join('');
+  $('#statement-account').innerHTML = state.bankAccounts.map(a => `<option value="${a.id}">${escHtml(a.name)}</option>`).join('');
 
   attachThousandsFormatting($('#transfer-amount'));
   attachRialWordsPreview($('#transfer-amount'), 'transfer-amount-words');
@@ -2874,7 +2875,7 @@ async function loadBankStatement() {
   const typeLabel = { deposit: 'واریز', withdrawal: 'برداشت', transfer_in: 'انتقال ورودی', transfer_out: 'انتقال خروجی' };
   $('#bank-statement-tbody').innerHTML = (data.transactions || []).map(tx => `
     <tr><td>${toJalaliDate(tx.date, true)}</td><td>${typeLabel[tx.tx_type] || tx.tx_type}</td>
-    <td title="${wordsTitle(tx.amount)}">${fmtRial(tx.amount)}</td><td>${tx.description || '—'}</td></tr>`
+    <td title="${wordsTitle(tx.amount)}">${fmtRial(tx.amount)}</td><td>${escHtml(tx.description || '—')}</td></tr>`
   ).join('') || '<tr><td colspan="4" class="muted">تراکنشی ثبت نشده</td></tr>';
 }
 
@@ -2899,7 +2900,7 @@ async function loadCash() {
   $('#cash-tbody').innerHTML = data.transactions.map(tx => `
     <tr><td>${toJalaliDate(tx.date, true)}</td><td>${tx.tx_type === 'in' ? 'دریافت' : 'پرداخت'}</td><td title="${wordsTitle(tx.amount)}">${fmtRial(tx.amount)}</td>
     <td>${tx.expense_category ? (EXPENSE_CATEGORY_LABELS[tx.expense_category] || tx.expense_category) : '—'}</td>
-    <td>${tx.description || '—'}</td></tr>`).join('');
+    <td>${escHtml(tx.description || '—')}</td></tr>`).join('');
   loadCashClosings();
 }
 $('#cash-type').addEventListener('change', () => {
@@ -2987,9 +2988,9 @@ async function loadExtraReports() {
   ]);
   if (byEmployee) $('#by-employee-tbody').innerHTML = byEmployee.map(e => `<tr><td>${escHtml(e.username)}</td><td>${fmt(e.invoice_count)}</td><td title="${wordsTitle(e.total_amount)}">${fmtRial(e.total_amount)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">فروشی ثبت نشده</td></tr>';
   if (expenses) $('#expenses-tbody').innerHTML = expenses.categories.map(c => `<tr><td>${EXPENSE_CATEGORY_LABELS[c.category] || c.category}</td><td>${fmt(c.tx_count)}</td><td title="${wordsTitle(c.total_amount)}">${fmtRial(c.total_amount)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">هزینه‌ای ثبت نشده</td></tr>';
-  if (profitByItem) $('#profit-by-item-tbody').innerHTML = profitByItem.map(it => `<tr><td>${it.name}</td><td>${fmt(it.total_qty)}</td><td title="${wordsTitle(it.total_sales)}">${fmtRial(it.total_sales)}</td><td title="${wordsTitle(it.estimated_cost)}">${fmtRial(it.estimated_cost)}</td><td style="color:${it.estimated_profit >= 0 ? 'var(--accent)' : 'var(--danger)'}" title="${wordsTitle(Math.abs(it.estimated_profit))}">${fmtRial(it.estimated_profit)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">فروشی ثبت نشده</td></tr>';
+  if (profitByItem) $('#profit-by-item-tbody').innerHTML = profitByItem.map(it => `<tr><td>${escHtml(it.name)}</td><td>${fmt(it.total_qty)}</td><td title="${wordsTitle(it.total_sales)}">${fmtRial(it.total_sales)}</td><td title="${wordsTitle(it.estimated_cost)}">${fmtRial(it.estimated_cost)}</td><td style="color:${it.estimated_profit >= 0 ? 'var(--accent)' : 'var(--danger)'}" title="${wordsTitle(Math.abs(it.estimated_profit))}">${fmtRial(it.estimated_profit)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">فروشی ثبت نشده</td></tr>';
   lastReorderSuggestions = reorder || [];
-  $('#reorder-tbody').innerHTML = (reorder || []).map(it => `<tr><td>${it.name}</td><td>${fmt(it.stock_qty)} ${it.unit}</td><td>${it.daily_rate}</td><td style="color:var(--danger)">${it.days_left} روز</td><td>${fmt(it.suggested_reorder_qty)} ${it.unit}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">فعلاً کالایی نیاز به سفارش فوری ندارد</td></tr>';
+  $('#reorder-tbody').innerHTML = (reorder || []).map(it => `<tr><td>${escHtml(it.name)}</td><td>${fmt(it.stock_qty)} ${escHtml(it.unit)}</td><td>${it.daily_rate}</td><td style="color:var(--danger)">${it.days_left} روز</td><td>${fmt(it.suggested_reorder_qty)} ${escHtml(it.unit)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">فعلاً کالایی نیاز به سفارش فوری ندارد</td></tr>';
   if (yoy) {
     $('#yoy-stat-grid').innerHTML = `
       <div class="stat-card primary" title="${wordsTitle(yoy.this_month)}"><div class="stat-label">فروش این ماه</div><div class="stat-value">${fmtRial(yoy.this_month)} ریال</div></div>
@@ -2997,9 +2998,9 @@ async function loadExtraReports() {
       <div class="stat-card accent" title="${wordsTitle(yoy.this_year)}"><div class="stat-label">فروش امسال (از ابتدای سال میلادی)</div><div class="stat-value">${fmtRial(yoy.this_year)} ریال</div></div>
       <div class="stat-card" title="${wordsTitle(yoy.last_year)}"><div class="stat-label">فروش سال قبل (همین بازه)</div><div class="stat-value">${fmtRial(yoy.last_year)} ریال</div></div>`;
   }
-  if (debtors) $('#debtors-tbody').innerHTML = debtors.map(p => `<tr><td>${p.name}</td><td>${p.phone || '—'}</td><td title="${wordsTitle(p.balance)}">${fmtRial(p.balance)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">بدهکاری ثبت نشده</td></tr>';
-  if (creditors) $('#creditors-tbody').innerHTML = creditors.map(p => `<tr><td>${p.name}</td><td>${p.phone || '—'}</td><td title="${wordsTitle(p.owed_amount)}">${fmtRial(p.owed_amount)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">بدهی‌ای ثبت نشده</td></tr>';
-  if (topItems) $('#top-items-tbody').innerHTML = topItems.map(it => `<tr><td>${it.name}</td><td>${it.brand || '—'}</td><td>${fmt(it.total_qty)}</td><td title="${wordsTitle(it.total_amount)}">${fmtRial(it.total_amount)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">فروشی ثبت نشده</td></tr>';
+  if (debtors) $('#debtors-tbody').innerHTML = debtors.map(p => `<tr><td>${escHtml(p.name)}</td><td>${escHtml(p.phone || '—')}</td><td title="${wordsTitle(p.balance)}">${fmtRial(p.balance)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">بدهکاری ثبت نشده</td></tr>';
+  if (creditors) $('#creditors-tbody').innerHTML = creditors.map(p => `<tr><td>${escHtml(p.name)}</td><td>${escHtml(p.phone || '—')}</td><td title="${wordsTitle(p.owed_amount)}">${fmtRial(p.owed_amount)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">بدهی‌ای ثبت نشده</td></tr>';
+  if (topItems) $('#top-items-tbody').innerHTML = topItems.map(it => `<tr><td>${escHtml(it.name)}</td><td>${escHtml(it.brand || '—')}</td><td>${fmt(it.total_qty)}</td><td title="${wordsTitle(it.total_amount)}">${fmtRial(it.total_amount)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">فروشی ثبت نشده</td></tr>';
 }
 
 // ===================== پشتیبان‌گیری =====================
@@ -3155,7 +3156,7 @@ async function loadAiScanPage() {
   $('#ai-scan-file').value = '';
   const parties = await api('GET', '/parties?type=supplier');
   state.suppliersList = parties || [];
-  $('#ai-scan-party-suggestions').innerHTML = state.suppliersList.map(p => `<option value="${p.name}">`).join('');
+  $('#ai-scan-party-suggestions').innerHTML = state.suppliersList.map(p => `<option value="${escHtml(p.name)}">`).join('');
   $('#ai-scan-party-name').value = '';
 }
 
@@ -3229,11 +3230,11 @@ function renderAiScanResults(data) {
 function renderAiScanTable() {
   $('#ai-scan-items-tbody').innerHTML = aiScanExtractedItems.map((row, i) => {
     const itemOptions = state.items.map(it =>
-      `<option value="${it.id}" ${row.matched_item_id === it.id ? 'selected' : ''}>${it.name}</option>`).join('');
+      `<option value="${it.id}" ${row.matched_item_id === it.id ? 'selected' : ''}>${escHtml(it.name)}</option>`).join('');
     return `
     <tr>
       <td><input type="checkbox" ${row.include ? 'checked' : ''} onchange="aiScanExtractedItems[${i}].include=this.checked"></td>
-      <td>${row.name}</td>
+      <td>${escHtml(row.name)}</td>
       <td>
         <select onchange="aiScanExtractedItems[${i}].matched_item_id = this.value === 'NEW' ? null : parseInt(this.value)">
           <option value="NEW" ${row.matched_item_id ? '' : 'selected'}>+ کالای جدید با همین نام</option>
@@ -3272,7 +3273,7 @@ $('#btn-ai-scan-confirm').addEventListener('click', () => {
   const rowsHtml = rows.map(r => {
     const matched = state.items.find(it => it.id === r.matched_item_id);
     return `<tr>
-      <td>${r.name}${matched ? '' : ' <span class="badge badge-orange">کالای جدید</span>'}</td>
+      <td>${escHtml(r.name)}${matched ? '' : ' <span class="badge badge-orange">کالای جدید</span>'}</td>
       <td>${fmt(r.qty)}</td><td>${fmtRial(r.unit_price)}</td><td>${fmtRial(r.qty * r.unit_price)}</td>
     </tr>`;
   }).join('');
@@ -3369,7 +3370,7 @@ async function openReturnModal(invoiceId) {
 
   $('#return-modal-tbody').innerHTML = returnModalState.items.map((it, i) => `
     <tr>
-      <td>${it.item_name}</td><td>${fmt_qty_js(it.qty)}</td><td>${fmtRial(it.unit_price)}</td>
+      <td>${escHtml(it.item_name)}</td><td>${fmt_qty_js(it.qty)}</td><td>${fmtRial(it.unit_price)}</td>
       <td><input type="number" step="any" min="0" max="${it.qty}" value="0" style="width:80px"
           onchange="returnModalState.items[${i}].return_qty = Math.min(parseFloat(this.value)||0, ${it.qty})"></td>
     </tr>`).join('');
@@ -3415,7 +3416,7 @@ async function loadBulkPricePage() {
   const select = $('#bulk-price-category');
   const currentValue = select.value;
   select.innerHTML = '<option value="">همه دسته‌ها</option>' +
-    (categories || []).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    (categories || []).map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('');
   select.value = currentValue;
 }
 
@@ -3445,7 +3446,7 @@ function renderBulkPriceTable() {
   $('#bulk-price-tbody').innerHTML = bulkPriceRows.map((r, i) => `
     <tr>
       <td><input type="checkbox" ${r.include ? 'checked' : ''} onchange="bulkPriceRows[${i}].include=this.checked"></td>
-      <td>${r.name}</td>
+      <td>${escHtml(r.name)}</td>
       <td>${fmtRial(r.old_purchase_price)}</td>
       <td><input type="text" inputmode="decimal" value="${(r.new_purchase_price * 10).toLocaleString('en-US')}" style="width:120px"
           onchange="bulkPriceRows[${i}].new_purchase_price=Math.round((parseFloat(this.value.replace(/,/g,''))||0)/10)"></td>
@@ -3483,10 +3484,10 @@ async function refreshPriceHistory() {
   const history = await api('GET', '/price-history');
   $('#price-history-tbody').innerHTML = (history || []).map(h => `
     <tr>
-      <td>${toJalaliDate(h.changed_at, true)}</td><td>${h.item_name}</td>
+      <td>${toJalaliDate(h.changed_at, true)}</td><td>${escHtml(h.item_name)}</td>
       <td>${fmtRial(h.old_purchase_price)} ← ${fmtRial(h.new_purchase_price)}</td>
       <td>${fmtRial(h.old_sale_price)} ← ${fmtRial(h.new_sale_price)}</td>
-      <td>${h.note || '—'}</td>
+      <td>${escHtml(h.note || '—')}</td>
       <td><button class="btn btn-sm btn-secondary" onclick="revertPriceHistory(${h.id})">بازگردانی</button></td>
     </tr>`).join('') || '<tr><td colspan="6" class="muted">هنوز تغییری ثبت نشده</td></tr>';
 }
@@ -3573,7 +3574,7 @@ function qsValidateAndSetQty(i, input) {
 function renderQsCart() {
   $('#qs-cart-tbody').innerHTML = qsCart.map((c, i) => `
     <tr>
-      <td>${c.item_name}</td>
+      <td>${escHtml(c.item_name)}</td>
       <td><input type="number" step="any" value="${c.qty}" style="width:70px" onchange="qsValidateAndSetQty(${i}, this)"></td>
       <td><input type="text" inputmode="decimal" value="${(c.unit_price * 10).toLocaleString('en-US')}" style="width:120px"
           onchange="qsCart[${i}].unit_price=Math.round((parseFloat(this.value.replace(/,/g,''))||0)/10); renderQsCart();"></td>
@@ -3604,7 +3605,7 @@ $('#qs-search').addEventListener('keydown', (e) => {
   qsCurrentMatches = matches.slice(0, 8);
   $('#qs-suggestions').classList.remove('hidden');
   $('#qs-suggestions').innerHTML = qsCurrentMatches.map((it, i) =>
-    `<div class="ss-item" style="border:1px solid var(--border);border-radius:6px;margin-bottom:4px" data-qs-idx="${i}">${it.name} — ${fmtRial(it.sale_price)} ریال</div>`
+    `<div class="ss-item" style="border:1px solid var(--border);border-radius:6px;margin-bottom:4px" data-qs-idx="${i}">${escHtml(it.name)} — ${fmtRial(it.sale_price)} ریال</div>`
   ).join('');
 });
 $('#qs-suggestions').addEventListener('click', (e) => {
@@ -3675,7 +3676,7 @@ async function loadUsers() {
   state.usersById = {};
   (users || []).forEach(u => { state.usersById[u.id] = u; });
   $('#users-tbody').innerHTML = (users || []).map(u => `
-    <tr><td>${u.username}</td><td>${u.role === 'admin' ? 'مدیر' : 'کارمند'}</td>
+    <tr><td>${escHtml(u.username)}</td><td>${u.role === 'admin' ? 'مدیر' : 'کارمند'}</td>
     <td>
       ${u.role !== 'admin' ? `<button class="btn btn-sm btn-secondary" onclick="openPermissionsModal(${u.id})">سطح دسترسی</button>` : ''}
       ${u.id !== state.user.id ? `<button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id})">حذف</button>` : '—'}
@@ -3738,7 +3739,7 @@ async function deleteUser(id) {
 async function loadActivity() {
   const logs = await api('GET', '/activity-log');
   $('#activity-tbody').innerHTML = (logs || []).map(lg =>
-    `<tr><td>${toJalaliDate(lg.timestamp, true)}</td><td>${lg.username || '—'}</td><td>${lg.action}</td><td>${lg.details || '—'}</td></tr>`).join('');
+    `<tr><td>${toJalaliDate(lg.timestamp, true)}</td><td>${escHtml(lg.username || '—')}</td><td>${escHtml(lg.action)}</td><td>${escHtml(lg.details || '—')}</td></tr>`).join('');
 }
 
 // ===================== لاگ امنیتی =====================
