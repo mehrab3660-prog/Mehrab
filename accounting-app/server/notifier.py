@@ -173,6 +173,33 @@ def send_telegram_message(bot_token, chat_id, text, proxy=None):
         return False, f"خطا در ارسال پیام تلگرام: {e}"
 
 
+def send_sms(provider, api_key, sender_line, phone, text):
+    """
+    ارسال پیامک به مشتری. فقط وقتی کار می‌کند که مدیر از «تنظیمات کلی» یک سرویس پیامکی
+    واقعی (با کلید API خودش) وصل کرده باشد — دقیقاً مثل تلگرام/ایمیل، این برنامه به‌تنهایی
+    نمی‌تواند پیامک بفرستد.
+    provider: نام سرویس پیامکی — فعلاً فقط "kavenegar" (سرویس رایج ایرانی) پیاده‌سازی شده.
+    """
+    if not api_key:
+        return False, "سرویس پیامک تنظیم نشده — از «تنظیمات کلی» کلید API یک سرویس پیامکی وارد کن"
+    if not phone:
+        return False, "شماره موبایل مشتری ثبت نشده"
+    provider = (provider or "kavenegar").lower()
+    if provider == "kavenegar":
+        url = f"https://api.kavenegar.com/v1/{api_key}/sms/send.json"
+        params = {"receptor": phone, "message": text}
+        if sender_line:
+            params["sender"] = sender_line
+        try:
+            resp = requests.get(url, params=params, timeout=15)
+            if resp.status_code == 200:
+                return True, "پیامک ارسال شد"
+            return False, f"خطای سرویس پیامک: کد {resp.status_code} — {resp.text[:200]}"
+        except Exception as e:
+            return False, f"خطا در ارسال پیامک: {e}"
+    return False, f"سرویس پیامکی «{provider}» پشتیبانی نمی‌شود"
+
+
 def upload_to_vps(backup_path):
     cfg = load_config()
     if not cfg or not cfg.get("vps", {}).get("enabled"):

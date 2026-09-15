@@ -24,10 +24,13 @@ import invoice_html
 import invoice_ai
 import invoice_ocr_free
 import assistant_ai
+import repair_html
 from paths import get_base_dir, get_bundle_dir
 
 SETTINGS_PATH = os.path.join(get_base_dir(), "shop_settings.json")
 ASSETS_DIR = os.path.join(get_base_dir(), "assets")
+REPAIR_MEDIA_DIR = os.path.join(get_base_dir(), "repair_media")
+os.makedirs(REPAIR_MEDIA_DIR, exist_ok=True)
 
 # اطمینان از وجود پوشه assets و آیکون پیش‌فرض کنار فایل exe (چون پوشه‌ی داخل exe موقتی است)
 os.makedirs(ASSETS_DIR, exist_ok=True)
@@ -47,7 +50,9 @@ def load_shop_settings():
     return {"name": "حسابداری", "phones": "", "address": "", "logo_filename": None, "invoice_number_offset": 0,
             "default_margin_percent": 0, "invoice_footer_message": "",
             "national_id": "", "economic_code": "", "postal_code": "",
-            "ai_enabled": False, "ai_api_key": ""}
+            "ai_enabled": False, "ai_api_key": "",
+            "sms_enabled": False, "sms_provider": "kavenegar", "sms_api_key": "", "sms_sender_line": "",
+            "undelivered_alert_days": 3, "warranty_ending_alert_days": 3}
 
 
 def get_next_invoice_id(conn):
@@ -104,7 +109,8 @@ SESSIONS = {}
 SESSIONS_LOCK = threading.Lock()
 
 # مسیرهایی که قبل از لاگین هم باید در دسترس باشند (صفحه ورود، فایل‌های استاتیک آن، پینگ)
-PUBLIC_ENDPOINTS = {"static", "index", "login", "logout", "ping", "assets", "get_shop_settings", "get_captcha"}
+PUBLIC_ENDPOINTS = {"static", "index", "login", "logout", "ping", "assets", "get_shop_settings", "get_captcha",
+                     "track_repair"}
 
 # ---------- کد امنیتی (کپچا) و قفل موقت بعد از تلاش‌های ناموفق ورود ----------
 CAPTCHAS = {}
@@ -180,10 +186,11 @@ def verify_totp(secret, code, window=1):
 
 
 # ---------- سطح دسترسی سفارشی کارمندها (فراتر از مدیر/کارمند ساده) ----------
-PERMISSION_KEYS = ("can_sell", "can_purchase", "can_manage_items", "can_manage_parties", "can_manage_cash")
-# دسترسی‌های بانک/چک برخلاف بقیه، پیش‌فرضشان برای کارمند بسته است — کارمند فقط می‌تواند
-# مشاهده کند، مگر مدیر صراحتاً این دو را برایش فعال کند
-STRICT_PERMISSION_KEYS = ("can_manage_bank", "can_manage_checks")
+PERMISSION_KEYS = ("can_sell", "can_purchase", "can_manage_items", "can_manage_parties", "can_manage_cash",
+                    "can_manage_repairs", "can_assign_technicians")
+# دسترسی‌های بانک/چک/سود تعمیرات برخلاف بقیه، پیش‌فرضشان برای کارمند بسته است — کارمند فقط می‌تواند
+# مشاهده کند، مگر مدیر صراحتاً این‌ها را برایش فعال کند
+STRICT_PERMISSION_KEYS = ("can_manage_bank", "can_manage_checks", "can_view_repair_financials")
 ALL_PERMISSION_KEYS = PERMISSION_KEYS + STRICT_PERMISSION_KEYS
 
 
@@ -267,6 +274,7 @@ def get_shop_settings():
     # پس کلیدهای حساس هرگز نباید در پاسخش برگردند — فقط این‌که «تنظیم شده یا نه»
     s["telegram_bot_token_set"] = bool(s.pop("telegram_bot_token", None))
     s["ai_api_key_set"] = bool(s.pop("ai_api_key", None))
+    s["sms_api_key_set"] = bool(s.pop("sms_api_key", None))
     return jsonify(s)
 
 
@@ -303,6 +311,24 @@ def update_shop_settings():
             s["default_margin_percent"] = float(d.get("default_margin_percent") or 0)
         except (TypeError, ValueError):
             return jsonify({"ok": False, "message": "درصد سود باید عدد باشد"}), 400
+    if "sms_enabled" in d:
+        s["sms_enabled"] = bool(d.get("sms_enabled"))
+    if "sms_provider" in d:
+        s["sms_provider"] = d.get("sms_provider") or "kavenegar"
+    if d.get("sms_api_key"):
+        s["sms_api_key"] = d.get("sms_api_key").strip()
+    if "sms_sender_line" in d:
+        s["sms_sender_line"] = (d.get("sms_sender_line") or "").strip()
+    if "undelivered_alert_days" in d:
+        try:
+            s["undelivered_alert_days"] = int(d.get("undelivered_alert_days") or 3)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "message": "تعداد روز باید عدد باشد"}), 400
+    if "warranty_ending_alert_days" in d:
+        try:
+            s["warranty_ending_alert_days"] = int(d.get("warranty_ending_alert_days") or 3)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "message": "تعداد روز باید عدد باشد"}), 400
     if d.get("next_invoice_number") not in (None, ""):
         try:
             next_number = int(d["next_invoice_number"])
@@ -316,6 +342,23 @@ def update_shop_settings():
         s["invoice_number_offset"] = next_number - next_id
     save_shop_settings(s)
     return jsonify({"ok": True})
+
+
+@app.route("/settings/sms/test", methods=["POST"])
+def test_sms():
+    err = require_admin()
+    if err:
+        return err
+    d = request.json or {}
+    phone = (d.get("phone") or "").strip()
+    if not phone:
+        return jsonify({"ok": False, "message": "شماره موبایل تست را وارد کن"}), 400
+    s = load_shop_settings()
+    ok, message = notifier.send_sms(
+        s.get("sms_provider"), s.get("sms_api_key"), s.get("sms_sender_line"),
+        phone, "این یک پیامک تستی از برنامه تعمیرگاه شماست."
+    )
+    return jsonify({"ok": ok, "message": message})
 
 
 @app.route("/settings/telegram/test", methods=["POST"])
@@ -632,11 +675,11 @@ def add_item():
         return jsonify({"ok": False, "message": item_error}), 400
     conn = get_connection()
     try:
-        conn.execute("""INSERT INTO items (code, name, category_id, unit, purchase_price, sale_price, stock_qty, min_stock, brand)
-                         VALUES (?,?,?,?,?,?,?,?,?)""",
+        conn.execute("""INSERT INTO items (code, name, category_id, unit, purchase_price, sale_price, stock_qty, min_stock, brand, is_service)
+                         VALUES (?,?,?,?,?,?,?,?,?,?)""",
                      (d.get("code") or None, d["name"], d.get("category_id"), d.get("unit", "عدد"),
                       d.get("purchase_price", 0), d.get("sale_price", 0),
-                      d.get("stock_qty", 0), d.get("min_stock", 0), d.get("brand")))
+                      d.get("stock_qty", 0), d.get("min_stock", 0), d.get("brand"), 1 if d.get("is_service") else 0))
     except sqlite3.IntegrityError:
         conn.close()
         return jsonify({"ok": False, "message": "کالای دیگری با همین کد/بارکد قبلاً ثبت شده"}), 400
@@ -657,10 +700,11 @@ def update_item(item_id):
     conn = get_connection()
     try:
         conn.execute("""UPDATE items SET code=?, name=?, category_id=?, unit=?, purchase_price=?,
-                         sale_price=?, stock_qty=?, min_stock=?, brand=? WHERE id=?""",
+                         sale_price=?, stock_qty=?, min_stock=?, brand=?, is_service=? WHERE id=?""",
                      (d.get("code") or None, d["name"], d.get("category_id"), d.get("unit", "عدد"),
                       d.get("purchase_price", 0), d.get("sale_price", 0),
-                      d.get("stock_qty", 0), d.get("min_stock", 0), d.get("brand"), item_id))
+                      d.get("stock_qty", 0), d.get("min_stock", 0), d.get("brand"),
+                      1 if d.get("is_service") else 0, item_id))
     except sqlite3.IntegrityError:
         conn.close()
         return jsonify({"ok": False, "message": "کالای دیگری با همین کد/بارکد قبلاً ثبت شده"}), 400
@@ -1808,6 +1852,801 @@ def update_warranty_claim(claim_id):
     return jsonify({"ok": True})
 
 
+# ================= ماژول تعمیرگاه موبایل/تبلت =================
+VALID_REPAIR_STATUSES = ("received", "diagnosing", "waiting_customer_approval", "waiting_parts",
+                          "in_repair", "repaired", "ready", "delivered", "cancelled", "warranty_return")
+STATUS_NOTIFY_KEYS = {"received": "received", "waiting_customer_approval": "waiting_approval",
+                       "in_repair": "in_repair", "ready": "ready"}
+
+
+def notify_repair_status(repair_id):
+    """پیامک وضعیت را (در صورت فعال بودن سرویس پیامک و داشتن شماره مشتری) در یک ترد جدا می‌فرستد
+    تا کند بودن اینترنت باعث معطلی درخواست اصلی نشود."""
+    conn = get_connection()
+    repair = conn.execute("SELECT * FROM repairs WHERE id=?", (repair_id,)).fetchone()
+    if not repair:
+        conn.close()
+        return
+    key = STATUS_NOTIFY_KEYS.get(repair["status"])
+    if not key:
+        conn.close()
+        return
+    tmpl_row = conn.execute("SELECT template FROM notification_templates WHERE key=?", (key,)).fetchone()
+    customer = conn.execute("SELECT * FROM parties WHERE id=?", (repair["customer_id"],)).fetchone() if repair["customer_id"] else None
+    conn.close()
+    if not tmpl_row or not customer or not customer["phone"]:
+        return
+    try:
+        text = tmpl_row["template"].format(
+            customer_name=customer["name"] or "", ticket_number=repair["ticket_number"] or "",
+            device_model=repair["device_model"] or "", device_brand=repair["device_brand"] or "")
+    except (KeyError, IndexError):
+        text = tmpl_row["template"]
+    s = load_shop_settings()
+    if not s.get("sms_enabled") or not s.get("sms_api_key"):
+        return
+    threading.Thread(target=notifier.send_sms,
+                      args=(s.get("sms_provider"), s.get("sms_api_key"), s.get("sms_sender_line"), customer["phone"], text),
+                      daemon=True).start()
+
+
+# ---------- تعمیرکاران ----------
+@app.route("/technicians", methods=["GET"])
+def get_technicians():
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM technicians ORDER BY active DESC, name").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/technicians", methods=["POST"])
+def add_technician():
+    err = require_permission("can_manage_repairs")
+    if err:
+        return err
+    d = request.json or {}
+    if not d.get("name"):
+        return jsonify({"ok": False, "message": "نام تعمیرکار را وارد کن"}), 400
+    conn = get_connection()
+    conn.execute("""INSERT INTO technicians (name, phone, specialty, commission_percent, base_wage, active, created_at)
+                     VALUES (?,?,?,?,?,?,?)""",
+                 (d["name"], d.get("phone"), d.get("specialty"), float(d.get("commission_percent") or 0),
+                  float(d.get("base_wage") or 0), 1, now()))
+    conn.commit()
+    conn.close()
+    log_action(g.current_user["username"], "افزودن تعمیرکار", d["name"])
+    return jsonify({"ok": True})
+
+
+@app.route("/technicians/<int:tech_id>", methods=["PUT"])
+def update_technician(tech_id):
+    err = require_permission("can_manage_repairs")
+    if err:
+        return err
+    d = request.json or {}
+    conn = get_connection()
+    conn.execute("""UPDATE technicians SET name=?, phone=?, specialty=?, commission_percent=?, base_wage=?, active=? WHERE id=?""",
+                 (d.get("name"), d.get("phone"), d.get("specialty"), float(d.get("commission_percent") or 0),
+                  float(d.get("base_wage") or 0), 1 if d.get("active", True) else 0, tech_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/technicians/<int:tech_id>", methods=["DELETE"])
+def delete_technician(tech_id):
+    """حذف نرم (غیرفعال‌سازی) — چون سوابق تعمیرات گذشته به این تعمیرکار لینک شده‌اند"""
+    err = require_admin()
+    if err:
+        return err
+    conn = get_connection()
+    conn.execute("UPDATE technicians SET active=0 WHERE id=?", (tech_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+# ---------- پرونده‌های تعمیر ----------
+@app.route("/repairs", methods=["GET"])
+def get_repairs():
+    status = request.args.get("status")
+    technician_id = request.args.get("technician_id")
+    q = request.args.get("q", "").strip()
+    conn = get_connection()
+    sql = """SELECT repairs.*, parties.name as customer_name, parties.phone as customer_phone
+              FROM repairs LEFT JOIN parties ON repairs.customer_id = parties.id WHERE 1=1"""
+    params = []
+    if status:
+        sql += " AND repairs.status=?"
+        params.append(status)
+    if technician_id:
+        sql += " AND repairs.id IN (SELECT repair_id FROM repair_technicians WHERE technician_id=?)"
+        params.append(technician_id)
+    if q:
+        like = f"%{q}%"
+        sql += """ AND (repairs.ticket_number LIKE ? OR repairs.imei LIKE ? OR repairs.device_model LIKE ?
+                    OR repairs.device_brand LIKE ? OR parties.name LIKE ? OR parties.phone LIKE ?)"""
+        params += [like, like, like, like, like, like]
+    sql += " ORDER BY repairs.id DESC"
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/repairs/<int:repair_id>", methods=["GET"])
+def get_repair_detail(repair_id):
+    conn = get_connection()
+    repair = conn.execute("""SELECT repairs.*, parties.name as customer_name, parties.phone as customer_phone
+                              FROM repairs LEFT JOIN parties ON repairs.customer_id = parties.id
+                              WHERE repairs.id=?""", (repair_id,)).fetchone()
+    if not repair:
+        conn.close()
+        return jsonify({"ok": False, "message": "پرونده تعمیر پیدا نشد"}), 404
+    parts = conn.execute("""SELECT repair_parts_used.*, items.name as item_name, items.is_service as is_service
+                             FROM repair_parts_used JOIN items ON repair_parts_used.item_id = items.id
+                             WHERE repair_id=? ORDER BY repair_parts_used.id""", (repair_id,)).fetchall()
+    technicians = conn.execute("""SELECT repair_technicians.*, technicians.name as name, technicians.phone as phone
+                                   FROM repair_technicians JOIN technicians ON repair_technicians.technician_id = technicians.id
+                                   WHERE repair_id=? ORDER BY repair_technicians.id""", (repair_id,)).fetchall()
+    history = conn.execute("SELECT * FROM repair_status_history WHERE repair_id=? ORDER BY id", (repair_id,)).fetchall()
+    media = conn.execute("SELECT * FROM repair_media WHERE repair_id=? ORDER BY id", (repair_id,)).fetchall()
+    contact_log = conn.execute("SELECT * FROM repair_contact_log WHERE repair_id=? ORDER BY id DESC", (repair_id,)).fetchall()
+    original_repair = None
+    if repair["original_repair_id"]:
+        original_repair = conn.execute("SELECT id, ticket_number, delivered_at FROM repairs WHERE id=?",
+                                        (repair["original_repair_id"],)).fetchone()
+    conn.close()
+    result = dict(repair)
+    result["parts"] = [dict(r) for r in parts]
+    result["technicians"] = [dict(r) for r in technicians]
+    result["history"] = [dict(r) for r in history]
+    result["media"] = [dict(r) for r in media]
+    result["contact_log"] = [dict(r) for r in contact_log]
+    result["original_repair"] = dict(original_repair) if original_repair else None
+    return jsonify(result)
+
+
+@app.route("/repairs", methods=["POST"])
+def add_repair():
+    err = require_permission("can_manage_repairs")
+    if err:
+        return err
+    d = request.json or {}
+    if not d.get("device_model") and not d.get("device_brand"):
+        return jsonify({"ok": False, "message": "برند یا مدل دستگاه را وارد کن"}), 400
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""INSERT INTO repairs (ticket_number, customer_id, device_brand, device_model, device_color, imei,
+                    device_password, device_condition, accessories, reported_issue, description, checklist_json,
+                    status, priority, intake_date, expected_delivery_date, prepayment, discount, created_by, created_at)
+                 VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+              (d.get("customer_id"), d.get("device_brand"), d.get("device_model"), d.get("device_color"),
+               (d.get("imei") or "").strip() or None, d.get("device_password"), d.get("device_condition"),
+               d.get("accessories"), d.get("reported_issue"), d.get("description"),
+               json.dumps(d.get("checklist") or {}, ensure_ascii=False),
+               "received", d.get("priority", "normal"), now(), d.get("expected_delivery_date"),
+               float(d.get("prepayment") or 0), float(d.get("discount") or 0),
+               g.current_user["username"], now()))
+    repair_id = c.lastrowid
+    ticket_number = f"R-{repair_id:05d}"
+    c.execute("UPDATE repairs SET ticket_number=? WHERE id=?", (ticket_number, repair_id))
+    c.execute("""INSERT INTO repair_status_history (repair_id, old_status, new_status, changed_by, changed_at, note)
+                 VALUES (?,?,?,?,?,?)""", (repair_id, None, "received", g.current_user["username"], now(), "پذیرش دستگاه"))
+    if d.get("customer_id"):
+        c.execute("UPDATE parties SET visit_count = visit_count + 1 WHERE id=?", (d["customer_id"],))
+
+    warranty_match = None
+    imei = (d.get("imei") or "").strip()
+    if imei:
+        match = conn.execute("""SELECT id, ticket_number, delivered_at, warranty_end_date FROM repairs
+                                 WHERE imei=? AND status='delivered' AND warranty_end_date IS NOT NULL AND warranty_end_date >= ?
+                                 ORDER BY delivered_at DESC LIMIT 1""", (imei, now())).fetchone()
+        if match:
+            warranty_match = dict(match)
+
+    conn.commit()
+    conn.close()
+    log_action(g.current_user["username"], f"پذیرش دستگاه {ticket_number}", d.get("reported_issue", ""))
+    notify_repair_status(repair_id)
+    return jsonify({"ok": True, "repair_id": repair_id, "ticket_number": ticket_number, "possible_warranty_match": warranty_match})
+
+
+@app.route("/repairs/<int:repair_id>", methods=["PUT"])
+def update_repair(repair_id):
+    err = require_permission("can_manage_repairs")
+    if err:
+        return err
+    d = request.json or {}
+    conn = get_connection()
+    repair = conn.execute("SELECT * FROM repairs WHERE id=?", (repair_id,)).fetchone()
+    if not repair:
+        conn.close()
+        return jsonify({"ok": False, "message": "پرونده تعمیر پیدا نشد"}), 404
+    fields = ("customer_id", "device_brand", "device_model", "device_color", "imei", "device_password",
+              "device_condition", "accessories", "reported_issue", "description", "priority",
+              "expected_delivery_date", "prepayment", "discount", "final_issue", "tests_performed",
+              "test_result", "damaged_part_desc", "diagnostic_notes", "customer_signature")
+    updates = {f: d[f] for f in fields if f in d}
+    if not updates:
+        conn.close()
+        return jsonify({"ok": True})
+    set_clause = ", ".join(f"{f}=?" for f in updates)
+    values = list(updates.values()) + [now(), repair_id]
+    conn.execute(f"UPDATE repairs SET {set_clause}, updated_at=? WHERE id=?", values)
+    conn.commit()
+    conn.close()
+    log_action(g.current_user["username"], "ویرایش پرونده تعمیر", repair["ticket_number"])
+    return jsonify({"ok": True})
+
+
+@app.route("/repairs/<int:repair_id>/checklist", methods=["PUT"])
+def update_repair_checklist(repair_id):
+    err = require_permission("can_manage_repairs")
+    if err:
+        return err
+    d = request.json or {}
+    conn = get_connection()
+    conn.execute("UPDATE repairs SET checklist_json=?, updated_at=? WHERE id=?",
+                 (json.dumps(d.get("checklist") or {}, ensure_ascii=False), now(), repair_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/repairs/<int:repair_id>/status", methods=["PUT"])
+def update_repair_status(repair_id):
+    err = require_permission("can_manage_repairs")
+    if err:
+        return err
+    d = request.json or {}
+    new_status = d.get("status")
+    if new_status not in VALID_REPAIR_STATUSES:
+        return jsonify({"ok": False, "message": "وضعیت نامعتبر است"}), 400
+    conn = get_connection()
+    c = conn.cursor()
+    repair = c.execute("SELECT * FROM repairs WHERE id=?", (repair_id,)).fetchone()
+    if not repair:
+        conn.close()
+        return jsonify({"ok": False, "message": "پرونده تعمیر پیدا نشد"}), 404
+    old_status = repair["status"]
+    extra_sql = ""
+    extra_params = []
+    if new_status == "in_repair" and not repair["repair_start_time"]:
+        extra_sql += ", repair_start_time=?"
+        extra_params.append(now())
+    if new_status in ("repaired", "ready") and not repair["repair_end_time"]:
+        extra_sql += ", repair_end_time=?"
+        extra_params.append(now())
+    if new_status == "delivered":
+        extra_sql += ", delivered_at=?"
+        extra_params.append(now())
+        if d.get("warranty_hours") is not None or not repair["warranty_start_date"]:
+            warranty_hours = int(d.get("warranty_hours", repair["warranty_hours"] or 0) or 0)
+            start = now()
+            end = (datetime.now() + timedelta(hours=warranty_hours)).strftime("%Y-%m-%d %H:%M:%S") if warranty_hours else None
+            extra_sql += ", warranty_hours=?, warranty_start_date=?, warranty_end_date=?"
+            extra_params += [warranty_hours, start, end]
+    c.execute(f"UPDATE repairs SET status=?, updated_at=? {extra_sql} WHERE id=?",
+              [new_status, now()] + extra_params + [repair_id])
+    c.execute("""INSERT INTO repair_status_history (repair_id, old_status, new_status, changed_by, changed_at, note)
+                 VALUES (?,?,?,?,?,?)""", (repair_id, old_status, new_status, g.current_user["username"], now(), d.get("note", "")))
+    if new_status == "delivered" and repair["customer_id"]:
+        c.execute("UPDATE parties SET loyalty_points = loyalty_points + 10 WHERE id=?", (repair["customer_id"],))
+    conn.commit()
+    conn.close()
+    log_action(g.current_user["username"], f"تغییر وضعیت تعمیر {repair['ticket_number']}", f"{old_status} → {new_status}")
+    notify_repair_status(repair_id)
+    return jsonify({"ok": True})
+
+
+@app.route("/repairs/<int:repair_id>/link-warranty/<int:original_id>", methods=["POST"])
+def link_repair_warranty(repair_id, original_id):
+    err = require_permission("can_manage_repairs")
+    if err:
+        return err
+    conn = get_connection()
+    conn.execute("""UPDATE repairs SET original_repair_id=?, is_warranty_return=1, status='warranty_return', updated_at=?
+                     WHERE id=?""", (original_id, now(), repair_id))
+    conn.execute("""INSERT INTO repair_status_history (repair_id, old_status, new_status, changed_by, changed_at, note)
+                     VALUES (?,?,?,?,?,?)""",
+                 (repair_id, None, "warranty_return", g.current_user["username"], now(), f"لینک به تعمیر قبلی شماره {original_id}"))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+# ---------- قطعات/خدمات مصرف‌شده روی تعمیر ----------
+@app.route("/repairs/<int:repair_id>/parts", methods=["POST"])
+def add_repair_part(repair_id):
+    err = require_permission("can_manage_repairs")
+    if err:
+        return err
+    d = request.json or {}
+    try:
+        item_id = int(d["item_id"])
+        qty = float(d.get("qty") or 1)
+        unit_price = float(d.get("unit_price"))
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"ok": False, "message": "کالا/تعداد/قیمت نامعتبر است"}), 400
+    if qty <= 0 or unit_price < 0:
+        return jsonify({"ok": False, "message": "تعداد باید مثبت و قیمت نامنفی باشد"}), 400
+    conn = get_connection()
+    item = conn.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
+    if not item:
+        conn.close()
+        return jsonify({"ok": False, "message": "کالا پیدا نشد"}), 404
+    repair = conn.execute("SELECT * FROM repairs WHERE id=?", (repair_id,)).fetchone()
+    if not repair:
+        conn.close()
+        return jsonify({"ok": False, "message": "پرونده تعمیر پیدا نشد"}), 404
+    is_service = bool(item["is_service"])
+    if not is_service:
+        if item["stock_qty"] < qty:
+            conn.close()
+            return jsonify({"ok": False, "message": f'موجودی «{item["name"]}» فقط {item["stock_qty"]:g} است'}), 400
+        conn.execute("UPDATE items SET stock_qty = stock_qty - ? WHERE id=?", (qty, item_id))
+    unit_cost = 0 if is_service else (item["avg_cost"] if item["avg_cost"] is not None else item["purchase_price"])
+    conn.execute("""INSERT INTO repair_parts_used (repair_id, item_id, qty, unit_price, unit_cost, created_at, username)
+                     VALUES (?,?,?,?,?,?,?)""",
+                 (repair_id, item_id, qty, unit_price, unit_cost or 0, now(), g.current_user["username"]))
+    conn.commit()
+    conn.close()
+    log_action(g.current_user["username"], f"افزودن {'خدمت' if is_service else 'قطعه'} به تعمیر {repair['ticket_number']}", item["name"])
+    return jsonify({"ok": True})
+
+
+@app.route("/repairs/<int:repair_id>/parts/<int:usage_id>", methods=["DELETE"])
+def delete_repair_part(repair_id, usage_id):
+    err = require_permission("can_manage_repairs")
+    if err:
+        return err
+    conn = get_connection()
+    usage = conn.execute("SELECT * FROM repair_parts_used WHERE id=? AND repair_id=?", (usage_id, repair_id)).fetchone()
+    if not usage:
+        conn.close()
+        return jsonify({"ok": False, "message": "ردیف پیدا نشد"}), 404
+    item = conn.execute("SELECT * FROM items WHERE id=?", (usage["item_id"],)).fetchone()
+    if item and not item["is_service"]:
+        conn.execute("UPDATE items SET stock_qty = stock_qty + ? WHERE id=?", (usage["qty"], usage["item_id"]))
+    conn.execute("DELETE FROM repair_parts_used WHERE id=?", (usage_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+# ---------- تخصیص تعمیرکار ----------
+@app.route("/repairs/<int:repair_id>/technicians", methods=["POST"])
+def assign_repair_technician(repair_id):
+    err = require_permission("can_assign_technicians")
+    if err:
+        return err
+    d = request.json or {}
+    tech_id = d.get("technician_id")
+    if not tech_id:
+        return jsonify({"ok": False, "message": "تعمیرکار را انتخاب کن"}), 400
+    conn = get_connection()
+    technician = conn.execute("SELECT * FROM technicians WHERE id=?", (tech_id,)).fetchone()
+    if not technician:
+        conn.close()
+        return jsonify({"ok": False, "message": "تعمیرکار پیدا نشد"}), 404
+    commission_amount = d.get("commission_amount")
+    if commission_amount is None:
+        labor_total = conn.execute("""SELECT COALESCE(SUM(rpu.qty*rpu.unit_price),0) as t FROM repair_parts_used rpu
+                                       JOIN items ON rpu.item_id=items.id WHERE rpu.repair_id=? AND items.is_service=1""",
+                                    (repair_id,)).fetchone()["t"]
+        commission_amount = labor_total * (technician["commission_percent"] or 0) / 100
+    conn.execute("""INSERT INTO repair_technicians (repair_id, technician_id, role_note, commission_amount, assigned_at)
+                     VALUES (?,?,?,?,?)""", (repair_id, tech_id, d.get("role_note"), float(commission_amount or 0), now()))
+    conn.commit()
+    conn.close()
+    log_action(g.current_user["username"], "تخصیص تعمیرکار", technician["name"])
+    return jsonify({"ok": True})
+
+
+@app.route("/repairs/<int:repair_id>/technicians/<int:assignment_id>", methods=["DELETE"])
+def unassign_repair_technician(repair_id, assignment_id):
+    err = require_permission("can_assign_technicians")
+    if err:
+        return err
+    conn = get_connection()
+    conn.execute("DELETE FROM repair_technicians WHERE id=? AND repair_id=?", (assignment_id, repair_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+# ---------- سود واقعی و صدور فاکتور ----------
+@app.route("/repairs/<int:repair_id>/profit", methods=["GET"])
+def get_repair_profit(repair_id):
+    err = require_permission_strict("can_view_repair_financials")
+    if err:
+        return err
+    conn = get_connection()
+    repair = conn.execute("SELECT * FROM repairs WHERE id=?", (repair_id,)).fetchone()
+    if not repair:
+        conn.close()
+        return jsonify({"ok": False, "message": "پرونده تعمیر پیدا نشد"}), 404
+    parts = conn.execute("""SELECT rpu.qty, rpu.unit_price, rpu.unit_cost, items.is_service as is_service
+                             FROM repair_parts_used rpu JOIN items ON rpu.item_id=items.id
+                             WHERE rpu.repair_id=?""", (repair_id,)).fetchall()
+    technician_cost = conn.execute("SELECT COALESCE(SUM(commission_amount),0) as t FROM repair_technicians WHERE repair_id=?",
+                                    (repair_id,)).fetchone()["t"]
+    conn.close()
+    gross = sum(p["qty"] * p["unit_price"] for p in parts)
+    parts_cost = sum(p["qty"] * p["unit_cost"] for p in parts if not p["is_service"])
+    labor_revenue = sum(p["qty"] * p["unit_price"] for p in parts if p["is_service"])
+    parts_revenue = gross - labor_revenue
+    discount = repair["discount"] or 0
+    revenue = gross - discount
+    profit = revenue - parts_cost - technician_cost
+    return jsonify({"gross": gross, "parts_revenue": parts_revenue, "labor_revenue": labor_revenue,
+                     "discount": discount, "revenue": revenue, "parts_cost": parts_cost,
+                     "technician_cost": technician_cost, "profit": profit})
+
+
+@app.route("/repairs/<int:repair_id>/finalize-invoice", methods=["POST"])
+def finalize_repair_invoice(repair_id):
+    """فاکتور فروش نهایی تعمیر را می‌سازد (قطعات+خدمات)، بدون کسر دوباره‌ی موجودی — چون موجودی
+    قطعات همان لحظه‌ی «افزودن قطعه به تعمیر» کم شده. این فاکتور دقیقاً وارد همان گزارش‌های
+    فروش/سود موجود برنامه می‌شود (ستون invoices.repair_id) تا حسابداری واقعاً یکپارچه باشد."""
+    err = require_permission("can_manage_repairs")
+    if err:
+        return err
+    d = request.json or {}
+    conn = get_connection()
+    c = conn.cursor()
+    repair = c.execute("SELECT * FROM repairs WHERE id=?", (repair_id,)).fetchone()
+    if not repair:
+        conn.close()
+        return jsonify({"ok": False, "message": "پرونده تعمیر پیدا نشد"}), 404
+    if repair["invoice_id"]:
+        conn.close()
+        return jsonify({"ok": False, "message": "برای این تعمیر قبلاً فاکتور صادر شده"}), 400
+    parts = c.execute("SELECT * FROM repair_parts_used WHERE repair_id=?", (repair_id,)).fetchall()
+    if not parts:
+        conn.close()
+        return jsonify({"ok": False, "message": "هیچ قطعه/خدمتی برای این تعمیر ثبت نشده"}), 400
+    subtotal = sum(p["qty"] * p["unit_price"] for p in parts)
+    discount = repair["discount"] or 0
+    total = max(subtotal - discount, 0)
+    payment_type = d.get("payment_type", "cash")
+    paid = total if payment_type == "cash" else float(d.get("paid") or 0)
+    if paid > total:
+        conn.close()
+        return jsonify({"ok": False, "message": "مبلغ پرداختی نمی‌تواند بیشتر از مبلغ کل باشد"}), 400
+
+    c.execute("""INSERT INTO invoices (invoice_type, number, party_id, date, total, paid, payment_type, description,
+                    discount, created_by, repair_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+              ("sale", None, repair["customer_id"], now(), total, paid, payment_type,
+               f"فاکتور تعمیر {repair['ticket_number']}", discount, g.current_user["username"], repair_id))
+    invoice_id = c.lastrowid
+    offset = load_shop_settings().get("invoice_number_offset", 0) or 0
+    invoice_number = str(invoice_id + offset)
+    c.execute("UPDATE invoices SET number=? WHERE id=?", (invoice_number, invoice_id))
+
+    for p in parts:
+        line_total = p["qty"] * p["unit_price"]
+        c.execute("INSERT INTO invoice_items (invoice_id, item_id, qty, unit_price, total) VALUES (?,?,?,?,?)",
+                  (invoice_id, p["item_id"], p["qty"], p["unit_price"], line_total))
+
+    if repair["customer_id"] and payment_type == "credit":
+        remaining = total - paid
+        c.execute("UPDATE parties SET balance = balance + ? WHERE id=?", (remaining, repair["customer_id"]))
+
+    if paid > 0:
+        c.execute("INSERT INTO cash_transactions (date, tx_type, amount, description, invoice_id) VALUES (?,?,?,?,?)",
+                   (now(), "in", paid, f"فاکتور تعمیر شماره {invoice_number}", invoice_id))
+
+    c.execute("UPDATE repairs SET invoice_id=? WHERE id=?", (invoice_id, repair_id))
+    conn.commit()
+    conn.close()
+    log_action(g.current_user["username"], f"صدور فاکتور تعمیر {repair['ticket_number']}", f"جمع کل: {total:,.0f} تومان")
+    return jsonify({"ok": True, "invoice_id": invoice_id, "invoice_number": invoice_number, "total": total})
+
+
+# ---------- پیگیری تماس برای دستگاه‌های معطل ----------
+@app.route("/repairs/<int:repair_id>/contact-log", methods=["POST"])
+def add_repair_contact_log(repair_id):
+    err = require_permission("can_manage_repairs")
+    if err:
+        return err
+    d = request.json or {}
+    conn = get_connection()
+    conn.execute("INSERT INTO repair_contact_log (repair_id, contacted_at, note, username) VALUES (?,?,?,?)",
+                 (repair_id, now(), d.get("note", ""), g.current_user["username"]))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+# ---------- عکس/فیلم/فایل تعمیر ----------
+@app.route("/repairs/<int:repair_id>/media", methods=["POST"])
+def upload_repair_media(repair_id):
+    err = require_permission("can_manage_repairs")
+    if err:
+        return err
+    if "file" not in request.files:
+        return jsonify({"ok": False, "message": "فایلی ارسال نشده"}), 400
+    file = request.files["file"]
+    if not file or file.filename == "":
+        return jsonify({"ok": False, "message": "فایلی انتخاب نشده"}), 400
+    ext = os.path.splitext(file.filename)[1].lower()
+    image_exts = (".png", ".jpg", ".jpeg", ".gif", ".webp")
+    video_exts = (".mp4", ".mov", ".webm")
+    if ext not in image_exts + video_exts + (".pdf",):
+        return jsonify({"ok": False, "message": "فرمت فایل پشتیبانی نمی‌شود"}), 400
+    file_bytes = file.read()
+    if ext in image_exts:
+        sniffed = sniff_image_ext(file_bytes)
+        ext_family = ".jpg" if ext == ".jpeg" else ext
+        if not sniffed or sniffed != ext_family:
+            return jsonify({"ok": False, "message": "محتوای فایل با پسوند آن مطابقت ندارد"}), 400
+        media_type = "image"
+    elif ext in video_exts:
+        media_type = "video"
+    else:
+        if file_bytes[:4] != b"%PDF":
+            return jsonify({"ok": False, "message": "محتوای فایل با پسوند pdf مطابقت ندارد"}), 400
+        media_type = "file"
+    stage = request.form.get("stage", "other")
+    if stage not in ("before", "after", "other"):
+        stage = "other"
+    filename = f"repair_{repair_id}_{secrets.token_hex(6)}{ext}"
+    with open(os.path.join(REPAIR_MEDIA_DIR, filename), "wb") as f:
+        f.write(file_bytes)
+    conn = get_connection()
+    conn.execute("""INSERT INTO repair_media (repair_id, filename, media_type, stage, uploaded_by, uploaded_at)
+                     VALUES (?,?,?,?,?,?)""", (repair_id, filename, media_type, stage, g.current_user["username"], now()))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "filename": filename, "url": f"/repair-media/{filename}"})
+
+
+@app.route("/repair-media/<path:filename>")
+def serve_repair_media(filename):
+    return send_from_directory(REPAIR_MEDIA_DIR, filename)
+
+
+@app.route("/repairs/<int:repair_id>/media/<int:media_id>", methods=["DELETE"])
+def delete_repair_media(repair_id, media_id):
+    err = require_permission("can_manage_repairs")
+    if err:
+        return err
+    conn = get_connection()
+    media = conn.execute("SELECT * FROM repair_media WHERE id=? AND repair_id=?", (media_id, repair_id)).fetchone()
+    if not media:
+        conn.close()
+        return jsonify({"ok": False, "message": "فایل پیدا نشد"}), 404
+    conn.execute("DELETE FROM repair_media WHERE id=?", (media_id,))
+    conn.commit()
+    conn.close()
+    path = os.path.join(REPAIR_MEDIA_DIR, media["filename"])
+    if os.path.exists(path):
+        os.remove(path)
+    return jsonify({"ok": True})
+
+
+# ---------- QR/چاپ و پیگیری عمومی ----------
+@app.route("/repairs/<int:repair_id>/print/receipt", methods=["GET"])
+def print_repair_receipt(repair_id):
+    conn = get_connection()
+    repair = conn.execute("""SELECT repairs.*, parties.name as customer_name, parties.phone as customer_phone
+                              FROM repairs LEFT JOIN parties ON repairs.customer_id=parties.id
+                              WHERE repairs.id=?""", (repair_id,)).fetchone()
+    conn.close()
+    if not repair:
+        return "پرونده تعمیر پیدا نشد", 404
+    cfg = load_shop_settings()
+    return repair_html.build_repair_receipt_html(dict(repair), [], shop_name=cfg.get("name", ""),
+                                                   shop_phones=cfg.get("phones", ""), shop_address=cfg.get("address", ""))
+
+
+@app.route("/repairs/<int:repair_id>/print/label", methods=["GET"])
+def print_repair_label(repair_id):
+    conn = get_connection()
+    repair = conn.execute("""SELECT repairs.*, parties.name as customer_name FROM repairs
+                              LEFT JOIN parties ON repairs.customer_id=parties.id WHERE repairs.id=?""", (repair_id,)).fetchone()
+    conn.close()
+    if not repair:
+        return "پرونده تعمیر پیدا نشد", 404
+    return repair_html.build_repair_label_html(dict(repair))
+
+
+@app.route("/repairs/<int:repair_id>/print/report", methods=["GET"])
+def print_repair_report(repair_id):
+    conn = get_connection()
+    repair = conn.execute("""SELECT repairs.*, parties.name as customer_name FROM repairs
+                              LEFT JOIN parties ON repairs.customer_id=parties.id WHERE repairs.id=?""", (repair_id,)).fetchone()
+    if not repair:
+        conn.close()
+        return "پرونده تعمیر پیدا نشد", 404
+    parts = conn.execute("""SELECT rpu.qty, rpu.unit_price, items.name as item_name FROM repair_parts_used rpu
+                             JOIN items ON rpu.item_id=items.id WHERE rpu.repair_id=?""", (repair_id,)).fetchall()
+    technicians = conn.execute("""SELECT rt.commission_amount, t.name as name FROM repair_technicians rt
+                                   JOIN technicians t ON rt.technician_id=t.id WHERE rt.repair_id=?""", (repair_id,)).fetchall()
+    history = conn.execute("SELECT * FROM repair_status_history WHERE repair_id=? ORDER BY id", (repair_id,)).fetchall()
+    conn.close()
+    return repair_html.build_repair_report_html(dict(repair), [dict(r) for r in parts],
+                                                  [dict(r) for r in technicians], [dict(r) for r in history])
+
+
+@app.route("/track/<ticket_number>", methods=["GET"])
+def track_repair(ticket_number):
+    """پیگیری عمومی بدون نیاز به ورود — فقط وضعیت/تاریخ برمی‌گرداند، هیچ اطلاعات هویتی مشتری را نه"""
+    conn = get_connection()
+    repair = conn.execute("""SELECT status, intake_date, expected_delivery_date, delivered_at
+                              FROM repairs WHERE ticket_number=?""", (ticket_number,)).fetchone()
+    conn.close()
+    if not repair:
+        return jsonify({"ok": False, "message": "شماره پذیرش پیدا نشد"}), 404
+    return jsonify({"ok": True, "status": repair["status"],
+                     "status_label": repair_html.STATUS_LABELS.get(repair["status"], repair["status"]),
+                     "intake_date": repair["intake_date"], "expected_delivery_date": repair["expected_delivery_date"],
+                     "delivered_at": repair["delivered_at"]})
+
+
+# ---------- قالب‌های پیامک ----------
+@app.route("/notification-templates", methods=["GET"])
+def get_notification_templates():
+    err = require_admin()
+    if err:
+        return err
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM notification_templates").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/notification-templates/<key>", methods=["PUT"])
+def update_notification_template(key):
+    err = require_admin()
+    if err:
+        return err
+    d = request.json or {}
+    conn = get_connection()
+    conn.execute("UPDATE notification_templates SET template=?, updated_at=? WHERE key=?", (d.get("template", ""), now(), key))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+# ---------- عیب‌یابی هوشمند (AI) ----------
+@app.route("/repairs/<int:repair_id>/diagnose-ai", methods=["POST"])
+def diagnose_repair_ai(repair_id):
+    d = request.json or {}
+    s = load_shop_settings()
+    ok, answer = assistant_ai.diagnose_repair(d.get("symptom", ""), d.get("device_model", ""), s.get("ai_api_key"))
+    if ok:
+        return jsonify({"ok": True, "answer": answer})
+    return jsonify({"ok": False, "message": answer})
+
+
+# ---------- داشبورد و گزارش‌های تعمیرات ----------
+@app.route("/repairs/dashboard-stats", methods=["GET"])
+def repairs_dashboard_stats():
+    conn = get_connection()
+
+    def count_status(*statuses):
+        placeholders = ",".join("?" * len(statuses))
+        return conn.execute(f"SELECT COUNT(*) as c FROM repairs WHERE status IN ({placeholders})", statuses).fetchone()["c"]
+
+    today = now()[:10]
+    in_repair = count_status("diagnosing", "waiting_customer_approval", "waiting_parts", "in_repair")
+    ready = count_status("ready", "repaired")
+    waiting_parts = count_status("waiting_parts")
+    warranty_returns = count_status("warranty_return")
+    delivered_today = conn.execute("SELECT COUNT(*) as c FROM repairs WHERE status='delivered' AND delivered_at LIKE ?",
+                                    (f"{today}%",)).fetchone()["c"]
+    intake_today = conn.execute("SELECT COUNT(*) as c FROM repairs WHERE intake_date LIKE ?", (f"{today}%",)).fetchone()["c"]
+    revenue_today = conn.execute("""SELECT COALESCE(SUM(total),0) as t FROM invoices
+                                     WHERE repair_id IS NOT NULL AND voided=0 AND date LIKE ?""", (f"{today}%",)).fetchone()["t"]
+    week_start = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+    revenue_week = conn.execute("""SELECT COALESCE(SUM(total),0) as t FROM invoices
+                                    WHERE repair_id IS NOT NULL AND voided=0 AND date >= ?""", (week_start,)).fetchone()["t"]
+    month_start = today[:7] + "-01"
+    revenue_month = conn.execute("""SELECT COALESCE(SUM(total),0) as t FROM invoices
+                                     WHERE repair_id IS NOT NULL AND voided=0 AND date >= ?""", (month_start,)).fetchone()["t"]
+    debtors = conn.execute("SELECT COALESCE(SUM(balance),0) as t FROM parties WHERE balance > 0 AND type='customer'").fetchone()["t"]
+    low_stock_parts = conn.execute("SELECT COUNT(*) as c FROM items WHERE stock_qty <= min_stock AND is_service=0 AND deleted_at IS NULL").fetchone()["c"]
+    is_admin = g.current_user.get("role") == "admin"
+    tech_perf = conn.execute("""SELECT technicians.name as name, COUNT(DISTINCT rt.repair_id) as repair_count
+                                 FROM repair_technicians rt JOIN technicians ON rt.technician_id=technicians.id
+                                 GROUP BY technicians.id ORDER BY repair_count DESC LIMIT 5""").fetchall()
+    conn.close()
+    return jsonify({
+        "in_repair": in_repair, "ready": ready, "waiting_parts": waiting_parts,
+        "delivered_today": delivered_today, "intake_today": intake_today,
+        "revenue_today": revenue_today, "revenue_week": revenue_week,
+        "revenue_month": revenue_month if is_admin else None,
+        "debtors": debtors, "low_stock_parts": low_stock_parts, "warranty_returns": warranty_returns,
+        "technician_performance": [dict(r) for r in tech_perf],
+    })
+
+
+@app.route("/reports/repairs/technician-performance", methods=["GET"])
+def report_technician_performance():
+    err = require_permission_strict("can_view_repair_financials")
+    if err:
+        return err
+    conn = get_connection()
+    rows = conn.execute("""SELECT technicians.id, technicians.name, COUNT(DISTINCT rt.repair_id) as repair_count,
+                            COALESCE(SUM(rt.commission_amount),0) as total_commission
+                            FROM technicians LEFT JOIN repair_technicians rt ON rt.technician_id = technicians.id
+                            GROUP BY technicians.id ORDER BY repair_count DESC""").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/reports/repairs/warranty", methods=["GET"])
+def report_warranty_repairs():
+    conn = get_connection()
+    rows = conn.execute("""SELECT repairs.*, parties.name as customer_name FROM repairs
+                            LEFT JOIN parties ON repairs.customer_id=parties.id
+                            WHERE is_warranty_return=1 ORDER BY repairs.id DESC""").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/reports/repairs/parts-consumption", methods=["GET"])
+def report_parts_consumption():
+    conn = get_connection()
+    rows = conn.execute("""SELECT items.name as item_name, items.is_service as is_service,
+                            SUM(rpu.qty) as total_qty, SUM(rpu.qty*rpu.unit_price) as total_revenue
+                            FROM repair_parts_used rpu JOIN items ON rpu.item_id=items.id
+                            GROUP BY items.id ORDER BY total_revenue DESC""").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/reports/repairs/undelivered", methods=["GET"])
+def report_undelivered_repairs():
+    s = load_shop_settings()
+    days = s.get("undelivered_alert_days", 3)
+    threshold = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    conn = get_connection()
+    rows = conn.execute("""SELECT repairs.*, parties.name as customer_name, parties.phone as customer_phone
+                            FROM repairs LEFT JOIN parties ON repairs.customer_id=parties.id
+                            WHERE repairs.status IN ('ready','repaired') AND repairs.updated_at <= ?
+                            ORDER BY repairs.updated_at ASC""", (threshold,)).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/reports/repairs/top-customers", methods=["GET"])
+def report_top_repair_customers():
+    conn = get_connection()
+    rows = conn.execute("""SELECT parties.id, parties.name, parties.phone, parties.loyalty_points, parties.visit_count,
+                            COUNT(repairs.id) as repair_count
+                            FROM parties JOIN repairs ON repairs.customer_id=parties.id
+                            GROUP BY parties.id ORDER BY repair_count DESC LIMIT 20""").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/export/repairs.xlsx", methods=["GET"])
+def export_repairs_excel():
+    import openpyxl
+    conn = get_connection()
+    rows = conn.execute("""SELECT repairs.ticket_number, parties.name as customer_name, parties.phone as customer_phone,
+                            repairs.device_brand, repairs.device_model, repairs.imei, repairs.status,
+                            repairs.intake_date, repairs.expected_delivery_date, repairs.delivered_at
+                            FROM repairs LEFT JOIN parties ON repairs.customer_id=parties.id
+                            ORDER BY repairs.id DESC""").fetchall()
+    conn.close()
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "تعمیرات"
+    ws.append(["شماره پذیرش", "مشتری", "تلفن", "برند", "مدل", "IMEI", "وضعیت", "تاریخ پذیرش", "تاریخ تحویل احتمالی", "تاریخ تحویل"])
+    for r in rows:
+        ws.append([r["ticket_number"], r["customer_name"], r["customer_phone"], r["device_brand"], r["device_model"],
+                   r["imei"], repair_html.STATUS_LABELS.get(r["status"], r["status"]),
+                   r["intake_date"], r["expected_delivery_date"], r["delivered_at"]])
+    tmp_path = os.path.join(tempfile.gettempdir(), "repairs_export.xlsx")
+    wb.save(tmp_path)
+    return send_file(tmp_path, as_attachment=True, download_name="تعمیرات.xlsx")
+# ================= پایان ماژول تعمیرگاه =================
+
+
 @app.route("/reports/expenses", methods=["GET"])
 def report_expenses():
     """جمع هزینه‌های جاری (خروج دستی صندوق با دسته‌بندی) به تفکیک دسته، در N روز اخیر"""
@@ -1847,7 +2686,7 @@ def report_summary():
         WHERE tx_type='out' AND invoice_id IS NULL AND expense_category IS NOT NULL
     """).fetchone()["t"]
     debtors = conn.execute("SELECT COALESCE(SUM(balance),0) as t FROM parties WHERE balance > 0").fetchone()["t"]
-    low_stock = conn.execute("SELECT * FROM items WHERE stock_qty <= min_stock AND deleted_at IS NULL").fetchall()
+    low_stock = conn.execute("SELECT * FROM items WHERE stock_qty <= min_stock AND deleted_at IS NULL AND is_service=0").fetchall()
     conn.close()
     is_admin = g.current_user.get("role") == "admin"
     return jsonify({
@@ -2968,6 +3807,11 @@ def stock_ranking():
     rows = conn.execute("SELECT name, brand, stock_qty, unit FROM items WHERE deleted_at IS NULL ORDER BY stock_qty DESC LIMIT 10").fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
+
+
+@app.route("/ping", methods=["GET"])
+def ping():
+    return jsonify({"ok": True, "message": "سرور فعال است"})
 
 
 @app.route("/ping", methods=["GET"])
