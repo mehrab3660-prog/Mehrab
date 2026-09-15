@@ -4007,7 +4007,15 @@ async function openRepairDetail(repairId) {
     ${warrantyBanner}
     <div class="form-row">
       <div><label>وضعیت</label><select id="rd-status">${statusOptions}</select></div>
-      ${repair.status !== 'delivered' ? '' : ''}
+      <div><label>گارانتی (در صورت تحویل دستگاه)</label>
+        <select id="rd-warranty-hours">
+          <option value="0" ${!repair.warranty_hours ? 'selected' : ''}>بدون گارانتی</option>
+          <option value="24" ${repair.warranty_hours === 24 ? 'selected' : ''}>۲۴ ساعت</option>
+          <option value="48" ${repair.warranty_hours === 48 ? 'selected' : ''}>۴۸ ساعت</option>
+          <option value="72" ${repair.warranty_hours === 72 ? 'selected' : ''}>۳ روز</option>
+          <option value="168" ${repair.warranty_hours === 168 ? 'selected' : ''}>۷ روز</option>
+        </select>
+      </div>
       <div style="align-self:flex-end"><button class="btn btn-primary btn-sm" id="rd-save-status">اعمال تغییر وضعیت</button></div>
     </div>
     <p class="muted">مشتری: ${escHtml(repair.customer_name) || '—'} (${escHtml(repair.customer_phone) || '—'}) | دستگاه: ${escHtml(repair.device_brand)} ${escHtml(repair.device_model)} / IMEI: <bdi dir="ltr">${escHtml(repair.imei) || '—'}</bdi></p>
@@ -4104,12 +4112,8 @@ async function openRepairDetail(repairId) {
   // ---- event wiring ----
   $('#rd-save-status').addEventListener('click', async () => {
     const status = $('#rd-status').value;
-    let warrantyDays;
-    if (status === 'delivered') {
-      warrantyDays = prompt('چند روز گارانتی برای این تعمیر می‌خواهی ثبت کنی؟ (عدد، یا خالی برای بدون گارانتی)', repair.warranty_days || '0');
-      if (warrantyDays === null) return;
-    }
-    const res = await api('PUT', `/repairs/${repairId}/status`, { status, warranty_days: warrantyDays !== undefined ? (parseInt(warrantyDays) || 0) : undefined });
+    const warrantyHours = status === 'delivered' ? parseInt($('#rd-warranty-hours').value) || 0 : undefined;
+    const res = await api('PUT', `/repairs/${repairId}/status`, { status, warranty_hours: warrantyHours });
     if (res && res.ok) { toast('وضعیت به‌روزرسانی شد', 'success'); openRepairDetail(repairId); if ($('#page-repairs').classList.contains('active')) loadRepairsPage(); }
     else if (res) toast(res.message || 'خطا', 'danger');
   });

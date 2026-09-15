@@ -21,6 +21,14 @@ STATUS_LABELS = {
 }
 
 
+def _format_warranty_hours(hours):
+    if not hours:
+        return "بدون گارانتی"
+    if hours % 24 == 0:
+        return f"{to_fa_digits(hours // 24)} روز"
+    return f"{to_fa_digits(hours)} ساعت"
+
+
 def _make_qr_svg(data):
     if not data:
         return ""
@@ -144,7 +152,7 @@ def build_repair_report_html(repair, parts, technicians, history):
   <tr><th>نتیجه تست</th><td colspan="3">{esc(repair.get('test_result') or '—')}</td></tr>
   <tr><th>قطعه خراب</th><td colspan="3">{esc(repair.get('damaged_part_desc') or '—')}</td></tr>
   <tr><th>یادداشت فنی</th><td colspan="3">{esc(repair.get('diagnostic_notes') or '—')}</td></tr>
-  <tr><th>گارانتی</th><td colspan="3">{to_fa_digits(repair.get('warranty_days') or 0)} روز
+  <tr><th>گارانتی</th><td colspan="3">{_format_warranty_hours(repair.get('warranty_hours') or 0)}
       ({esc(repair.get('warranty_start_date') or '—')} تا {esc(repair.get('warranty_end_date') or '—')})</td></tr>
 </table>
 <h3>قطعات و خدمات مصرف‌شده</h3>

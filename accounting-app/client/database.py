@@ -374,6 +374,8 @@ def init_db():
     add_column_if_missing("invoices", "repair_id", "INTEGER")
     add_column_if_missing("parties", "loyalty_points", "INTEGER NOT NULL DEFAULT 0")
     add_column_if_missing("parties", "visit_count", "INTEGER NOT NULL DEFAULT 0")
+    # گارانتی تعمیر حالا با دقت ساعت ثبت می‌شود (warranty_days قدیمی دیگر استفاده نمی‌شود)
+    add_column_if_missing("repairs", "warranty_hours", "INTEGER NOT NULL DEFAULT 0")
 
     # مهاجرت امنیتی: هش کردن رمزهایی که هنوز به‌صورت متن ساده ذخیره شده‌اند
     from werkzeug.security import generate_password_hash

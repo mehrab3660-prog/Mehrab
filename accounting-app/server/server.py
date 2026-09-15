@@ -2040,7 +2040,7 @@ def add_repair():
     if imei:
         match = conn.execute("""SELECT id, ticket_number, delivered_at, warranty_end_date FROM repairs
                                  WHERE imei=? AND status='delivered' AND warranty_end_date IS NOT NULL AND warranty_end_date >= ?
-                                 ORDER BY delivered_at DESC LIMIT 1""", (imei, now()[:10])).fetchone()
+                                 ORDER BY delivered_at DESC LIMIT 1""", (imei, now())).fetchone()
         if match:
             warranty_match = dict(match)
 
@@ -2120,12 +2120,12 @@ def update_repair_status(repair_id):
     if new_status == "delivered":
         extra_sql += ", delivered_at=?"
         extra_params.append(now())
-        if d.get("warranty_days") is not None or not repair["warranty_start_date"]:
-            warranty_days = int(d.get("warranty_days", repair["warranty_days"] or 0) or 0)
-            start = now()[:10]
-            end = (datetime.now() + timedelta(days=warranty_days)).strftime("%Y-%m-%d") if warranty_days else None
-            extra_sql += ", warranty_days=?, warranty_start_date=?, warranty_end_date=?"
-            extra_params += [warranty_days, start, end]
+        if d.get("warranty_hours") is not None or not repair["warranty_start_date"]:
+            warranty_hours = int(d.get("warranty_hours", repair["warranty_hours"] or 0) or 0)
+            start = now()
+            end = (datetime.now() + timedelta(hours=warranty_hours)).strftime("%Y-%m-%d %H:%M:%S") if warranty_hours else None
+            extra_sql += ", warranty_hours=?, warranty_start_date=?, warranty_end_date=?"
+            extra_params += [warranty_hours, start, end]
     c.execute(f"UPDATE repairs SET status=?, updated_at=? {extra_sql} WHERE id=?",
               [new_status, now()] + extra_params + [repair_id])
     c.execute("""INSERT INTO repair_status_history (repair_id, old_status, new_status, changed_by, changed_at, note)
@@ -3807,6 +3807,11 @@ def stock_ranking():
     rows = conn.execute("SELECT name, brand, stock_qty, unit FROM items WHERE deleted_at IS NULL ORDER BY stock_qty DESC LIMIT 10").fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
+
+
+@app.route("/ping", methods=["GET"])
+def ping():
+    return jsonify({"ok": True, "message": "سرور فعال است"})
 
 
 @app.route("/ping", methods=["GET"])
