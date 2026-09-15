@@ -554,7 +554,17 @@ table.totals tr.grand td { border-top: 1px solid var(--border); padding-top: 10p
   box-shadow: var(--shadow-lg);
   animation: modalPop .18s cubic-bezier(.2,.9,.3,1.2);
 }
+.modal.modal-lg { width: 920px; }
 .modal h3 { margin-bottom: 16px; font-size: 16px; }
+.repair-section { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 14px; }
+.repair-section h4 { margin: 0 0 10px; font-size: 14px; }
+.repair-checklist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.repair-checklist-item { display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 12px; }
+.repair-status-timeline { list-style: none; padding: 0; margin: 0; font-size: 12px; }
+.repair-status-timeline li { padding: 6px 0; border-bottom: 1px dashed var(--border); }
+.repair-media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; }
+.repair-media-grid img, .repair-media-grid video { width: 100%; height: 70px; object-fit: cover; border-radius: 6px; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }

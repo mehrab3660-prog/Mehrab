@@ -203,6 +203,141 @@ def init_db():
         FOREIGN KEY (party_id) REFERENCES parties(id)
     )""")
 
+    # --- ماژول تعمیرگاه موبایل/تبلت ---
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS technicians (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        phone TEXT,
+        specialty TEXT,
+        commission_percent REAL NOT NULL DEFAULT 0,
+        base_wage REAL NOT NULL DEFAULT 0,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT
+    )""")
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS repairs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticket_number TEXT UNIQUE,
+        customer_id INTEGER,
+        device_brand TEXT,
+        device_model TEXT,
+        device_color TEXT,
+        imei TEXT,
+        device_password TEXT,
+        device_condition TEXT,
+        accessories TEXT,
+        reported_issue TEXT,
+        description TEXT,
+        checklist_json TEXT,
+        status TEXT NOT NULL DEFAULT 'received',
+        priority TEXT NOT NULL DEFAULT 'normal',
+        intake_date TEXT NOT NULL,
+        expected_delivery_date TEXT,
+        delivered_at TEXT,
+        prepayment REAL NOT NULL DEFAULT 0,
+        final_issue TEXT,
+        tests_performed TEXT,
+        test_result TEXT,
+        damaged_part_desc TEXT,
+        diagnostic_notes TEXT,
+        repair_start_time TEXT,
+        repair_end_time TEXT,
+        discount REAL NOT NULL DEFAULT 0,
+        warranty_days INTEGER NOT NULL DEFAULT 0,
+        warranty_start_date TEXT,
+        warranty_end_date TEXT,
+        is_warranty_return INTEGER NOT NULL DEFAULT 0,
+        original_repair_id INTEGER,
+        invoice_id INTEGER,
+        customer_signature TEXT,
+        created_by TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT,
+        FOREIGN KEY (customer_id) REFERENCES parties(id),
+        FOREIGN KEY (original_repair_id) REFERENCES repairs(id),
+        FOREIGN KEY (invoice_id) REFERENCES invoices(id)
+    )""")
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS repair_status_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        repair_id INTEGER NOT NULL,
+        old_status TEXT,
+        new_status TEXT NOT NULL,
+        changed_by TEXT,
+        changed_at TEXT NOT NULL,
+        note TEXT,
+        FOREIGN KEY (repair_id) REFERENCES repairs(id) ON DELETE CASCADE
+    )""")
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS repair_parts_used (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        repair_id INTEGER NOT NULL,
+        item_id INTEGER NOT NULL,
+        qty REAL NOT NULL,
+        unit_price REAL NOT NULL,
+        unit_cost REAL NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        username TEXT,
+        FOREIGN KEY (repair_id) REFERENCES repairs(id) ON DELETE CASCADE,
+        FOREIGN KEY (item_id) REFERENCES items(id)
+    )""")
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS repair_technicians (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        repair_id INTEGER NOT NULL,
+        technician_id INTEGER NOT NULL,
+        role_note TEXT,
+        commission_amount REAL NOT NULL DEFAULT 0,
+        assigned_at TEXT NOT NULL,
+        FOREIGN KEY (repair_id) REFERENCES repairs(id) ON DELETE CASCADE,
+        FOREIGN KEY (technician_id) REFERENCES technicians(id)
+    )""")
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS repair_media (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        repair_id INTEGER NOT NULL,
+        filename TEXT NOT NULL,
+        media_type TEXT NOT NULL DEFAULT 'image',
+        stage TEXT NOT NULL DEFAULT 'other',
+        uploaded_by TEXT,
+        uploaded_at TEXT NOT NULL,
+        FOREIGN KEY (repair_id) REFERENCES repairs(id) ON DELETE CASCADE
+    )""")
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS repair_contact_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        repair_id INTEGER NOT NULL,
+        contacted_at TEXT NOT NULL,
+        note TEXT,
+        username TEXT,
+        FOREIGN KEY (repair_id) REFERENCES repairs(id) ON DELETE CASCADE
+    )""")
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS notification_templates (
+        key TEXT PRIMARY KEY,
+        template TEXT NOT NULL,
+        updated_at TEXT
+    )""")
+
+    default_templates = {
+        "received": "سلام {customer_name}؛ دستگاه {device_model} شما با شماره پذیرش {ticket_number} دریافت شد. برای پیگیری همین شماره را نگه دارید.",
+        "waiting_approval": "سلام {customer_name}؛ عیب‌یابی دستگاه {device_model} (پذیرش {ticket_number}) انجام شد و منتظر تأیید شما برای شروع تعمیر هستیم.",
+        "in_repair": "سلام {customer_name}؛ دستگاه {device_model} شما (پذیرش {ticket_number}) در حال تعمیر است.",
+        "ready": "سلام {customer_name}؛ دستگاه {device_model} شما (پذیرش {ticket_number}) آماده تحویل است.",
+        "warranty_ending": "سلام {customer_name}؛ گارانتی تعمیر دستگاه {device_model} شما (پذیرش {ticket_number}) به‌زودی به پایان می‌رسد.",
+    }
+    for key, text in default_templates.items():
+        c.execute("INSERT OR IGNORE INTO notification_templates (key, template, updated_at) VALUES (?,?,?)",
+                   (key, text, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+
     # --- مهاجرت ستون‌های جدید برای دیتابیس‌های قبلی (اگر از قبل ساخته شده باشند) ---
     def add_column_if_missing(table, column, coltype):
         existing = [row["name"] for row in c.execute(f"PRAGMA table_info({table})").fetchall()]
@@ -233,6 +368,12 @@ def init_db():
     add_column_if_missing("items", "deleted_at", "TEXT")
     add_column_if_missing("bank_accounts", "iban", "TEXT")
     add_column_if_missing("bank_transactions", "category", "TEXT")
+
+    # --- ستون‌های ماژول تعمیرگاه ---
+    add_column_if_missing("items", "is_service", "INTEGER NOT NULL DEFAULT 0")
+    add_column_if_missing("invoices", "repair_id", "INTEGER")
+    add_column_if_missing("parties", "loyalty_points", "INTEGER NOT NULL DEFAULT 0")
+    add_column_if_missing("parties", "visit_count", "INTEGER NOT NULL DEFAULT 0")
 
     # مهاجرت امنیتی: هش کردن رمزهایی که هنوز به‌صورت متن ساده ذخیره شده‌اند
     from werkzeug.security import generate_password_hash
