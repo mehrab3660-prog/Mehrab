@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+
+# فایل‌های زمان اجرا (نباید در گیت باشند - حاوی داده/رمز واقعی هستند)
+reception.db
+FIRST_LOGIN_PASSWORD.txt
+backups/
+app_log.txt
+
+# ساخت exe
+build/
+dist/
+*.spec
