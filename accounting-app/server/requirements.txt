@@ -9,3 +9,4 @@ pytesseract==0.3.13
 pymupdf==1.24.11
 python-barcode==0.15.1
 PySocks==1.7.1
+qrcode==7.4.2

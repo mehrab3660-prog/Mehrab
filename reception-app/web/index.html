@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>سیستم پذیرش دستگاه</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- ورود -->
+<div id="login-screen" class="login-screen">
+  <div class="login-card">
+    <h1 id="login-shop-name">سیستم پذیرش دستگاه</h1>
+    <p class="muted">برای ادامه رمز عبور را وارد کن</p>
+    <div class="field">
+      <label>رمز عبور</label>
+      <input type="password" id="login-password" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary btn-block" id="login-btn">ورود</button>
+    <p class="error-text" id="login-error"></p>
+  </div>
+</div>
+
+<!-- برنامه اصلی -->
+<div id="app" class="app hidden">
+  <header class="topbar">
+    <h1 id="topbar-shop-name">سیستم پذیرش دستگاه</h1>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost" id="btn-settings">⚙️ تنظیمات</button>
+      <button class="btn btn-ghost" id="btn-logout">خروج</button>
+    </div>
+  </header>
+
+  <main class="content">
+    <div class="stat-grid" id="stat-grid"></div>
+
+    <div class="card">
+      <div class="toolbar">
+        <button class="btn btn-primary" id="btn-new-device">+ پذیرش دستگاه جدید</button>
+        <input type="text" id="filter-q" placeholder="جستجو (شماره پذیرش، IMEI، نام، تلفن، مدل)...">
+        <select id="filter-status">
+          <option value="">همه وضعیت‌ها</option>
+          <option value="received">پذیرش‌شده</option>
+          <option value="in_progress">در حال بررسی/تعمیر</option>
+          <option value="ready">آماده تحویل</option>
+          <option value="delivered">تحویل‌شده</option>
+          <option value="cancelled">لغو‌شده</option>
+        </select>
+      </div>
+      <table class="data-table">
+        <thead><tr><th>شماره پذیرش</th><th>مشتری</th><th>دستگاه</th><th>تاریخ پذیرش</th><th>وضعیت</th><th>عملیات</th></tr></thead>
+        <tbody id="devices-tbody"></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<!-- مودال عمومی -->
+<div class="modal-overlay hidden" id="modal-overlay">
+  <div class="modal" id="modal-box"></div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

@@ -386,8 +386,9 @@ function celebrateSuccess() {
 }
 
 // ===================== مودال عمومی =====================
-function openModal(html) {
+function openModal(html, opts = {}) {
   $('#modal-box').innerHTML = html;
+  $('#modal-box').classList.toggle('modal-lg', !!opts.wide);
   $('#modal-overlay').classList.remove('hidden');
 }
 function closeModal() {
@@ -1012,6 +1013,7 @@ function loadPage(page) {
     'settings-hub': loadSettingsHub,
     'ai-scan': loadAiScanPage, 'bulk-price': loadBulkPricePage, 'quick-sale': loadQuickSalePage,
     'send-invoice': loadSendInvoicePage, warranty: loadWarrantyPage, stocktake: loadStocktakePage,
+    repairs: loadRepairsPage, technicians: loadTechniciansPage,
   };
   if (loaders[page]) loaders[page]();
 }
@@ -1088,10 +1090,11 @@ function bindGlobalSearch() {
 
 async function runGlobalSearch(q) {
   const ql = normalizeSearchText(q);
-  const [items, parties, invoices] = await Promise.all([
+  const [items, parties, invoices, repairs] = await Promise.all([
     api('GET', `/items?role=${state.user.role}`),
     api('GET', '/parties'),
     api('GET', '/invoices'),
+    api('GET', `/repairs?q=${encodeURIComponent(q)}`),
   ]);
   const itemMatches = (items || []).filter(it =>
     normalizeSearchText(it.name).includes(ql) || normalizeSearchText(it.barcode).includes(ql)
@@ -1120,6 +1123,12 @@ async function runGlobalSearch(q) {
       `<div class="gsr-item" data-page="history"><span>فاکتور ${toFaDigits(inv.number || inv.id)}</span><span class="gsr-sub">${escHtml(inv.party_name || '')} — ${typeLabel[inv.invoice_type] || ''}</span></div>`
     ).join('');
   }
+  const repairMatches = (repairs || []).slice(0, 5);
+  if (repairMatches.length) {
+    html += '<div class="gsr-group-title">📱 تعمیرات</div>' + repairMatches.map(r =>
+      `<div class="gsr-item" data-page="repairs" data-open-repair-id="${r.id}"><span>${escHtml(r.ticket_number)}</span><span class="gsr-sub">${escHtml(r.device_brand)} ${escHtml(r.device_model)} — ${escHtml(r.customer_name || '')}</span></div>`
+    ).join('');
+  }
 
   const box = $('#global-search-results');
   box.innerHTML = html || '<div class="gsr-empty">چیزی پیدا نشد</div>';
@@ -1127,6 +1136,7 @@ async function runGlobalSearch(q) {
   $$('.gsr-item', box).forEach(el => {
     el.addEventListener('click', () => {
       navigateToPage(el.dataset.page);
+      if (el.dataset.openRepairId) setTimeout(() => openRepairDetail(parseInt(el.dataset.openRepairId)), 150);
       box.classList.add('hidden');
       $('#global-search').value = '';
     });
@@ -1369,13 +1379,14 @@ const ICONS = {
   customers: '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
   invoices: '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>',
   checks: '<svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22M7 15h.01M11 15h4"/></svg>',
+  repair: '<svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>',
 };
 
 async function loadDashboard() {
   const isAdmin = state.user.role === 'admin';
   const today = new Date().toISOString().slice(0, 10);
 
-  const [data, cash, items, invoices, customers, checks, monthly, stockRanking, topItems, debtors] = await Promise.all([
+  const [data, cash, items, invoices, customers, checks, monthly, stockRanking, topItems, debtors, repairStats] = await Promise.all([
     api('GET', `/reports/summary?role=${state.user.role}`),
     api('GET', '/cash'),
     api('GET', `/items?role=${state.user.role}`),
@@ -1386,6 +1397,7 @@ async function loadDashboard() {
     api('GET', '/reports/stock-ranking'),
     api('GET', '/reports/top-items'),
     api('GET', '/reports/debtors'),
+    api('GET', '/repairs/dashboard-stats'),
   ]);
   if (!data) return;
 
@@ -1409,9 +1421,15 @@ async function loadDashboard() {
     { label: 'فاکتورهای امروز', value: String(todaysInvoices.length), cls: 'primary', icon: ICONS.invoices },
     { label: 'چک‌های در انتظار', value: String(pendingChecks.length), cls: 'warning', icon: ICONS.checks },
   );
+  if (repairStats) {
+    cards.push(
+      { label: 'تعمیرات در حال انجام', value: String(repairStats.in_repair), cls: 'warning', icon: ICONS.repair },
+      { label: 'آماده تحویل (تعمیرات)', value: String(repairStats.ready), cls: 'accent', icon: ICONS.repair },
+    );
+  }
   $('#stat-grid').innerHTML = cards.map(c => `
     <div class="kpi-card ${c.cls}" title="${c.raw ? 'به حروف: ' + numberToPersianWords(c.raw) + ' تومان' : ''}">
-      <div class="kpi-icon">${c.icon}</div>
+      <div class="kpi-icon">${c.icon || ''}</div>
       <div class="kpi-label">${c.label}</div>
       <div class="kpi-value" data-count-target="${c.raw !== undefined ? c.raw * 10 : (parseInt(c.value) || 0)}" data-count-suffix="${c.raw !== undefined ? ' ریال' : ''}">0</div>
     </div>`).join('');
@@ -1551,6 +1569,7 @@ function openEditItemModal(itemId) {
       <div style="display:flex;gap:8px;flex-wrap:wrap">${marginSuggestPillsHtml()}</div>
     </div>
     <div class="form-row"><div><label>موجودی</label><input type="number" id="ei-stock" value="${it.stock_qty}"></div><div><label>حداقل موجودی</label><input type="number" id="ei-min" value="${it.min_stock}"></div></div>
+    <label style="display:flex;align-items:center;gap:6px;margin:8px 0"><input type="checkbox" id="ei-is-service" style="width:auto" ${it.is_service ? 'checked' : ''}> این یک خدمت/اجرت است (نه کالای انبارداری‌شده)</label>
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-edit-item-btn">ذخیره</button></div>`);
   attachThousandsFormatting($('#ei-purchase'));
   attachThousandsFormatting($('#ei-sale'));
@@ -1567,6 +1586,7 @@ function openEditItemModal(itemId) {
       category_id: categoryId,
       purchase_price: readRialAsToman($('#ei-purchase')), sale_price: readRialAsToman($('#ei-sale')),
       stock_qty: parseFloat($('#ei-stock').value || 0), min_stock: parseFloat($('#ei-min').value || 0),
+      is_service: $('#ei-is-service').checked,
     };
     const res = await api('PUT', `/items/${itemId}`, payload);
     if (res && res.ok) { toast('کالا ذخیره شد', 'success'); closeModal(); loadItems(); }
@@ -1688,6 +1708,7 @@ $('#btn-new-item').addEventListener('click', () => {
       <div style="display:flex;gap:8px;flex-wrap:wrap">${marginSuggestPillsHtml()}</div>
     </div>
     <div class="form-row"><div><label>موجودی</label><input type="number" id="ni-stock" value="0"></div><div><label>حداقل موجودی</label><input type="number" id="ni-min" value="0"></div></div>
+    <label style="display:flex;align-items:center;gap:6px;margin:8px 0"><input type="checkbox" id="ni-is-service" style="width:auto"> این یک خدمت/اجرت است (نه کالای انبارداری‌شده — مثل تعمیر نرم‌افزاری، اجرت تعویض قطعه)</label>
     <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-item-btn">ذخیره</button></div>`);
   attachThousandsFormatting($('#ni-purchase'));
   attachThousandsFormatting($('#ni-sale'));
@@ -1704,6 +1725,7 @@ $('#btn-new-item').addEventListener('click', () => {
       category_id: categoryId,
       purchase_price: readRialAsToman($('#ni-purchase')), sale_price: readRialAsToman($('#ni-sale')),
       stock_qty: parseFloat($('#ni-stock').value || 0), min_stock: parseFloat($('#ni-min').value || 0),
+      is_service: $('#ni-is-service').checked,
     };
     const res = await api('POST', '/items', payload);
     if (res && res.ok) { toast('کالا اضافه شد', 'success'); closeModal(); loadItems(); }
@@ -3057,6 +3079,31 @@ async function loadShopSettings() {
   $('#shop-ai-status').textContent = s.ai_api_key_set
     ? (s.ai_enabled ? 'کلید API تنظیم شده و دستیار فعال است ✅' : 'کلید API تنظیم شده ولی دستیار غیرفعاله')
     : 'هنوز کلید API وارد نشده';
+
+  $('#shop-sms-enabled').checked = !!s.sms_enabled;
+  $('#shop-sms-api-key').value = '';
+  $('#shop-sms-api-key').placeholder = s.sms_api_key_set ? 'قبلاً تنظیم شده — فقط برای تغییر وارد کن' : 'کلید API کاوه‌نگار';
+  $('#shop-sms-sender-line').value = s.sms_sender_line || '';
+  loadNotificationTemplates();
+}
+const NOTIFICATION_TEMPLATE_LABELS = {
+  received: 'پذیرش دستگاه', waiting_approval: 'منتظر تأیید مشتری', in_repair: 'شروع تعمیر',
+  ready: 'آماده تحویل', warranty_ending: 'پایان گارانتی نزدیک است',
+};
+async function loadNotificationTemplates() {
+  const templates = await api('GET', '/notification-templates');
+  if (!templates) return;
+  $('#notification-templates-list').innerHTML = templates.map(t => `
+    <div class="field">
+      <label>${escHtml(NOTIFICATION_TEMPLATE_LABELS[t.key] || t.key)}</label>
+      <textarea rows="2" data-template-key="${t.key}">${escHtml(t.template)}</textarea>
+    </div>`).join('') + '<button class="btn btn-primary" id="btn-save-notification-templates">ذخیره متن پیامک‌ها</button>';
+  $('#btn-save-notification-templates').addEventListener('click', async () => {
+    const areas = $$('[data-template-key]', $('#notification-templates-list'));
+    const results = await Promise.all(areas.map(a => api('PUT', `/notification-templates/${a.dataset.templateKey}`, { template: a.value })));
+    if (results.every(r => r && r.ok)) toast('متن پیامک‌ها ذخیره شد', 'success');
+    else toast('خطا در ذخیره برخی متن‌ها', 'danger');
+  });
 }
 $('#btn-save-pricing-footer').addEventListener('click', async () => {
   const res = await api('POST', '/settings/shop', {
@@ -3086,6 +3133,22 @@ $('#btn-save-ai-settings').addEventListener('click', async () => {
   });
   if (res && res.ok) { toast('تنظیمات دستیار هوش مصنوعی ذخیره شد', 'success'); loadShopSettings(); }
   else if (res) toast(res.message || 'خطا در ذخیره', 'danger');
+});
+$('#btn-save-sms-settings').addEventListener('click', async () => {
+  const res = await api('POST', '/settings/shop', {
+    sms_enabled: $('#shop-sms-enabled').checked,
+    sms_api_key: $('#shop-sms-api-key').value.trim(),
+    sms_sender_line: $('#shop-sms-sender-line').value.trim(),
+  });
+  if (res && res.ok) { toast('تنظیمات پیامک ذخیره شد', 'success'); loadShopSettings(); }
+  else if (res) toast(res.message || 'خطا در ذخیره', 'danger');
+});
+$('#btn-test-sms').addEventListener('click', async () => {
+  const phone = $('#shop-sms-test-phone').value.trim();
+  if (!phone) { toast('شماره تست را وارد کن', 'danger'); return; }
+  const res = await api('POST', '/settings/sms/test', { phone });
+  if (res && res.ok) toast('پیامک تستی ارسال شد', 'success');
+  else if (res) toast(res.message || 'خطا در ارسال', 'danger');
 });
 $('#btn-test-telegram').addEventListener('click', async () => {
   const res = await api('POST', '/settings/telegram/test');
@@ -3684,12 +3747,14 @@ async function loadUsers() {
 const PERMISSION_LABELS = {
   can_sell: 'ثبت فاکتور فروش', can_purchase: 'ثبت فاکتور خرید', can_manage_items: 'مدیریت کالاها',
   can_manage_parties: 'مدیریت مشتریان/تامین‌کنندگان', can_manage_cash: 'ثبت تراکنش صندوق',
+  can_manage_repairs: 'مدیریت پذیرش/تعمیرات', can_assign_technicians: 'تخصیص تعمیرکار',
 };
-// دسترسی‌های بانک/چک برخلاف بقیه پیش‌فرضشان خاموش است — کارمند بدون تیک زدن صریح مدیر،
-// فقط می‌تواند بانک/چک را مشاهده کند، نه ثبت/ویرایش/حذف
+// دسترسی‌های بانک/چک/سود تعمیرات برخلاف بقیه پیش‌فرضشان خاموش است — کارمند بدون تیک زدن صریح مدیر،
+// فقط می‌تواند بانک/چک را مشاهده کند و سود واقعی تعمیرات را نبیند
 const STRICT_PERMISSION_LABELS = {
   can_manage_bank: 'مدیریت بانک (ثبت/ویرایش/حذف حساب و تراکنش)',
   can_manage_checks: 'مدیریت چک‌ها (ثبت/ویرایش/حذف)',
+  can_view_repair_financials: 'مشاهده سود واقعی تعمیرات',
 };
 function openPermissionsModal(userId) {
   const u = state.usersById[userId];
@@ -3778,6 +3843,409 @@ async function loadTrash() {
     });
   });
 }
+
+// ===================== تعمیرات موبایل و تبلت =====================
+const REPAIR_STATUS_LABELS = {
+  received: ['پذیرش‌شده', 'gray'], diagnosing: ['در حال عیب‌یابی', 'orange'],
+  waiting_customer_approval: ['منتظر تأیید مشتری', 'orange'], waiting_parts: ['منتظر قطعه', 'orange'],
+  in_repair: ['در حال تعمیر', 'orange'], repaired: ['تعمیر کامل شده', 'green'],
+  ready: ['آماده تحویل', 'green'], delivered: ['تحویل شده', 'green'],
+  cancelled: ['لغو شده', 'red'], warranty_return: ['برگشتی / گارانتی', 'red'],
+};
+const REPAIR_CHECKLIST_ITEMS = [
+  ['screen', 'صفحه‌نمایش'], ['touch', 'تاچ'], ['front_camera', 'دوربین جلو'], ['rear_camera', 'دوربین عقب'],
+  ['speaker', 'اسپیکر'], ['microphone', 'میکروفون'], ['vibration', 'ویبره'], ['charging', 'شارژ'],
+  ['battery', 'باتری'], ['antenna', 'آنتن'], ['wifi', 'Wi-Fi'], ['bluetooth', 'Bluetooth'],
+  ['sensors', 'سنسورها'], ['buttons', 'دکمه‌ها'], ['biometric', 'Face ID / Touch ID'], ['flash', 'فلاش'],
+];
+let repairsListCache = [];
+
+async function loadRepairsPage() {
+  const [stats, parties] = await Promise.all([
+    api('GET', '/repairs/dashboard-stats'), api('GET', '/parties?type=customer'),
+  ]);
+  if (parties) state.parties = parties;
+  if (stats) {
+    const cards = [
+      { label: 'در حال تعمیر', value: stats.in_repair, cls: 'warning' },
+      { label: 'منتظر قطعه', value: stats.waiting_parts, cls: 'warning' },
+      { label: 'آماده تحویل', value: stats.ready, cls: 'accent' },
+      { label: 'تعمیرات امروز', value: stats.intake_today, cls: 'primary' },
+      { label: 'تحویل‌شده امروز', value: stats.delivered_today, cls: 'accent' },
+      { label: 'درآمد امروز', value: fmtRial(stats.revenue_today) + ' ریال', cls: 'accent' },
+      { label: 'برگشتی/گارانتی', value: stats.warranty_returns, cls: 'danger' },
+    ];
+    $('#repairs-stat-grid').innerHTML = cards.map(c => `
+      <div class="kpi-card ${c.cls}"><div class="kpi-label">${c.label}</div><div class="kpi-value">${toFaDigits(c.value)}</div></div>`).join('');
+  }
+  await applyRepairsFilters();
+}
+
+async function applyRepairsFilters() {
+  const q = $('#repairs-filter-q').value.trim();
+  const status = $('#repairs-filter-status').value;
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (status) params.set('status', status);
+  const rows = await api('GET', `/repairs?${params.toString()}`);
+  if (!rows) return;
+  repairsListCache = rows;
+  $('#repairs-tbody').innerHTML = rows.map(r => {
+    const st = REPAIR_STATUS_LABELS[r.status] || ['—', 'gray'];
+    return `<tr>
+      <td><a href="javascript:void(0)" data-open-repair="${r.id}">${escHtml(r.ticket_number)}</a></td>
+      <td>${escHtml(r.customer_name) || '—'}</td>
+      <td>${escHtml(r.device_brand)} ${escHtml(r.device_model)}</td>
+      <td dir="ltr">${escHtml(r.imei) || '—'}</td>
+      <td>${toJalaliDate(r.intake_date, true)}</td>
+      <td><span class="badge badge-${st[1]}">${st[0]}</span></td>
+      <td><button class="btn btn-secondary btn-sm" data-open-repair="${r.id}">مشاهده</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" class="muted">پرونده‌ای پیدا نشد</td></tr>';
+  $$('[data-open-repair]', $('#repairs-tbody')).forEach(el => {
+    el.addEventListener('click', () => openRepairDetail(parseInt(el.dataset.openRepair)));
+  });
+}
+let repairsFilterTimer = null;
+$('#repairs-filter-q').addEventListener('input', () => { clearTimeout(repairsFilterTimer); repairsFilterTimer = setTimeout(applyRepairsFilters, 250); });
+$('#repairs-filter-status').addEventListener('change', applyRepairsFilters);
+$('#btn-export-repairs').addEventListener('click', () => downloadAuthed('/export/repairs.xlsx', 'تعمیرات.xlsx'));
+
+$('#btn-new-repair').addEventListener('click', () => {
+  const partyOptions = (state.parties || []).map(p => `<option value="${p.id}">${escHtml(p.name)}${p.phone ? ' — ' + p.phone : ''}</option>`).join('');
+  openModal(`
+    <h3>پذیرش دستگاه جدید</h3>
+    <div class="form-row">
+      <div><label>مشتری</label><select id="ri-customer"><option value="">— بدون مشتری —</option>${partyOptions}</select></div>
+      <div><label>تاریخ تحویل احتمالی</label><input type="date" id="ri-expected-date"></div>
+    </div>
+    <div class="form-row">
+      <div><label>برند دستگاه</label><input id="ri-brand" placeholder="مثلاً Samsung"></div>
+      <div><label>مدل دستگاه</label><input id="ri-model" placeholder="مثلاً Galaxy A54"></div>
+      <div><label>رنگ</label><input id="ri-color"></div>
+    </div>
+    <div class="form-row">
+      <div><label>IMEI</label><input id="ri-imei" dir="ltr"></div>
+      <div><label>رمز/الگوی دستگاه</label><input id="ri-password" dir="ltr"></div>
+      <div><label>پیش‌پرداخت (تومان)</label><input type="number" id="ri-prepayment" value="0"></div>
+    </div>
+    <div class="field"><label>وضعیت ظاهری</label><input id="ri-condition" placeholder="مثلاً خط‌وخش جزئی روی درب پشت"></div>
+    <div class="field"><label>لوازم همراه</label><input id="ri-accessories" placeholder="مثلاً شارژر، قاب"></div>
+    <div class="field"><label>مشکل اعلام‌شده توسط مشتری</label><textarea id="ri-issue" rows="2"></textarea></div>
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="save-new-repair-btn">ثبت پذیرش</button></div>
+  `);
+  $('#save-new-repair-btn').addEventListener('click', async () => {
+    const brand = $('#ri-brand').value.trim();
+    const model = $('#ri-model').value.trim();
+    if (!brand && !model) { toast('برند یا مدل دستگاه را وارد کن', 'danger'); return; }
+    const res = await api('POST', '/repairs', {
+      customer_id: $('#ri-customer').value || null, device_brand: brand, device_model: model,
+      device_color: $('#ri-color').value.trim(), imei: $('#ri-imei').value.trim(),
+      device_password: $('#ri-password').value.trim(), device_condition: $('#ri-condition').value.trim(),
+      accessories: $('#ri-accessories').value.trim(), reported_issue: $('#ri-issue').value.trim(),
+      expected_delivery_date: $('#ri-expected-date').value || null, prepayment: $('#ri-prepayment').value || 0,
+    });
+    if (!res || !res.ok) { if (res) toast(res.message || 'خطا در ثبت', 'danger'); return; }
+    toast(`پذیرش ثبت شد — شماره ${res.ticket_number}`, 'success');
+    if (res.possible_warranty_match) {
+      toast(`⚠️ این IMEI قبلاً در تعمیر ${res.possible_warranty_match.ticket_number} ثبت شده و هنوز در گارانتی است — از داخل پرونده می‌توانی به آن لینکش کنی`, 'warning');
+    }
+    closeModal();
+    openRepairDetail(res.repair_id);
+    if ($('#page-repairs').classList.contains('active')) loadRepairsPage();
+  });
+});
+
+async function openRepairDetail(repairId) {
+  const repair = await api('GET', `/repairs/${repairId}`);
+  if (!repair) return;
+  const [items, technicians] = await Promise.all([
+    api('GET', `/items?role=${state.user.role}`), api('GET', '/technicians'),
+  ]);
+  if (items) state.items = items;
+  const st = REPAIR_STATUS_LABELS[repair.status] || ['—', 'gray'];
+  let checklist = {};
+  try { checklist = JSON.parse(repair.checklist_json || '{}'); } catch (e) { checklist = {}; }
+
+  const statusOptions = Object.entries(REPAIR_STATUS_LABELS).map(([k, v]) =>
+    `<option value="${k}" ${k === repair.status ? 'selected' : ''}>${v[0]}</option>`).join('');
+  const checklistHtml = REPAIR_CHECKLIST_ITEMS.map(([key, label]) => {
+    const val = checklist[key] || 'untested';
+    return `<div class="repair-checklist-item"><span>${label}</span>
+      <select data-checklist-key="${key}" style="width:auto">
+        <option value="untested" ${val === 'untested' ? 'selected' : ''}>تست‌نشده</option>
+        <option value="ok" ${val === 'ok' ? 'selected' : ''}>سالم</option>
+        <option value="bad" ${val === 'bad' ? 'selected' : ''}>خراب</option>
+      </select></div>`;
+  }).join('');
+
+  const partsRows = (repair.parts || []).map(p => `<tr>
+      <td>${escHtml(p.item_name)}${p.is_service ? ' <span class="badge badge-gray">خدمت</span>' : ''}</td>
+      <td>${toFaDigits(p.qty)}</td><td>${fmt(p.unit_price)}</td><td>${fmt(p.qty * p.unit_price)}</td>
+      <td><button class="btn btn-danger btn-sm" data-del-part="${p.id}">حذف</button></td>
+    </tr>`).join('') || '<tr><td colspan="5" class="muted">چیزی ثبت نشده</td></tr>';
+  const partsTotal = (repair.parts || []).reduce((s, p) => s + p.qty * p.unit_price, 0);
+
+  const techRows = (repair.technicians || []).map(t => `<tr>
+      <td>${escHtml(t.name)}</td><td>${fmt(t.commission_amount)}</td>
+      <td><button class="btn btn-danger btn-sm" data-del-tech="${t.id}">حذف</button></td>
+    </tr>`).join('') || '<tr><td colspan="3" class="muted">تخصیص داده نشده</td></tr>';
+
+  const historyHtml = (repair.history || []).map(h =>
+    `<li><b>${(REPAIR_STATUS_LABELS[h.new_status] || [h.new_status])[0]}</b> — ${toJalaliDate(h.changed_at, true)} — ${escHtml(h.changed_by || '')}${h.note ? ' — ' + escHtml(h.note) : ''}</li>`
+  ).join('') || '<li class="muted">تاریخچه‌ای نیست</li>';
+
+  const mediaHtml = (repair.media || []).map(m => `<div>
+      ${m.media_type === 'image' ? `<img src="/repair-media/${m.filename}">` : `<div class="badge badge-gray" style="display:block;text-align:center;padding:20px 0">${m.media_type}</div>`}
+      <button class="btn btn-danger btn-sm" style="width:100%;margin-top:2px" data-del-media="${m.id}">حذف</button>
+    </div>`).join('') || '<span class="muted">فایلی آپلود نشده</span>';
+
+  const warrantyBanner = repair.is_warranty_return && repair.original_repair
+    ? `<div class="lsb-text" style="background:var(--danger-100);color:var(--danger);padding:8px;border-radius:8px;margin-bottom:10px">این تعمیر به‌عنوان برگشتی/گارانتیِ تعمیر ${escHtml(repair.original_repair.ticket_number)} ثبت شده است.</div>` : '';
+
+  openModal(`
+    <h3>پرونده تعمیر — ${escHtml(repair.ticket_number)} <span class="badge badge-${st[1]}">${st[0]}</span></h3>
+    ${warrantyBanner}
+    <div class="form-row">
+      <div><label>وضعیت</label><select id="rd-status">${statusOptions}</select></div>
+      <div><label>گارانتی (در صورت تحویل دستگاه)</label>
+        <select id="rd-warranty-hours">
+          <option value="0" ${!repair.warranty_hours ? 'selected' : ''}>بدون گارانتی</option>
+          <option value="24" ${repair.warranty_hours === 24 ? 'selected' : ''}>۲۴ ساعت</option>
+          <option value="48" ${repair.warranty_hours === 48 ? 'selected' : ''}>۴۸ ساعت</option>
+          <option value="72" ${repair.warranty_hours === 72 ? 'selected' : ''}>۳ روز</option>
+          <option value="168" ${repair.warranty_hours === 168 ? 'selected' : ''}>۷ روز</option>
+        </select>
+      </div>
+      <div style="align-self:flex-end"><button class="btn btn-primary btn-sm" id="rd-save-status">اعمال تغییر وضعیت</button></div>
+    </div>
+    <p class="muted">مشتری: ${escHtml(repair.customer_name) || '—'} (${escHtml(repair.customer_phone) || '—'}) | دستگاه: ${escHtml(repair.device_brand)} ${escHtml(repair.device_model)} / IMEI: <bdi dir="ltr">${escHtml(repair.imei) || '—'}</bdi></p>
+
+    <div class="repair-section">
+      <h4>چک‌لیست تست دستگاه</h4>
+      <div class="repair-checklist-grid">${checklistHtml}</div>
+      <button class="btn btn-secondary btn-sm" id="rd-save-checklist" style="margin-top:8px">ذخیره چک‌لیست</button>
+    </div>
+
+    <div class="repair-section">
+      <h4>عیب‌یابی</h4>
+      <div class="field"><label>عیب نهایی</label><input id="rd-final-issue" value="${escHtml(repair.final_issue || '')}"></div>
+      <div class="field"><label>تست‌های انجام‌شده</label><input id="rd-tests" value="${escHtml(repair.tests_performed || '')}"></div>
+      <div class="field"><label>یادداشت فنی</label><textarea id="rd-notes" rows="2">${escHtml(repair.diagnostic_notes || '')}</textarea></div>
+      <button class="btn btn-secondary btn-sm" id="rd-save-diagnosis">ذخیره عیب‌یابی</button>
+      <div style="margin-top:10px">
+        <div class="field"><label>🤖 عیب‌یابی هوشمند — علائم را بنویس</label><textarea id="rd-ai-symptom" rows="2" placeholder="مثلاً: روشن نمی‌شود و جریان‌کشی دارد"></textarea></div>
+        <button class="btn btn-secondary btn-sm" id="rd-ai-diagnose-btn">دریافت پیشنهاد هوش مصنوعی</button>
+        <div id="rd-ai-result" class="muted" style="margin-top:8px;white-space:pre-line"></div>
+      </div>
+    </div>
+
+    <div class="repair-section">
+      <h4>قطعات و خدمات مصرف‌شده</h4>
+      <div class="form-row">
+        <div style="flex:2" id="rd-part-select"></div>
+        <div><label>تعداد</label><input type="number" id="rd-part-qty" value="1" style="width:70px"></div>
+        <div><label>قیمت واحد (تومان)</label><input type="number" id="rd-part-price" style="width:110px"></div>
+        <div style="align-self:flex-end"><button class="btn btn-primary btn-sm" id="rd-add-part">افزودن</button></div>
+      </div>
+      <table class="data-table" style="margin-top:8px"><thead><tr><th>شرح</th><th>تعداد</th><th>قیمت واحد</th><th>جمع</th><th></th></tr></thead>
+        <tbody>${partsRows}</tbody></table>
+      <p><b>جمع: ${fmt(partsTotal)} تومان</b></p>
+    </div>
+
+    <div class="repair-section">
+      <h4>تعمیرکاران</h4>
+      <div class="form-row">
+        <div style="flex:2" id="rd-tech-select"></div>
+        <div style="align-self:flex-end"><button class="btn btn-primary btn-sm" id="rd-assign-tech">تخصیص</button></div>
+      </div>
+      <table class="data-table" style="margin-top:8px"><thead><tr><th>نام</th><th>پورسانت (تومان)</th><th></th></tr></thead>
+        <tbody>${techRows}</tbody></table>
+    </div>
+
+    <div class="repair-section" id="rd-profit-section"></div>
+
+    <div class="repair-section">
+      <h4>عکس/فیلم/فایل</h4>
+      <div class="repair-media-grid" id="rd-media-grid">${mediaHtml}</div>
+      <input type="file" id="rd-media-file" accept="image/*,video/mp4,video/webm,application/pdf" style="margin-top:8px">
+      <select id="rd-media-stage" style="width:auto"><option value="before">قبل از تعمیر</option><option value="after">بعد از تعمیر</option><option value="other">سایر</option></select>
+      <button class="btn btn-secondary btn-sm" id="rd-upload-media">آپلود</button>
+    </div>
+
+    <div class="repair-section">
+      <h4>تاریخچه وضعیت</h4>
+      <ul class="repair-status-timeline">${historyHtml}</ul>
+    </div>
+
+    <div class="repair-section">
+      <h4>چاپ و فاکتور</h4>
+      <button class="btn btn-secondary btn-sm" id="rd-print-receipt">چاپ رسید پذیرش</button>
+      <button class="btn btn-secondary btn-sm" id="rd-print-label">چاپ برچسب</button>
+      <button class="btn btn-secondary btn-sm" id="rd-print-report">چاپ گزارش تعمیر</button>
+      ${repair.invoice_id ? `<button class="btn btn-secondary btn-sm" id="rd-print-invoice">چاپ فاکتور</button>` :
+        `<button class="btn btn-primary btn-sm" id="rd-finalize-invoice">صدور فاکتور نهایی</button>`}
+    </div>
+
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">بستن</button></div>
+  `, { wide: true });
+
+  // ---- select widgets ----
+  const itemOptions = (state.items || []).map(it => ({ value: it.id, label: `${it.name}${it.is_service ? ' (خدمت)' : ''} — موجودی: ${it.stock_qty}` }));
+  const partSelect = createSearchableSelect('rd-part-select', itemOptions, {
+    placeholder: 'جستجوی قطعه/خدمت...',
+    onSelect: (val, found) => {
+      const it = (state.items || []).find(x => String(x.id) === String(val));
+      if (it) $('#rd-part-price').value = it.sale_price;
+    },
+  });
+  const techOptions = (technicians || []).filter(t => t.active).map(t => ({ value: t.id, label: t.name }));
+  const techSelect = createSearchableSelect('rd-tech-select', techOptions, { placeholder: 'جستجوی تعمیرکار...' });
+
+  // ---- profit (permission-gated on backend; render if response ok) ----
+  api('GET', `/repairs/${repairId}/profit`).then(profit => {
+    if (!profit || profit.ok === false) return;
+    $('#rd-profit-section').innerHTML = `<h4>سود واقعی این تعمیر</h4>
+      <p>درآمد: ${fmt(profit.revenue)} — بهای قطعات: ${fmt(profit.parts_cost)} — پورسانت تعمیرکار: ${fmt(profit.technician_cost)}</p>
+      <p><b>سود خالص: ${fmt(profit.profit)} تومان</b></p>`;
+  });
+
+  // ---- event wiring ----
+  $('#rd-save-status').addEventListener('click', async () => {
+    const status = $('#rd-status').value;
+    const warrantyHours = status === 'delivered' ? parseInt($('#rd-warranty-hours').value) || 0 : undefined;
+    const res = await api('PUT', `/repairs/${repairId}/status`, { status, warranty_hours: warrantyHours });
+    if (res && res.ok) { toast('وضعیت به‌روزرسانی شد', 'success'); openRepairDetail(repairId); if ($('#page-repairs').classList.contains('active')) loadRepairsPage(); }
+    else if (res) toast(res.message || 'خطا', 'danger');
+  });
+  $('#rd-save-checklist').addEventListener('click', async () => {
+    const cl = {};
+    $$('[data-checklist-key]').forEach(sel => { cl[sel.dataset.checklistKey] = sel.value; });
+    const res = await api('PUT', `/repairs/${repairId}/checklist`, { checklist: cl });
+    if (res && res.ok) toast('چک‌لیست ذخیره شد', 'success');
+  });
+  $('#rd-save-diagnosis').addEventListener('click', async () => {
+    const res = await api('PUT', `/repairs/${repairId}`, {
+      final_issue: $('#rd-final-issue').value.trim(), tests_performed: $('#rd-tests').value.trim(),
+      diagnostic_notes: $('#rd-notes').value.trim(),
+    });
+    if (res && res.ok) toast('عیب‌یابی ذخیره شد', 'success');
+  });
+  $('#rd-ai-diagnose-btn').addEventListener('click', async () => {
+    const symptom = $('#rd-ai-symptom').value.trim();
+    if (!symptom) { toast('علائم را بنویس', 'danger'); return; }
+    $('#rd-ai-result').textContent = 'در حال دریافت پیشنهاد...';
+    const res = await api('POST', `/repairs/${repairId}/diagnose-ai`, { symptom, device_model: `${repair.device_brand} ${repair.device_model}` });
+    $('#rd-ai-result').textContent = res && res.ok ? res.answer : (res && res.message) || 'خطا در دریافت پاسخ';
+  });
+  $('#rd-add-part').addEventListener('click', async () => {
+    const itemId = partSelect.getValue();
+    if (!itemId) { toast('یک قطعه/خدمت انتخاب کن', 'danger'); return; }
+    const res = await api('POST', `/repairs/${repairId}/parts`, {
+      item_id: itemId, qty: $('#rd-part-qty').value || 1, unit_price: $('#rd-part-price').value || 0,
+    });
+    if (res && res.ok) openRepairDetail(repairId);
+    else if (res) toast(res.message || 'خطا', 'danger');
+  });
+  $$('[data-del-part]').forEach(btn => btn.addEventListener('click', async () => {
+    const res = await api('DELETE', `/repairs/${repairId}/parts/${btn.dataset.delPart}`);
+    if (res && res.ok) openRepairDetail(repairId);
+  }));
+  $('#rd-assign-tech').addEventListener('click', async () => {
+    const techId = techSelect.getValue();
+    if (!techId) { toast('یک تعمیرکار انتخاب کن', 'danger'); return; }
+    const res = await api('POST', `/repairs/${repairId}/technicians`, { technician_id: techId });
+    if (res && res.ok) openRepairDetail(repairId);
+    else if (res) toast(res.message || 'خطا', 'danger');
+  });
+  $$('[data-del-tech]').forEach(btn => btn.addEventListener('click', async () => {
+    const res = await api('DELETE', `/repairs/${repairId}/technicians/${btn.dataset.delTech}`);
+    if (res && res.ok) openRepairDetail(repairId);
+  }));
+  $$('[data-del-media]').forEach(btn => btn.addEventListener('click', async () => {
+    const res = await api('DELETE', `/repairs/${repairId}/media/${btn.dataset.delMedia}`);
+    if (res && res.ok) openRepairDetail(repairId);
+  }));
+  $('#rd-upload-media').addEventListener('click', async () => {
+    const fileInput = $('#rd-media-file');
+    if (!fileInput.files.length) { toast('یک فایل انتخاب کن', 'danger'); return; }
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    formData.append('stage', $('#rd-media-stage').value);
+    const headers = {};
+    if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
+    try {
+      const resp = await fetch(`/repairs/${repairId}/media`, { method: 'POST', headers, body: formData });
+      const res = await resp.json();
+      if (res && res.ok) { toast('آپلود شد', 'success'); openRepairDetail(repairId); }
+      else toast((res && res.message) || 'خطا در آپلود', 'danger');
+    } catch (e) { toast('ارتباط با سرور برقرار نشد', 'danger'); }
+  });
+  $('#rd-print-receipt').addEventListener('click', () => openAuthedInNewTab(`/repairs/${repairId}/print/receipt`, 'text/html'));
+  $('#rd-print-label').addEventListener('click', () => openAuthedInNewTab(`/repairs/${repairId}/print/label`, 'text/html'));
+  $('#rd-print-report').addEventListener('click', () => openAuthedInNewTab(`/repairs/${repairId}/print/report`, 'text/html'));
+  if (repair.invoice_id) {
+    $('#rd-print-invoice').addEventListener('click', () => openAuthedInNewTab(`/invoices/${repair.invoice_id}/print`, 'text/html'));
+  } else {
+    $('#rd-finalize-invoice').addEventListener('click', async () => {
+      if (!(repair.parts || []).length) { toast('اول حداقل یک قطعه/خدمت اضافه کن', 'danger'); return; }
+      const paymentType = prompt('نوع پرداخت را بنویس: cash (نقد)، credit (نسیه)، check (چک)', 'cash');
+      if (!paymentType) return;
+      const res = await api('POST', `/repairs/${repairId}/finalize-invoice`, { payment_type: paymentType });
+      if (res && res.ok) { toast(`فاکتور شماره ${res.invoice_number} صادر شد`, 'success'); openRepairDetail(repairId); }
+      else if (res) toast(res.message || 'خطا در صدور فاکتور', 'danger');
+    });
+  }
+}
+
+// ===================== تعمیرکاران =====================
+async function loadTechniciansPage() {
+  const rows = await api('GET', '/technicians');
+  if (!rows) return;
+  $('#technicians-tbody').innerHTML = rows.map(t => `<tr>
+      <td>${escHtml(t.name)}</td><td>${escHtml(t.phone) || '—'}</td><td>${escHtml(t.specialty) || '—'}</td>
+      <td>${toFaDigits(t.commission_percent)}٪</td><td>${fmt(t.base_wage)}</td>
+      <td>${t.active ? '<span class="badge badge-green">فعال</span>' : '<span class="badge badge-gray">غیرفعال</span>'}</td>
+      <td>
+        <button class="btn btn-secondary btn-sm" data-edit-tech="${t.id}">ویرایش</button>
+        ${t.active ? `<button class="btn btn-danger btn-sm" data-deactivate-tech="${t.id}">غیرفعال‌سازی</button>` : ''}
+      </td>
+    </tr>`).join('') || '<tr><td colspan="7" class="muted">تعمیرکاری ثبت نشده</td></tr>';
+  $$('[data-edit-tech]', $('#technicians-tbody')).forEach(btn => {
+    const t = rows.find(x => x.id === parseInt(btn.dataset.editTech));
+    btn.addEventListener('click', () => openTechnicianModal(t));
+  });
+  $$('[data-deactivate-tech]', $('#technicians-tbody')).forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('این تعمیرکار غیرفعال شود؟')) return;
+      const res = await api('DELETE', `/technicians/${btn.dataset.deactivateTech}`);
+      if (res && res.ok) { toast('غیرفعال شد', 'success'); loadTechniciansPage(); }
+    });
+  });
+}
+function openTechnicianModal(t) {
+  openModal(`
+    <h3>${t ? 'ویرایش تعمیرکار' : 'افزودن تعمیرکار'}</h3>
+    <div class="field"><label>نام</label><input id="tm-name" value="${t ? escHtml(t.name) : ''}"></div>
+    <div class="field"><label>تلفن</label><input id="tm-phone" value="${t ? escHtml(t.phone || '') : ''}" dir="ltr"></div>
+    <div class="field"><label>تخصص</label><input id="tm-specialty" value="${t ? escHtml(t.specialty || '') : ''}"></div>
+    <div class="field"><label>درصد پورسانت</label><input type="number" id="tm-commission" value="${t ? t.commission_percent : 0}"></div>
+    <div class="field"><label>اجرت پایه (تومان)</label><input type="number" id="tm-wage" value="${t ? t.base_wage : 0}"></div>
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">انصراف</button><button class="btn btn-primary" id="tm-save-btn">ذخیره</button></div>
+  `);
+  $('#tm-save-btn').addEventListener('click', async () => {
+    const name = $('#tm-name').value.trim();
+    if (!name) { toast('نام را وارد کن', 'danger'); return; }
+    const payload = {
+      name, phone: $('#tm-phone').value.trim(), specialty: $('#tm-specialty').value.trim(),
+      commission_percent: $('#tm-commission').value || 0, base_wage: $('#tm-wage').value || 0, active: true,
+    };
+    const res = t ? await api('PUT', `/technicians/${t.id}`, payload) : await api('POST', '/technicians', payload);
+    if (res && res.ok) { toast('ذخیره شد', 'success'); closeModal(); loadTechniciansPage(); }
+    else if (res) toast(res.message || 'خطا', 'danger');
+  });
+}
+$('#btn-new-technician').addEventListener('click', () => openTechnicianModal(null));
 
 // ===================== شروع برنامه =====================
 function initApp() {

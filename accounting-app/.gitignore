@@ -10,6 +10,8 @@ server/shop_settings.json
 client/shop_settings.json
 server/backups/
 client/backups/
+server/repair_media/
+client/repair_media/
 **/FIRST_LOGIN_ADMIN_PASSWORD.txt
 
 # ساخت exe

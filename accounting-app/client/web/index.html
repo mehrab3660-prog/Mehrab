@@ -138,6 +138,8 @@
           <span class="nav-caret" id="nav-ai-group-caret">▾</span>
         </li>
         <li class="nav-item nav-subitem hidden" data-page="warranty" id="nav-warranty-sub"><span class="nav-icon">🔧</span><span class="nav-label">گارانتی و تعمیرات</span></li>
+        <li class="nav-item" data-page="repairs"><span class="nav-icon">📱</span><span class="nav-label">تعمیرات موبایل</span></li>
+        <li class="nav-item" data-page="technicians"><span class="nav-icon">🛠️</span><span class="nav-label">تعمیرکاران</span></li>
         <li class="nav-item" data-page="history"><span class="nav-icon">📜</span><span class="nav-label">تاریخچه فاکتورها</span></li>
         <li class="nav-item" data-page="send-invoice"><span class="nav-icon">📤</span><span class="nav-label">ارسال فاکتور</span></li>
         <li class="nav-item" data-page="parties"><span class="nav-icon">👥</span><span class="nav-label">مشتریان و تامین‌کنندگان</span></li>
@@ -595,6 +597,54 @@
         </div>
       </section>
 
+      <!-- تعمیرات موبایل و تبلت -->
+      <section class="page" id="page-repairs">
+        <div class="page-header">
+          <div><h2>تعمیرات موبایل و تبلت</h2><p class="page-sub">پذیرش دستگاه، عیب‌یابی، قطعات مصرفی، تخصیص تعمیرکار، وضعیت و گارانتی — همه از همین‌جا.</p></div>
+          <button class="btn btn-primary" id="btn-new-repair">+ پذیرش دستگاه جدید</button>
+        </div>
+        <div class="kpi-grid" id="repairs-stat-grid"></div>
+        <div class="card">
+          <div class="form-row">
+            <div><label>جستجو (شماره پذیرش، IMEI، مدل، مشتری، تلفن)</label><input type="text" id="repairs-filter-q" placeholder="جستجو..."></div>
+            <div><label>وضعیت</label>
+              <select id="repairs-filter-status">
+                <option value="">همه وضعیت‌ها</option>
+                <option value="received">پذیرش‌شده</option>
+                <option value="diagnosing">در حال عیب‌یابی</option>
+                <option value="waiting_customer_approval">منتظر تأیید مشتری</option>
+                <option value="waiting_parts">منتظر قطعه</option>
+                <option value="in_repair">در حال تعمیر</option>
+                <option value="repaired">تعمیر کامل شده</option>
+                <option value="ready">آماده تحویل</option>
+                <option value="delivered">تحویل شده</option>
+                <option value="cancelled">لغو شده</option>
+                <option value="warranty_return">برگشتی / گارانتی</option>
+              </select>
+            </div>
+            <div style="align-self:flex-end"><button class="btn btn-secondary" id="btn-export-repairs">خروجی اکسل</button></div>
+          </div>
+          <table class="data-table" style="margin-top:14px">
+            <thead><tr><th>شماره پذیرش</th><th>مشتری</th><th>دستگاه</th><th>IMEI</th><th>تاریخ پذیرش</th><th>وضعیت</th><th>عملیات</th></tr></thead>
+            <tbody id="repairs-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- تعمیرکاران -->
+      <section class="page" id="page-technicians">
+        <div class="page-header">
+          <div><h2>تعمیرکاران</h2><p class="page-sub">مدیریت تعمیرکاران، تخصص، درصد پورسانت و اجرت پایه.</p></div>
+          <button class="btn btn-primary" id="btn-new-technician">+ افزودن تعمیرکار</button>
+        </div>
+        <div class="card">
+          <table class="data-table">
+            <thead><tr><th>نام</th><th>تلفن</th><th>تخصص</th><th>درصد پورسانت</th><th>اجرت پایه</th><th>وضعیت</th><th>عملیات</th></tr></thead>
+            <tbody id="technicians-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- انبارگردانی با بارکد -->
       <section class="page" id="page-stocktake">
         <div class="page-header"><div><h2>انبارگردانی</h2><p class="page-sub">بارکد کالاها رو پشت‌سرهم اسکن کن تا هر کدوم چند بار دیده شد بشمره، بعد با موجودی سیستم مقایسه کن و اختلاف‌ها رو اصلاح کن.</p></div></div>
@@ -723,6 +773,21 @@
             <div class="field"><label>کلید API</label><input type="password" id="shop-ai-api-key" placeholder="فقط در صورت تغییر وارد کن" dir="ltr" autocomplete="off"></div>
             <label style="display:flex;align-items:center;gap:6px;margin:8px 0"><input type="checkbox" id="shop-ai-enabled"> فعال باشد</label>
             <button class="btn btn-primary" id="btn-save-ai-settings">ذخیره</button>
+          </div>
+          <div class="card">
+            <div class="card-title">پیامک به مشتری (تعمیرات)</div>
+            <p class="muted" style="margin-bottom:10px">با فعال‌سازی، هنگام تغییر وضعیت تعمیر (پذیرش، منتظر تأیید، در حال تعمیر، آماده تحویل) خودکار پیامک به مشتری ارسال می‌شود. فعلاً فقط سرویس کاوه‌نگار پشتیبانی می‌شود.</p>
+            <label style="display:flex;align-items:center;gap:6px;margin:8px 0"><input type="checkbox" id="shop-sms-enabled"> فعال باشد</label>
+            <div class="field"><label>کلید API کاوه‌نگار</label><input type="password" id="shop-sms-api-key" placeholder="فقط در صورت تغییر وارد کن" dir="ltr" autocomplete="off"></div>
+            <div class="field"><label>شماره/خط ارسال (اختیاری)</label><input type="text" id="shop-sms-sender-line" dir="ltr"></div>
+            <button class="btn btn-primary" id="btn-save-sms-settings">ذخیره</button>
+            <div class="field" style="margin-top:10px"><label>شماره تست</label><input type="text" id="shop-sms-test-phone" dir="ltr" placeholder="09xxxxxxxxx"></div>
+            <button class="btn btn-secondary" id="btn-test-sms">ارسال پیامک تستی</button>
+          </div>
+          <div class="card">
+            <div class="card-title">متن پیامک‌های خودکار</div>
+            <p class="muted" style="margin-bottom:10px">می‌توانی متن هر پیامک را دلخواه تغییر بدهی. از این جای‌گذارها استفاده کن: <bdi dir="ltr">{customer_name} {ticket_number} {device_model} {device_brand}</bdi></p>
+            <div id="notification-templates-list"></div>
           </div>
         </div>
 
