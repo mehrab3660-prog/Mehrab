@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import yt_dlp
+from deep_translator import GoogleTranslator
 from dotenv import load_dotenv
 from telegram import (
     InlineKeyboardButton,
@@ -68,6 +69,11 @@ DB_PATH = Path(__file__).parent / "bot_data.db"
 
 # key -> {"video": Path, "audio": Path | None, "gif": Path | None, "caption": str}
 media_cache: dict[str, dict] = {}
+
+# admin's sent message_id -> user_id, so an admin reply can be routed back
+admin_reply_targets: dict[int, int] = {}
+
+TRIM_RE = re.compile(r"^\s*(\d+)\s*-\s*(\d+)\s*$")
 
 
 def init_db() -> None:
@@ -244,6 +250,28 @@ def extract_gif(video_path: Path, key: str) -> Path:
     return gif_path
 
 
+def trim_video(video_path: Path, key: str, start: int, end: int) -> Path:
+    trimmed_path = DOWNLOAD_DIR / f"{key}_trim_{start}_{end}.mp4"
+    if trimmed_path.exists():
+        return trimmed_path
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-i", str(video_path),
+            "-ss", str(start), "-to", str(end),
+            "-c:v", "libx264", "-c:a", "aac",
+            str(trimmed_path),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return trimmed_path
+
+
+def translate_to_persian(text: str) -> str:
+    return GoogleTranslator(source="auto", target="fa").translate(text)
+
+
 def build_settings_keyboard(admin: bool) -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton("📜 دانلودهای من", callback_data="mydownloads")]]
     if admin:
@@ -363,10 +391,12 @@ async def notify_admin_of_message(context: ContextTypes.DEFAULT_TYPE, user: User
         return
     uname = f"@{user.username}" if user.username else "(بدون یوزرنیم)"
     try:
-        await context.bot.send_message(
+        sent = await context.bot.send_message(
             ADMIN_ID,
-            f"📩 پیام جدید از {user.first_name or ''} {uname} (id: {user.id}):\n\n{text}",
+            f"📩 پیام جدید از {user.first_name or ''} {uname} (id: {user.id}):\n\n{text}\n\n"
+            "(برای پاسخ به این کاربر، روی همین پیام Reply کن)",
         )
+        admin_reply_targets[sent.message_id] = user.id
     except Exception:
         logger.exception("Failed to notify admin of message from %s", user.id)
 
@@ -388,16 +418,61 @@ async def handle_sticker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await context.bot.forward_message(
                 ADMIN_ID, update.effective_chat.id, update.message.message_id
             )
-            await context.bot.send_message(
+            sent = await context.bot.send_message(
                 ADMIN_ID,
-                f"👆 استیکر از {user.first_name or ''} {uname} (id: {user.id})",
+                f"👆 استیکر از {user.first_name or ''} {uname} (id: {user.id})\n"
+                "(برای پاسخ به این کاربر، روی همین پیام Reply کن)",
             )
+            admin_reply_targets[sent.message_id] = user.id
         except Exception:
             logger.exception("Failed to notify admin of sticker from %s", user.id)
 
 
+async def process_trim(update: Update, context: ContextTypes.DEFAULT_TYPE, key: str, text: str) -> None:
+    match = TRIM_RE.match(text)
+    if not match:
+        await update.message.reply_text("فرمت نامعتبره. مثال درست: 5-15")
+        return
+    start, end = int(match.group(1)), int(match.group(2))
+    if end <= start:
+        await update.message.reply_text("زمان پایان باید از شروع بزرگ‌تر باشه.")
+        return
+
+    entry = media_cache.get(key)
+    if entry is None:
+        cached = load_cache_entry(key)
+        if cached:
+            entry = {"video": cached["video"], "audio": None, "gif": None, "caption": cached["caption"]}
+            media_cache[key] = entry
+    if entry is None or entry["video"].suffix.lower() in IMAGE_EXTENSIONS:
+        await update.message.reply_text("این ویدیو دیگه در دسترس نیست.")
+        return
+
+    status_msg = await update.message.reply_text("✂️ در حال برش...")
+    try:
+        trimmed_path = await asyncio.to_thread(trim_video, entry["video"], key, start, end)
+    except Exception:
+        logger.exception("Failed to trim video for key %s", key)
+        await status_msg.edit_text("❌ برش ناموفق بود.")
+        return
+    await status_msg.delete()
+    with open(trimmed_path, "rb") as trimmed_file:
+        await update.message.reply_video(trimmed_file)
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text or ""
+
+    if is_admin(update) and update.message.reply_to_message:
+        target_user_id = admin_reply_targets.get(update.message.reply_to_message.message_id)
+        if target_user_id:
+            try:
+                await context.bot.send_message(target_user_id, text)
+                await update.message.reply_text("✅ پیام برای کاربر ارسال شد.")
+            except Exception:
+                logger.exception("Failed to relay admin reply to user %s", target_user_id)
+                await update.message.reply_text("❌ ارسال پیام ناموفق بود.")
+            return
 
     if is_admin(update) and text == SETTINGS_BUTTON_TEXT:
         await update.message.reply_text(
@@ -409,6 +484,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         context.user_data["awaiting_broadcast"] = False
         sent = await send_broadcast(context, text)
         await update.message.reply_text(f"✅ به {sent} کاربر ارسال شد.")
+        return
+
+    trim_key = context.user_data.get("awaiting_trim")
+    if trim_key:
+        context.user_data["awaiting_trim"] = None
+        await process_trim(update, context, trim_key, text)
         return
 
     record_user_message(update.effective_user, text)
@@ -466,9 +547,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         [
             [
                 InlineKeyboardButton("📝 کپشن", callback_data=f"caption:{key}"),
+                InlineKeyboardButton("🌐 ترجمه کپشن", callback_data=f"translate:{key}"),
+            ],
+            [
                 InlineKeyboardButton("🎵 صدا", callback_data=f"voice:{key}"),
                 InlineKeyboardButton("🎞 GIF", callback_data=f"gif:{key}"),
-            ]
+                InlineKeyboardButton("✂️ برش", callback_data=f"trim:{key}"),
+            ],
         ]
     )
 
@@ -541,6 +626,27 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await query.answer()
         caption = entry["caption"] or "بدون کپشن"
         await query.message.reply_text(caption[:4000])
+        return
+
+    if action == "translate":
+        await query.answer("در حال ترجمه...")
+        try:
+            translated = await asyncio.to_thread(translate_to_persian, entry["caption"] or "")
+            await query.message.reply_text(translated[:4000] or "چیزی برای ترجمه نبود.")
+        except Exception:
+            logger.exception("Failed to translate caption for key %s", key)
+            await query.message.reply_text("❌ ترجمه ناموفق بود.")
+        return
+
+    if action == "trim":
+        if entry["video"].suffix.lower() in IMAGE_EXTENSIONS:
+            await query.answer("این یک عکسه، برش فقط برای ویدیوئه.", show_alert=True)
+            return
+        await query.answer()
+        context.user_data["awaiting_trim"] = key
+        await query.message.reply_text(
+            "بازه‌ی زمانی رو به‌صورت start-end به ثانیه بفرست (مثلاً 5-15):"
+        )
         return
 
     if action == "voice":
