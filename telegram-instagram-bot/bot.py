@@ -58,6 +58,9 @@ LINK_RE = re.compile(
     r")[^\s]*"
 )
 
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+CLEANUP_MAX_AGE_HOURS = 24
+
 DOWNLOAD_DIR = Path(tempfile.gettempdir()) / "ig_bot_downloads"
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 
@@ -444,6 +447,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         "caption": result["caption"],
     }
 
+    if result["video"].suffix.lower() in IMAGE_EXTENSIONS:
+        keyboard = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("📝 کپشن", callback_data=f"caption:{key}")]]
+        )
+        await status_msg.delete()
+        with open(result["video"], "rb") as photo_file:
+            await update.message.reply_photo(photo_file, reply_markup=keyboard)
+        return
+
     try:
         send_path = await asyncio.to_thread(ensure_within_telegram_limit, result["video"])
     except Exception:
@@ -558,6 +570,26 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await query.answer()
 
 
+def cleanup_old_downloads() -> None:
+    cutoff = datetime.now(timezone.utc).timestamp() - CLEANUP_MAX_AGE_HOURS * 3600
+    for path in DOWNLOAD_DIR.iterdir():
+        try:
+            if path.is_file() and path.stat().st_mtime < cutoff:
+                path.unlink()
+        except OSError:
+            logger.exception("Failed to remove old file %s", path)
+
+    cutoff_iso = datetime.fromtimestamp(cutoff, tz=timezone.utc).isoformat()
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("DELETE FROM link_cache WHERE created_at < ?", (cutoff_iso,))
+    conn.commit()
+    conn.close()
+
+
+async def cleanup_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    await asyncio.to_thread(cleanup_old_downloads)
+
+
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error("Unhandled exception", exc_info=context.error)
     if ADMIN_ID:
@@ -575,6 +607,7 @@ def main() -> None:
     app.add_handler(MessageHandler(filters.Sticker.ALL, handle_sticker))
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_error_handler(error_handler)
+    app.job_queue.run_repeating(cleanup_job, interval=3600, first=60)
     app.run_polling()
 
 
