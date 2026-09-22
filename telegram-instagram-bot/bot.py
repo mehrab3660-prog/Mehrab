@@ -411,30 +411,13 @@ async def notify_admin_of_message(context: ContextTypes.DEFAULT_TYPE, user: User
 
 
 async def handle_sticker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    sticker = update.message.sticker
-    user = update.effective_user
-
-    if is_admin(update):
-        await update.message.reply_text(
-            "این آیدی استیکرو کپی کن و به‌عنوان STICKER_FILE_ID تو فایل .env بذار:\n\n"
-            f"{sticker.file_id}"
-        )
+    if not is_admin(update):
         return
-
-    if ADMIN_ID:
-        uname = f"@{user.username}" if user.username else "(بدون یوزرنیم)"
-        try:
-            await context.bot.forward_message(
-                ADMIN_ID, update.effective_chat.id, update.message.message_id
-            )
-            sent = await context.bot.send_message(
-                ADMIN_ID,
-                f"👆 استیکر از {user.first_name or ''} {uname} (id: {user.id})\n"
-                "(برای پاسخ به این کاربر، روی همین پیام Reply کن)",
-            )
-            admin_reply_targets[sent.message_id] = user.id
-        except Exception:
-            logger.exception("Failed to notify admin of sticker from %s", user.id)
+    sticker = update.message.sticker
+    await update.message.reply_text(
+        "این آیدی استیکرو کپی کن و به‌عنوان STICKER_FILE_ID تو فایل .env بذار:\n\n"
+        f"{sticker.file_id}"
+    )
 
 
 async def process_trim(update: Update, context: ContextTypes.DEFAULT_TYPE, key: str, text: str) -> None:
@@ -509,7 +492,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     record_user_message(update.effective_user, text)
-    await notify_admin_of_message(context, update.effective_user, text)
 
     match = LINK_RE.search(text)
     if not match:
