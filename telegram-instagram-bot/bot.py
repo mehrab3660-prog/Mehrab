@@ -42,6 +42,7 @@ DOWNLOAD_SEMAPHORE = asyncio.Semaphore(3)
 SETTINGS_BUTTON_TEXT = "⚙️ تنظیمات"
 ADMIN_KEYBOARD = ReplyKeyboardMarkup([[SETTINGS_BUTTON_TEXT]], resize_keyboard=True)
 CONTACT_ADMIN_BUTTON = InlineKeyboardButton("📩 ارسال پیام به ادمین", callback_data="contact_admin")
+INVITE_FRIENDS_BUTTON = InlineKeyboardButton("🎁 معرفی به دوستان", callback_data="invite_friends")
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -274,7 +275,10 @@ def translate_to_persian(text: str) -> str:
 
 
 def build_settings_keyboard(admin: bool) -> InlineKeyboardMarkup:
-    rows = [[InlineKeyboardButton("📜 دانلودهای من", callback_data="mydownloads")]]
+    rows = [
+        [InlineKeyboardButton("📜 دانلودهای من", callback_data="mydownloads")],
+        [INVITE_FRIENDS_BUTTON],
+    ]
     if admin:
         rows.append(
             [
@@ -391,7 +395,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         await update.message.reply_text(
             message,
-            reply_markup=InlineKeyboardMarkup([[CONTACT_ADMIN_BUTTON]]),
+            reply_markup=InlineKeyboardMarkup([[CONTACT_ADMIN_BUTTON], [INVITE_FRIENDS_BUTTON]]),
         )
 
 
@@ -577,6 +581,19 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await query.answer()
         context.user_data["awaiting_admin_message"] = True
         await query.message.reply_text("📩 پیامت رو بنویس، مستقیم برای ادمین می‌فرستم:")
+        return
+
+    if data == "invite_friends":
+        await query.answer()
+        bot_username = context.bot.username
+        invite_text = (
+            "🎬 این ربات لینک اینستاگرام، تیک‌تاک، یوتیوب شورتس و توییتر/X رو "
+            "برات به ویدیو، کپشن، صدا و GIF تبدیل می‌کنه — رایگان و سریع!\n\n"
+            f"👉 https://t.me/{bot_username}"
+        )
+        await query.message.reply_text(
+            "این متن رو برای دوستات بفرست:\n\n" + invite_text
+        )
         return
 
     if data == "mydownloads":
