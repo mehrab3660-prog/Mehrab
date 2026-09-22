@@ -310,14 +310,10 @@ async def send_users_keyboard(target) -> None:
 
     buttons = []
     for row in rows:
-        name = row["first_name"] or (f"@{row['username']}" if row["username"] else str(row["user_id"]))
+        uname = f"@{row['username']}" if row["username"] else ""
+        label = f"{row['first_name'] or ''} {uname} | id:{row['user_id']} | {row['message_count']} پیام".strip()
         buttons.append(
-            [
-                InlineKeyboardButton(
-                    f"{name} ({row['message_count']} پیام)",
-                    callback_data=f"view_user:{row['user_id']}",
-                )
-            ]
+            [InlineKeyboardButton(label, callback_data=f"view_user:{row['user_id']}")]
         )
     await target.reply_text(
         "👥 برای دیدن پیام‌های هر کاربر روش بزن:",
@@ -325,9 +321,18 @@ async def send_users_keyboard(target) -> None:
     )
 
 
-async def send_history(target, user_id: int, limit: int = 50) -> None:
+async def send_history(target, user_id: int, limit: int = 50, show_user_info: bool = False) -> None:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    if show_user_info:
+        user_row = conn.execute(
+            "SELECT username, first_name FROM users WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if user_row:
+            uname = f"@{user_row['username']}" if user_row["username"] else "(بدون یوزرنیم)"
+            await target.reply_text(
+                f"👤 {user_row['first_name'] or ''} {uname} | id: {user_id}"
+            )
     rows = conn.execute(
         "SELECT text, sent_at FROM messages WHERE user_id = ? "
         "ORDER BY sent_at DESC LIMIT ?",
@@ -628,7 +633,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             return
         await query.answer()
         target_id = int(data.partition(":")[2])
-        await send_history(query.message, target_id, limit=30)
+        await send_history(query.message, target_id, limit=30, show_user_info=True)
         return
 
     action, _, key = data.partition(":")
