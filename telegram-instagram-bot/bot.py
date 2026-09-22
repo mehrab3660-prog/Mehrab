@@ -322,9 +322,23 @@ async def settings_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 
+async def notify_admin_of_message(context: ContextTypes.DEFAULT_TYPE, user: User, text: str) -> None:
+    if not ADMIN_ID or user.id == ADMIN_ID:
+        return
+    uname = f"@{user.username}" if user.username else "(بدون یوزرنیم)"
+    try:
+        await context.bot.send_message(
+            ADMIN_ID,
+            f"📩 پیام جدید از {user.first_name or ''} {uname} (id: {user.id}):\n\n{text}",
+        )
+    except Exception:
+        logger.exception("Failed to notify admin of message from %s", user.id)
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text or ""
     record_user_message(update.effective_user, text)
+    await notify_admin_of_message(context, update.effective_user, text)
 
     match = LINK_RE.search(text)
     if not match:
