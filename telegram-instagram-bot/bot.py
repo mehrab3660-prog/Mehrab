@@ -298,19 +298,27 @@ async def send_history(target, user_id: int, limit: int = 50) -> None:
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(
+    message = (
         "سلام! لینک پست/ریل اینستاگرام، تیک‌تاک، یوتیوب شورتس یا توییتر/X رو "
         "برام بفرست تا ویدیوش رو برات بفرستم. زیر ویدیو دکمه‌هایی برای گرفتن "
-        "کپشن، صدا و GIF می‌بینی.",
-        reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("⚙️ تنظیمات", callback_data="open_settings")]]
-        ),
+        "کپشن، صدا و GIF می‌بینی."
     )
+    if is_admin(update):
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("⚙️ تنظیمات", callback_data="open_settings")]]
+            ),
+        )
+    else:
+        await update.message.reply_text(message)
 
 
 async def settings_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not is_admin(update):
+        return
     await update.message.reply_text(
-        "⚙️ تنظیمات:", reply_markup=build_settings_keyboard(is_admin(update))
+        "⚙️ تنظیمات:", reply_markup=build_settings_keyboard(True)
     )
 
 
@@ -377,9 +385,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     data = query.data or ""
 
     if data == "open_settings":
+        if not is_admin(update):
+            await query.answer("دسترسی نداری.", show_alert=True)
+            return
         await query.answer()
         await query.message.reply_text(
-            "⚙️ تنظیمات:", reply_markup=build_settings_keyboard(is_admin(update))
+            "⚙️ تنظیمات:", reply_markup=build_settings_keyboard(True)
         )
         return
 
