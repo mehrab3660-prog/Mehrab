@@ -383,7 +383,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if is_admin(update):
         await update.message.reply_text(message, reply_markup=ADMIN_KEYBOARD)
     else:
-        await update.message.reply_text(message)
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("📩 ارسال پیام به ادمین", callback_data="contact_admin")]]
+            ),
+        )
 
 
 async def notify_admin_of_message(context: ContextTypes.DEFAULT_TYPE, user: User, text: str) -> None:
@@ -492,6 +497,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await process_trim(update, context, trim_key, text)
         return
 
+    if context.user_data.get("awaiting_admin_message"):
+        context.user_data["awaiting_admin_message"] = False
+        record_user_message(update.effective_user, text)
+        await notify_admin_of_message(context, update.effective_user, text)
+        await update.message.reply_text("✅ پیامت برای ادمین ارسال شد.")
+        return
+
     record_user_message(update.effective_user, text)
     await notify_admin_of_message(context, update.effective_user, text)
 
@@ -565,6 +577,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     data = query.data or ""
+
+    if data == "contact_admin":
+        await query.answer()
+        context.user_data["awaiting_admin_message"] = True
+        await query.message.reply_text("📩 پیامت رو بنویس، مستقیم برای ادمین می‌فرستم:")
+        return
 
     if data == "mydownloads":
         await query.answer()
