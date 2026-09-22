@@ -41,6 +41,7 @@ DOWNLOAD_SEMAPHORE = asyncio.Semaphore(3)
 
 SETTINGS_BUTTON_TEXT = "⚙️ تنظیمات"
 ADMIN_KEYBOARD = ReplyKeyboardMarkup([[SETTINGS_BUTTON_TEXT]], resize_keyboard=True)
+CONTACT_ADMIN_BUTTON = InlineKeyboardButton("📩 ارسال پیام به ادمین", callback_data="contact_admin")
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -385,9 +386,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         await update.message.reply_text(
             message,
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("📩 ارسال پیام به ادمین", callback_data="contact_admin")]]
-            ),
+            reply_markup=InlineKeyboardMarkup([[CONTACT_ADMIN_BUTTON]]),
         )
 
 
@@ -511,13 +510,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if not match:
         await update.message.reply_text(
             "لطفاً یک لینک معتبر اینستاگرام، تیک‌تاک، یوتیوب شورتس یا توییتر/X "
-            "ارسال کنید."
+            "ارسال کنید.",
+            reply_markup=InlineKeyboardMarkup([[CONTACT_ADMIN_BUTTON]]),
         )
         return
 
     if not is_admin(update) and not check_rate_limit(update.effective_user.id):
         await update.message.reply_text(
-            f"⛔️ به سقف {RATE_LIMIT_PER_DAY} دانلود روزانه رسیدی. فردا دوباره امتحان کن."
+            f"⛔️ به سقف {RATE_LIMIT_PER_DAY} دانلود روزانه رسیدی. فردا دوباره امتحان کن.",
+            reply_markup=InlineKeyboardMarkup([[CONTACT_ADMIN_BUTTON]]),
         )
         return
 
@@ -531,6 +532,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     except Exception as exc:
         logger.exception("Failed to download %s", url)
         await status_msg.edit_text(f"❌ دانلود ناموفق بود:\n{exc}")
+        await update.message.reply_text(
+            "اگه مشکل ادامه داشت می‌تونی به ادمین پیام بدی:",
+            reply_markup=InlineKeyboardMarkup([[CONTACT_ADMIN_BUTTON]]),
+        )
         return
 
     media_cache[key] = {
@@ -540,9 +545,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         "caption": result["caption"],
     }
 
+    extra_rows = [] if is_admin(update) else [[CONTACT_ADMIN_BUTTON]]
+
     if result["video"].suffix.lower() in IMAGE_EXTENSIONS:
         keyboard = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("📝 کپشن", callback_data=f"caption:{key}")]]
+            [[InlineKeyboardButton("📝 کپشن", callback_data=f"caption:{key}")], *extra_rows]
         )
         await status_msg.delete()
         with open(result["video"], "rb") as photo_file:
@@ -566,6 +573,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 InlineKeyboardButton("🎞 GIF", callback_data=f"gif:{key}"),
                 InlineKeyboardButton("✂️ برش", callback_data=f"trim:{key}"),
             ],
+            *extra_rows,
         ]
     )
 
