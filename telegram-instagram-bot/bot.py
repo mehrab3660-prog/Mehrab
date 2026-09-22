@@ -217,21 +217,21 @@ def ensure_within_telegram_limit(video_path: Path) -> Path:
     return compressed_path
 
 
-def extract_voice(video_path: Path, key: str) -> Path:
-    voice_path = DOWNLOAD_DIR / f"{key}.ogg"
-    if voice_path.exists():
-        return voice_path
+def extract_audio(video_path: Path, key: str) -> Path:
+    audio_path = DOWNLOAD_DIR / f"{key}.mp3"
+    if audio_path.exists():
+        return audio_path
     subprocess.run(
         [
             "ffmpeg", "-y", "-i", str(video_path),
-            "-vn", "-c:a", "libopus", "-b:a", "64k",
-            str(voice_path),
+            "-vn", "-acodec", "libmp3lame", "-q:a", "2",
+            str(audio_path),
         ],
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    return voice_path
+    return audio_path
 
 
 def extract_gif(video_path: Path, key: str) -> Path:
@@ -679,9 +679,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await query.answer("در حال آماده‌سازی صدا...")
         try:
             if entry.get("audio") is None:
-                entry["audio"] = await asyncio.to_thread(extract_voice, entry["video"], key)
+                entry["audio"] = await asyncio.to_thread(extract_audio, entry["video"], key)
             with open(entry["audio"], "rb") as audio_file:
-                await query.message.reply_voice(audio_file)
+                await query.message.reply_audio(audio_file, title="صدای ویدیو")
         except Exception:
             logger.exception("Failed to extract audio for key %s", key)
             await query.message.reply_text("❌ استخراج صدا ناموفق بود.")
