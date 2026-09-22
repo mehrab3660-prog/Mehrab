@@ -32,6 +32,7 @@ load_dotenv()
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
 COOKIES_FILE = os.environ.get("COOKIES_FILE") or None
+STICKER_FILE_ID = os.environ.get("STICKER_FILE_ID") or None
 
 RATE_LIMIT_PER_DAY = 20
 MAX_TELEGRAM_FILE_BYTES = 49 * 1024 * 1024
@@ -343,6 +344,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "📦 فشرده‌سازی خودکار ویدیوهای حجیم\n\n"
         "کافیه لینک رو بفرستی، بقیه‌ش با من!"
     )
+    if STICKER_FILE_ID:
+        try:
+            await update.message.reply_sticker(STICKER_FILE_ID)
+        except Exception:
+            logger.exception("Failed to send welcome sticker")
     if is_admin(update):
         await update.message.reply_text(message, reply_markup=ADMIN_KEYBOARD)
     else:
@@ -360,6 +366,31 @@ async def notify_admin_of_message(context: ContextTypes.DEFAULT_TYPE, user: User
         )
     except Exception:
         logger.exception("Failed to notify admin of message from %s", user.id)
+
+
+async def handle_sticker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    sticker = update.message.sticker
+    user = update.effective_user
+
+    if is_admin(update):
+        await update.message.reply_text(
+            "این آیدی استیکرو کپی کن و به‌عنوان STICKER_FILE_ID تو فایل .env بذار:\n\n"
+            f"{sticker.file_id}"
+        )
+        return
+
+    if ADMIN_ID:
+        uname = f"@{user.username}" if user.username else "(بدون یوزرنیم)"
+        try:
+            await context.bot.forward_message(
+                ADMIN_ID, update.effective_chat.id, update.message.message_id
+            )
+            await context.bot.send_message(
+                ADMIN_ID,
+                f"👆 استیکر از {user.first_name or ''} {uname} (id: {user.id})",
+            )
+        except Exception:
+            logger.exception("Failed to notify admin of sticker from %s", user.id)
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -541,6 +572,7 @@ def main() -> None:
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.Sticker.ALL, handle_sticker))
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_error_handler(error_handler)
     app.run_polling()
