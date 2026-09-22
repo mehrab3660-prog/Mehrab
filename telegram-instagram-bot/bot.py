@@ -11,7 +11,13 @@ from pathlib import Path
 
 import yt_dlp
 from dotenv import load_dotenv
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, User
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ReplyKeyboardMarkup,
+    Update,
+    User,
+)
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -30,6 +36,9 @@ COOKIES_FILE = os.environ.get("COOKIES_FILE") or None
 RATE_LIMIT_PER_DAY = 20
 MAX_TELEGRAM_FILE_BYTES = 49 * 1024 * 1024
 DOWNLOAD_SEMAPHORE = asyncio.Semaphore(3)
+
+SETTINGS_BUTTON_TEXT = "⚙️ تنظیمات"
+ADMIN_KEYBOARD = ReplyKeyboardMarkup([[SETTINGS_BUTTON_TEXT]], resize_keyboard=True)
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -241,7 +250,7 @@ def build_settings_keyboard(admin: bool) -> InlineKeyboardMarkup:
             ]
         )
         rows.append(
-            [InlineKeyboardButton("📢 پیام همگانی", callback_data="admin_broadcast_help")]
+            [InlineKeyboardButton("📢 پیام همگانی", callback_data="admin_broadcast")]
         )
     return InlineKeyboardMarkup(rows)
 
@@ -253,12 +262,12 @@ async def send_stats(target) -> None:
     await target.reply_text(f"👥 تعداد کاربران: {count}")
 
 
-async def send_users_list(target) -> None:
+async def send_users_keyboard(target) -> None:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
-        "SELECT user_id, username, first_name, message_count, last_seen "
-        "FROM users ORDER BY last_seen DESC"
+        "SELECT user_id, username, first_name, message_count "
+        "FROM users ORDER BY last_seen DESC LIMIT 30"
     ).fetchall()
     conn.close()
 
@@ -266,16 +275,21 @@ async def send_users_list(target) -> None:
         await target.reply_text("هنوز کاربری ثبت نشده.")
         return
 
-    lines = []
+    buttons = []
     for row in rows:
-        uname = f"@{row['username']}" if row["username"] else "(بدون یوزرنیم)"
-        lines.append(
-            f"{row['first_name'] or ''} {uname} | id: {row['user_id']} | "
-            f"پیام‌ها: {row['message_count']} | آخرین بازدید: {row['last_seen']}"
+        name = row["first_name"] or (f"@{row['username']}" if row["username"] else str(row["user_id"]))
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    f"{name} ({row['message_count']} پیام)",
+                    callback_data=f"view_user:{row['user_id']}",
+                )
+            ]
         )
-    text = "\n".join(lines)
-    for i in range(0, len(text), 4000):
-        await target.reply_text(text[i:i + 4000])
+    await target.reply_text(
+        "👥 برای دیدن پیام‌های هر کاربر روش بزن:",
+        reply_markup=InlineKeyboardMarkup(buttons),
+    )
 
 
 async def send_history(target, user_id: int, limit: int = 50) -> None:
@@ -297,6 +311,21 @@ async def send_history(target, user_id: int, limit: int = 50) -> None:
         await target.reply_text(text[i:i + 4000])
 
 
+async def send_broadcast(context: ContextTypes.DEFAULT_TYPE, text: str) -> int:
+    conn = sqlite3.connect(DB_PATH)
+    user_ids = [row[0] for row in conn.execute("SELECT user_id FROM users").fetchall()]
+    conn.close()
+
+    sent = 0
+    for uid in user_ids:
+        try:
+            await context.bot.send_message(uid, text)
+            sent += 1
+        except Exception:
+            logger.exception("Failed to broadcast to user %s", uid)
+    return sent
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = (
         "سلام! لینک پست/ریل اینستاگرام، تیک‌تاک، یوتیوب شورتس یا توییتر/X رو "
@@ -304,22 +333,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "کپشن، صدا و GIF می‌بینی."
     )
     if is_admin(update):
-        await update.message.reply_text(
-            message,
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("⚙️ تنظیمات", callback_data="open_settings")]]
-            ),
-        )
+        await update.message.reply_text(message, reply_markup=ADMIN_KEYBOARD)
     else:
         await update.message.reply_text(message)
-
-
-async def settings_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not is_admin(update):
-        return
-    await update.message.reply_text(
-        "⚙️ تنظیمات:", reply_markup=build_settings_keyboard(True)
-    )
 
 
 async def notify_admin_of_message(context: ContextTypes.DEFAULT_TYPE, user: User, text: str) -> None:
@@ -337,6 +353,19 @@ async def notify_admin_of_message(context: ContextTypes.DEFAULT_TYPE, user: User
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text or ""
+
+    if is_admin(update) and text == SETTINGS_BUTTON_TEXT:
+        await update.message.reply_text(
+            "⚙️ تنظیمات:", reply_markup=build_settings_keyboard(True)
+        )
+        return
+
+    if is_admin(update) and context.user_data.get("awaiting_broadcast"):
+        context.user_data["awaiting_broadcast"] = False
+        sent = await send_broadcast(context, text)
+        await update.message.reply_text(f"✅ به {sent} کاربر ارسال شد.")
+        return
+
     record_user_message(update.effective_user, text)
     await notify_admin_of_message(context, update.effective_user, text)
 
@@ -398,16 +427,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     query = update.callback_query
     data = query.data or ""
 
-    if data == "open_settings":
-        if not is_admin(update):
-            await query.answer("دسترسی نداری.", show_alert=True)
-            return
-        await query.answer()
-        await query.message.reply_text(
-            "⚙️ تنظیمات:", reply_markup=build_settings_keyboard(True)
-        )
-        return
-
     if data == "mydownloads":
         await query.answer()
         await send_history(query.message, update.effective_user.id, limit=20)
@@ -426,15 +445,25 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await query.answer("دسترسی نداری.", show_alert=True)
             return
         await query.answer()
-        await send_users_list(query.message)
+        await send_users_keyboard(query.message)
         return
 
-    if data == "admin_broadcast_help":
+    if data == "admin_broadcast":
         if not is_admin(update):
             await query.answer("دسترسی نداری.", show_alert=True)
             return
         await query.answer()
-        await query.message.reply_text("برای پیام همگانی این دستور رو بزن:\n/broadcast متن پیام شما")
+        context.user_data["awaiting_broadcast"] = True
+        await query.message.reply_text("📢 متن پیام همگانی رو همین‌جا بفرست:")
+        return
+
+    if data.startswith("view_user:"):
+        if not is_admin(update):
+            await query.answer("دسترسی نداری.", show_alert=True)
+            return
+        await query.answer()
+        target_id = int(data.partition(":")[2])
+        await send_history(query.message, target_id, limit=30)
         return
 
     action, _, key = data.partition(":")
@@ -487,58 +516,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await query.answer()
 
 
-async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not is_admin(update):
-        return
-    await send_stats(update.message)
-
-
-async def users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not is_admin(update):
-        return
-    await send_users_list(update.message)
-
-
-async def history_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not is_admin(update):
-        return
-    if not context.args:
-        await update.message.reply_text("استفاده: /history <user_id>")
-        return
-    try:
-        target_id = int(context.args[0])
-    except ValueError:
-        await update.message.reply_text("آیدی نامعتبر است.")
-        return
-    await send_history(update.message, target_id, limit=50)
-
-
-async def mydownloads_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await send_history(update.message, update.effective_user.id, limit=20)
-
-
-async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not is_admin(update):
-        return
-    if not context.args:
-        await update.message.reply_text("استفاده: /broadcast متن پیام")
-        return
-    text = " ".join(context.args)
-
-    conn = sqlite3.connect(DB_PATH)
-    user_ids = [row[0] for row in conn.execute("SELECT user_id FROM users").fetchall()]
-    conn.close()
-
-    sent = 0
-    for uid in user_ids:
-        try:
-            await context.bot.send_message(uid, text)
-            sent += 1
-        except Exception:
-            logger.exception("Failed to broadcast to user %s", uid)
-    await update.message.reply_text(f"✅ به {sent} کاربر ارسال شد.")
-
-
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error("Unhandled exception", exc_info=context.error)
     if ADMIN_ID:
@@ -552,12 +529,6 @@ def main() -> None:
     init_db()
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("settings", settings_cmd))
-    app.add_handler(CommandHandler("stats", stats_cmd))
-    app.add_handler(CommandHandler("users", users_cmd))
-    app.add_handler(CommandHandler("history", history_cmd))
-    app.add_handler(CommandHandler("mydownloads", mydownloads_cmd))
-    app.add_handler(CommandHandler("broadcast", broadcast_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_error_handler(error_handler)
