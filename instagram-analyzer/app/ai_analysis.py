@@ -125,3 +125,26 @@ def analyze_image(image_url: str) -> str:
         ],
     )
     return next(b.text for b in response.content if b.type == "text")
+
+
+def generate_auto_reply(incoming_text: str, account_context: dict, source_type: str) -> str:
+    """Draft a reply to an incoming DM or comment, in the account owner's voice.
+
+    source_type is "dm" or "comment" — DMs can be more personal/detailed,
+    comment replies should stay short since they're public.
+    """
+    length_hint = "1-2 جمله‌ی کوتاه" if source_type == "comment" else "حداکثر ۳-۴ جمله"
+    prompt = (
+        "شما به‌جای صاحب این اکانت اینستاگرام، به یک پیام/کامنت ورودی جواب می‌دید. "
+        f"لحن باید صمیمی، طبیعی و هماهنگ با محتوای پیج باشه. جواب رو در حد {length_hint} فارسی بنویس. "
+        "فقط متن جواب رو بنویس، بدون هیچ توضیح یا پیش‌درآمد اضافه.\n\n"
+        f"نام/بیوی اکانت: {account_context.get('name') or ''}\n"
+        f"موضوع پست‌های اخیر: {account_context.get('recent_captions') or ''}\n\n"
+        f"پیام ورودی ({'دایرکت' if source_type == 'dm' else 'کامنت عمومی'}): {incoming_text}"
+    )
+    response = _get_client().messages.create(
+        model=MODEL,
+        max_tokens=300,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return next(b.text for b in response.content if b.type == "text").strip()

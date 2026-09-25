@@ -3,7 +3,8 @@
 Requires the connected Instagram account to be a Business or Creator account
 linked to a Facebook Page, and a Meta app with the following permissions
 approved for the accounts you manage: instagram_basic, instagram_manage_insights,
-instagram_manage_comments, pages_show_list, pages_read_engagement.
+instagram_manage_comments, instagram_manage_messages, pages_show_list,
+pages_read_engagement.
 """
 
 from datetime import datetime, timedelta
@@ -21,6 +22,7 @@ SCOPES = [
     "instagram_basic",
     "instagram_manage_insights",
     "instagram_manage_comments",
+    "instagram_manage_messages",
     "pages_show_list",
     "pages_read_engagement",
 ]
@@ -32,6 +34,19 @@ class InstagramAPIError(RuntimeError):
 
 def _get(path: str, params: dict) -> dict:
     resp = httpx.get(f"{GRAPH_BASE}/{path}", params=params, timeout=30)
+    data = resp.json()
+    if resp.status_code >= 400 or "error" in data:
+        raise InstagramAPIError(data.get("error", data))
+    return data
+
+
+def _post(path: str, access_token: str, json_body: dict | None = None, params: dict | None = None) -> dict:
+    resp = httpx.post(
+        f"{GRAPH_BASE}/{path}",
+        params={"access_token": access_token, **(params or {})},
+        json=json_body,
+        timeout=30,
+    )
     data = resp.json()
     if resp.status_code >= 400 or "error" in data:
         raise InstagramAPIError(data.get("error", data))
@@ -125,3 +140,17 @@ def list_comments(media_id: str, access_token: str) -> list[dict]:
         {"access_token": access_token, "fields": "id,username,text,like_count,timestamp"},
     )
     return data.get("data", [])
+
+
+def reply_to_comment(comment_id: str, message: str, access_token: str) -> dict:
+    """Post a public reply to a comment (requires instagram_manage_comments)."""
+    return _post(f"{comment_id}/replies", access_token, params={"message": message})
+
+
+def send_direct_message(ig_user_id: str, recipient_id: str, message: str, access_token: str) -> dict:
+    """Send a DM reply via the Instagram Messaging API (requires instagram_manage_messages)."""
+    return _post(
+        f"{ig_user_id}/messages",
+        access_token,
+        json_body={"recipient": {"id": recipient_id}, "message": {"text": message}},
+    )

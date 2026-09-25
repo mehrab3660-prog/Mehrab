@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app import instagram_client
 from app import instagram_private_client as private_client
 from app.database import get_db
-from app.models import Account, Comment, Media, MediaInsight
+from app.models import Account, AutoReply, Comment, Media, MediaInsight
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 
@@ -141,3 +141,26 @@ def sync_account(account_id: int, db: Session = Depends(get_db)):
     account.last_synced_at = datetime.utcnow()
     db.commit()
     return {"synced_media": synced}
+
+
+@router.get("/{account_id}/auto-replies")
+def list_auto_replies(account_id: int, db: Session = Depends(get_db)):
+    """Log of DMs/comments the AI has automatically replied to for this account."""
+    _get_account_or_404(db, account_id)
+    replies = (
+        db.query(AutoReply)
+        .filter_by(account_id=account_id)
+        .order_by(AutoReply.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    return [
+        {
+            "id": r.id,
+            "source_type": r.source_type,
+            "incoming_text": r.incoming_text,
+            "reply_text": r.reply_text,
+            "created_at": r.created_at,
+        }
+        for r in replies
+    ]

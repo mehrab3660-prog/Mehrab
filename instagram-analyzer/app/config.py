@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     session_secret: str = "change-me"
     anthropic_api_key: str = ""
     database_url: str = "sqlite:///./instagram_analyzer.db"
+    webhook_verify_token: str = "change-me-webhook-token"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

@@ -40,6 +40,7 @@ class Account(Base):
 
     media_items = relationship("Media", back_populates="account", cascade="all, delete-orphan")
     reports = relationship("Report", back_populates="account", cascade="all, delete-orphan")
+    auto_replies = relationship("AutoReply", back_populates="account", cascade="all, delete-orphan")
 
 
 class Media(Base):
@@ -111,3 +112,24 @@ class Report(Base):
     stats_json = Column(Text)
 
     account = relationship("Account", back_populates="reports")
+
+
+class AutoReply(Base):
+    """A record of an AI-generated reply automatically sent to a DM or comment.
+
+    source_id is the Instagram comment/message id and is unique so a webhook
+    retry never sends the same reply twice.
+    """
+
+    __tablename__ = "auto_replies"
+    __table_args__ = (UniqueConstraint("source_id", name="uq_auto_reply_source_id"),)
+
+    id = Column(Integer, primary_key=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False, index=True)
+    source_type = Column(String, nullable=False)  # "dm" | "comment"
+    source_id = Column(String, nullable=False)
+    incoming_text = Column(Text)
+    reply_text = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    account = relationship("Account", back_populates="auto_replies")

@@ -6,7 +6,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
 from app.database import Base, engine
-from app.routers import accounts, analysis, auth, private_auth
+from app.routers import accounts, analysis, auth, private_auth, webhooks
 
 
 @asynccontextmanager
@@ -22,5 +22,6 @@ app.include_router(auth.router)
 app.include_router(private_auth.router)
 app.include_router(accounts.router)
 app.include_router(analysis.router)
+app.include_router(webhooks.router)
 
 app.mount("/", StaticFiles(directory="web", html=True), name="web")

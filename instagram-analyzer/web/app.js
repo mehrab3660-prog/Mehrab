@@ -3,6 +3,7 @@ const accountDetail = document.getElementById("account-detail");
 const accountsList = document.getElementById("accounts-list");
 const accountHeader = document.getElementById("account-header");
 const reportsList = document.getElementById("reports-list");
+const autoRepliesList = document.getElementById("auto-replies-list");
 const mediaTableBody = document.querySelector("#media-table tbody");
 
 let currentAccountId = null;
@@ -105,7 +106,7 @@ async function refreshAccountDetail() {
     <p>فالوور: ${acc.followers_count} | پست‌ها: ${acc.media_count}</p>
     <p>آخرین به‌روزرسانی: ${acc.last_synced_at ? new Date(acc.last_synced_at).toLocaleString("fa-IR") : "هرگز"}</p>
   `;
-  await Promise.all([loadMedia(), loadReports()]);
+  await Promise.all([loadMedia(), loadReports(), loadAutoReplies()]);
 }
 
 async function loadMedia() {
@@ -138,6 +139,26 @@ async function loadReports() {
       <div>${escapeHtml(r.summary_text)}</div>
     `;
     reportsList.appendChild(card);
+  }
+}
+
+async function loadAutoReplies() {
+  const replies = await fetchJson(`/accounts/${currentAccountId}/auto-replies`);
+  autoRepliesList.innerHTML = "";
+  if (replies.length === 0) {
+    autoRepliesList.innerHTML = "<p>هنوز جواب خودکاری ارسال نشده.</p>";
+    return;
+  }
+  for (const r of replies) {
+    const card = document.createElement("div");
+    card.className = "reply-card";
+    const label = r.source_type === "dm" ? "دایرکت" : "کامنت";
+    card.innerHTML = `
+      <div class="reply-meta">${label} · ${new Date(r.created_at).toLocaleString("fa-IR")}</div>
+      <div class="incoming">${escapeHtml(r.incoming_text)}</div>
+      <div class="outgoing">${escapeHtml(r.reply_text)}</div>
+    `;
+    autoRepliesList.appendChild(card);
   }
 }
 
